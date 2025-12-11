@@ -43,7 +43,7 @@ export default function TraceDetail(props: { onClose?: () => void; open: boolean
             },
             error: (err: any) => {
                 setLoading(false);
-                console.log('查询错误', err);
+                console.log('Fetch Error', err);
             },
         });
     }, [currentCatalog, currentDatabase, currentTable, selectdbDS, setTraceData, traceId]);
