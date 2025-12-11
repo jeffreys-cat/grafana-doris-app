@@ -449,7 +449,7 @@ export function useDiscoverData() {
                     if (!ok) {
                         return;
                     }
-                    const formattedData = formatTracesResData(data);
+                    const formattedData = formatTracesResData(data.results.getTableDataTrace.frames[0]);
                     setTraceData(formattedData);
                 },
                 error: (err: any) => {
