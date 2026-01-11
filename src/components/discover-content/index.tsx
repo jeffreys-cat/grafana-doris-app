@@ -3,7 +3,6 @@ import { ColumnDef, Row } from '@tanstack/react-table';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Drawer, IconButton, Pagination, Tab, TabContent, TabsBar, useTheme2 } from '@grafana/ui';
-import JsonView from '@uiw/react-json-view';
 import {
     tableTotalCountAtom,
     tableDataAtom,
@@ -24,7 +23,6 @@ import SDCollapsibleTable from 'components/selectdb-ui/sd-collapsible-table';
 import { ColumnStyleWrapper, HoverStyle } from './discover-content.style';
 import { css } from '@emotion/css';
 import { ContentTableActions } from './content-table-actions';
-import { SELECTDB_THEME, SELECTDB_THEME_LIGHT } from './json-viewer.theme';
 import { ContentItem } from './content-item';
 import SurroundingLogs from 'components/surrounding-logs';
 import TraceDetail from 'components/trace-detail';
@@ -94,7 +92,78 @@ export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetch
     );
 
     const renderSubComponent = ({ row }: { row: Row<any> }) => {
-        const subTableData = Object.keys(row.original._original).map(key => {
+        // process object
+        const processObject = (obj: any): any => {
+            if (typeof obj !== 'object' || obj === null) {
+                return obj;
+            }
+
+            const result: any = {};
+            for (const key in obj) {
+                if (obj.hasOwnProperty(key)) {
+                    let value = obj[key];
+
+                    if (typeof value === 'string') {
+                        let cleanValue = value.trim();
+
+                        // check for escaped double quotes
+                        if (cleanValue.includes('\\"')) {
+                            try {
+                                cleanValue = JSON.parse(`"${cleanValue}"`);
+                            } catch (e) {
+                                // if parsing fails, keep the original value
+                            }
+                        }
+
+                        // check for JSON
+                        if ((cleanValue.startsWith('{') && cleanValue.endsWith('}')) ||
+                            (cleanValue.startsWith('[') && cleanValue.endsWith(']'))) {
+                            try {
+                                const parsed = JSON.parse(cleanValue);
+                                value = processObject(parsed);
+                            } catch (e) {
+                                value = obj[key];
+                            }
+                        } else {
+                            value = obj[key];
+                        }
+                    } else if (Array.isArray(value)) {
+                        value = value.map(item => {
+                            if (typeof item === 'string') {
+                                let cleanItem = item.trim();
+
+                                if (cleanItem.includes('\\"')) {
+                                    try {
+                                        cleanItem = JSON.parse(`"${cleanItem}"`);
+                                    } catch (e) {}
+                                }
+
+                                if ((cleanItem.startsWith('{') && cleanItem.endsWith('}')) ||
+                                    (cleanItem.startsWith('[') && cleanItem.endsWith(']'))) {
+                                    try {
+                                        const parsed = JSON.parse(cleanItem);
+                                        return processObject(parsed);
+                                    } catch {
+                                        return item;
+                                    }
+                                }
+                                return item;
+                            }
+                            return typeof item === 'object' && item !== null ? processObject(item) : item;
+                        });
+                    } else if (typeof value === 'object' && value !== null) {
+                        value = processObject(value);
+                    }
+
+                    result[key] = value;
+                }
+            }
+            return result;
+        };
+
+        const processedData = processObject(row.original._original);
+
+        const subTableData = Object.keys(processedData).map(key => {
             return {
                 field: key,
                 value: row.original._original[key],
@@ -103,13 +172,13 @@ export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetch
         return (
             <div
                 className={css`
-                    position: relative;
-                `}
+                position: relative;
+            `}
             >
                 <TabsBar
                     className={css`
-                        ${theme.isDark ? 'background-color: hsl(var(--n9) / 0.4);' : 'background-color: hsl(var(--b1) / 0.6);'}
-                    `}
+                    ${theme.isDark ? 'background-color: hsl(var(--n9) / 0.4);' : 'background-color: hsl(var(--b1) / 0.6);'}
+                `}
                 >
                     {state.map((tab, index) => {
                         return (
@@ -136,88 +205,95 @@ export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetch
                         <table
                             // className="bg-b1/20 pl-4 backdrop-blur-md dark:bg-n9/60"
                             className={css`
-                                padding-left: 16px;
-                                backdrop-filter: blur(12px);
-                                -webkit-backdrop-filter: blur(12px);
-                                width: 100%;
-                                ${theme.isDark ? 'background-color: hsl(var(--n9) / 0.6);' : 'background-color: hsl(var(--b1) / 0.2)'}
-                            `}
+                            padding-left: 16px;
+                            backdrop-filter: blur(12px);
+                            -webkit-backdrop-filter: blur(12px);
+                            width: 100%;
+                            ${theme.isDark ? 'background-color: hsl(var(--n9) / 0.6);' : 'background-color: hsl(var(--b1) / 0.2)'}
+                        `}
                         >
                             <tbody>
-                                {subTableData.map((item: any) => {
-                                    let fieldValue = item.value;
-                                    const fieldName = item.field;
-                                    if (typeof fieldValue === 'object') {
-                                        fieldValue = JSON.stringify(fieldValue);
-                                    }
-                                    const tableRowStyle = css`
-                                        &:hover {
-                                            .filter-table-content {
-                                                visibility: visible;
-                                            }
+                            {subTableData.map((item: any) => {
+                                let fieldValue = item.value;
+                                const fieldName = item.field;
+                                if (typeof fieldValue === 'object') {
+                                    fieldValue = JSON.stringify(fieldValue);
+                                }
+                                const tableRowStyle = css`
+                                    &:hover {
+                                        .filter-table-content {
+                                            visibility: visible;
                                         }
-                                    `;
-                                    return (
-                                        <tr className={`${tableRowStyle}`} key={fieldName}>
-                                            <td
+                                    }
+                                `;
+                                return (
+                                    <tr className={`${tableRowStyle}`} key={fieldName}>
+                                        <td
+                                            className={css`
+                                                height: 32px;
+                                                width: 70px;
+                                            `}
+                                        >
+                                            <div
+                                                className={`filter-table-content ${css`
+                                                    visibility: hidden;
+                                                `}`}
+                                            >
+                                                <ContentTableActions fieldName={fieldName} fieldValue={fieldValue} />
+                                            </div>
+                                        </td>
+                                        <td
+                                            className={css`
+                                                height: 32px;
+                                                font-size: 12px;
+                                            `}
+                                        >
+                                            {fieldName || '-'}
+                                        </td>
+                                        <td
+                                            className={css`
+                                                height: 32px;
+                                                font-size: 12px;
+                                                white-space: normal;
+                                            `}
+                                        >
+                                            <div
                                                 className={css`
-                                                    height: 32px;
-                                                    width: 70px;
+                                                    width: 100%;
+                                                    word-break: break-all;
                                                 `}
                                             >
-                                                <div
-                                                    className={`filter-table-content ${css`
-                                                        visibility: hidden;
-                                                    `}`}
-                                                >
-                                                    <ContentTableActions fieldName={fieldName} fieldValue={fieldValue} />
-                                                </div>
-                                            </td>
-                                            <td
-                                                className={css`
-                                                    height: 32px;
-                                                    font-size: 12px;
-                                                `}
-                                            >
-                                                {fieldName || '-'}
-                                            </td>
-                                            <td
-                                                className={css`
-                                                    height: 32px;
-                                                    font-size: 12px;
-                                                    white-space: normal;
-                                                `}
-                                            >
-                                                <div
-                                                    className={css`
-                                                        width: 100%;
-                                                        word-break: break-all;
-                                                    `}
-                                                >
-                                                    {fieldValue || '-'}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
+                                                {fieldValue || '-'}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                             </tbody>
                         </table>
                     )}
                     {state[1].active && (
                         <div>
-                            <JsonView
-                                value={row.original._original}
-                                className={`-mt-2 pl-11 !leading-6 ${css`
-                                    .w-rjv-wrap {
-                                        border-left: none !important;
-                                    }
-                                `}`}
-                                shortenTextAfterLength={0}
-                                indentWidth={36}
-                                displayDataTypes={false}
-                                enableClipboard={false}
-                                style={theme.isDark ? SELECTDB_THEME : SELECTDB_THEME_LIGHT}
-                            />
+            <pre
+                className={css`
+                    padding: 16px;
+                    margin: 0;
+                    overflow-x: auto;
+                    white-space: pre-wrap;
+                    word-break: break-all;
+                    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                    font-size: 12px;
+                    line-height: 1.5;
+                    ${theme.isDark
+                    ? 'background-color: #1e1e1e; color: #d4d4d4;'
+                    : 'background-color: #f5f5f5; color: #333;'}
+                    border-radius: 4px;
+                    max-height: 400px;
+                    overflow-y: auto;
+                `}
+            >
+                {JSON.stringify(processedData, null, 2)}
+            </pre>
                         </div>
                     )}
                 </TabContent>
@@ -228,21 +304,22 @@ export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetch
                         setSelectedRow(row.original);
                     }}
                     className={css`
-                        position: absolute;
-                        right: 1rem;
-                        top: 0;
-                        cursor: pointer;
-                        padding-top: 0.5rem;
-                        &:hover {
-                            color: rgb(43, 102, 253);
-                        }
-                    `}
+                    position: absolute;
+                    right: 1rem;
+                    top: 0;
+                    cursor: pointer;
+                    padding-top: 0.5rem;
+                    &:hover {
+                        color: rgb(43, 102, 253);
+                    }
+                `}
                 >
                     Surrounding Logs
                 </a>
             </div>
         );
     };
+
 
     const openTraceDrawer = (traceId: string) => {
         // request
