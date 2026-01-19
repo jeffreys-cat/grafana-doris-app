@@ -41,7 +41,10 @@ export const getFieldType = (columnType: string | undefined) => {
         return '';
     }
     const currentColumnType = FIELD_TYPES.find(item => item.value.some(val => columnType.toLocaleUpperCase().includes(val)));
-    return currentColumnType?.key;
+    if (currentColumnType) {
+        return currentColumnType.key;
+    }
+    return '';
 };
 
 export const DISCOVER_DEFAULT_STATUS: DiscoverCurrent = {
