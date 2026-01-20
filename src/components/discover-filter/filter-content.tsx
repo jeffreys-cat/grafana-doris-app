@@ -4,7 +4,7 @@ import { nanoid } from 'nanoid';
 import { Select, InlineField, InlineFieldRow, InlineSwitch, Button, Input, Field } from '@grafana/ui';
 import { tableFieldsAtom, dataFilterAtom, tableFieldValuesAtom } from 'store/discover';
 import { DataFilterType, Operator } from 'types/type';
-import { OPERATORS } from 'utils/data';
+import { OPERATORS, getFieldType } from 'utils/data';
 import { Controller, useForm } from 'react-hook-form';
 import { containerStyle, rowStyle, colStyle, footerStyle } from './discover-filter.style';
 
@@ -37,31 +37,74 @@ export function FilterContent({ onHide, dataFilterValue }: { onHide: () => void;
         },
     });
 
-    // const field: any = watch('field');
+    const field: any = watch('field');
     const operator: any = watch('operator');
     const showLabel: any = watch('showLabel');
+
+    // use centralized getFieldType from utils
+    const selectedFieldType = React.useMemo(() => {
+        const fieldName = typeof field === 'string' ? field : field?.value;
+        if (!fieldName) {
+            return '';
+        }
+        const tf = tableFields.find((f: any) => f.Field === fieldName);
+        return getFieldType(tf?.Type);
+    }, [field, tableFields]);
+
+    const isNumberField = selectedFieldType === 'NUMBER';
+    const isBooleanField = selectedFieldType === 'BOOLEAN';
+    const isTimeField = selectedFieldType === 'DATE';
+
+    // Normalize OPERATORS to the form {label, value} and filter out inapplicable operators based on field type.
+    const operatorOptions = React.useMemo(() => {
+        const normalized = ((OPERATORS || []) as any[]).map(op => ({ label: (op && op.label) || op, value: (op && op.value) || op }));
+        // text matching ops to remove for numeric fields
+        const textMatchOps = ['like', 'not like', 'match_all', 'match_any', 'match_phrase', 'match_phrase_prefix'];
+
+        if (isBooleanField) {
+            // BOOLEAN should only allow equality and null checks
+            const allowed = new Set(['=', '!=', 'is null', 'is not null']);
+            return normalized.filter(opItem => allowed.has(String(opItem.value)));
+        }
+
+        const isNumberOrTime = isNumberField || isTimeField;
+        if (isNumberOrTime) {
+            // remove text match ops for number or time fields
+            return normalized.filter(opItem => {
+                const v = String(opItem.value).toLowerCase();
+                return !textMatchOps.includes(v);
+            });
+        }
+
+        // non-number, non-boolean, non-time fields: keep full list
+        return normalized;
+     }, [isNumberField, isBooleanField, isTimeField]);
 
     const getValue = (value: string): string | number => (isNaN(+value) ? value : +value);
 
     const onSubmit = (formValues: any) => {
-        const { field, operator, value, minValue, maxValue, label } = formValues;
+        const { field, operator: opField, value, minValue, maxValue, label } = formValues;
         const current = dataFilter.find(f => f.id === dataFilterValue?.id);
         const id = dataFilterValue?.id || nanoid();
 
+        // The compatible operator could be string or {label, value}.
+        const opValue = typeof opField === 'string' ? opField : opField?.value;
+
         let newValue: any[] = [];
 
-        if (operator.value === 'between' || operator.value === 'not between') {
+        if (opValue === 'between' || opValue === 'not between') {
             if (minValue && maxValue) {
                 newValue = [getValue(minValue), getValue(maxValue)];
             }
-        } else if (value || typeof value === 'number') {
+        } else if (value !== undefined && value !== '') {
+            // accept 0 and other falsy numeric values
             newValue = [value];
         }
 
         const newItem = {
             id,
             fieldName: field.value,
-            operator: operator.value,
+            operator: opValue,
             label,
             value: newValue,
         };
@@ -183,10 +226,7 @@ export function FilterContent({ onHide, dataFilterValue }: { onHide: () => void;
                             render={({ field }) => (
                                 <Select
                                     {...field}
-                                    options={OPERATORS.map(op => ({
-                                        label: op,
-                                        value: op,
-                                    }))}
+                                    options={operatorOptions}
                                 />
                             )}
                         />
