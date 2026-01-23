@@ -2,12 +2,13 @@ import { useAtom, useAtomValue } from 'jotai';
 import React from 'react';
 import { nanoid } from 'nanoid';
 import { Select, InlineField, InlineFieldRow, InlineSwitch, Button, Input, Field } from '@grafana/ui';
-import { tableFieldsAtom, tableFieldValuesAtom, surroundingDataFilterAtom } from 'store/discover';
+import { tableFieldsAtom, tableFieldValuesAtom, surroundingDataFilterAtom, tableDataAtom } from 'store/discover';
 import { Operator } from 'types/type';
 import { OPERATORS, getFieldType } from 'utils/data';
 import { Controller, useForm } from 'react-hook-form';
 import { containerStyle, rowStyle, colStyle, footerStyle } from './discover-filter.style';
 import { FilterContentProps } from '../types';
+import { uniqBy } from 'lodash-es';
 
 export function FilterContent(props: FilterContentProps) {
     const { onHide, dataFilterValue } = props;
@@ -18,13 +19,15 @@ export function FilterContent(props: FilterContentProps) {
         // @ts-ignore
         surroundingDataFilterAtom.debugLabel = 'surroundingDataFilter';
     }
-    const tableFieldValue = useAtomValue(tableFieldValuesAtom);
+    const [tableFieldValue, setTableFieldValue] = useAtom(tableFieldValuesAtom);
+    const tableData = useAtomValue(tableDataAtom);
 
     const {
         control,
         handleSubmit,
         watch,
         register,
+        setValue,
         formState: { errors },
     } = useForm({
         defaultValues: {
@@ -118,17 +121,14 @@ export function FilterContent(props: FilterContentProps) {
             return getValue(String(v));
         }
 
-        // Fallback: if the value looks like a number, convert it (this handles cases when field type detection isn't set)
-        const asStr = String(v);
-        if (asStr.trim() !== '' && !Number.isNaN(Number(asStr))) {
-            return Number(asStr);
-        }
+        // NOTE: only convert to Number when the field type is numeric. For non-number fields
+        // preserve the original string so values like '00123' remain strings.
 
         return v;
     };
 
     const onSubmit = (formValues: any) => {
-        const { field, operator: opField, value, minValue, maxValue, label } = formValues;
+        const { field, operator: opField, value, minValue, maxValue, label, showLabel } = formValues;
         const current = surroundingDataFilter.find(f => f.id === dataFilterValue?.id);
         const id = dataFilterValue?.id || nanoid();
 
@@ -155,7 +155,8 @@ export function FilterContent(props: FilterContentProps) {
             id,
             fieldName: field.value,
             operator: opValue,
-            label,
+            // Only persist label when showLabel is true. Otherwise ensure it's empty.
+            label: showLabel ? label : '',
             value: newValue,
         };
 
@@ -168,6 +169,38 @@ export function FilterContent(props: FilterContentProps) {
 
         onHide();
     };
+
+    // When user turns off the Custom Label switch, clear the label form value so it won't persist.
+    React.useEffect(() => {
+        // watch 'showLabel' via the form's watch above; this effect runs when showLabel changes
+        // but we need access to the current 'showLabel' value - use watch above.
+        const currentShowLabel = (watch as any)('showLabel');
+        if (!currentShowLabel) {
+            // Clear the label in the form state so it won't be saved or re-displayed.
+            setValue('label', '');
+
+            // If we're editing an existing filter, also remove the label from the stored filter
+            // so the filter chip/list updates immediately and the switch remains off when reopened.
+            if (dataFilterValue?.id) {
+                setSurroundingDataFilter(prev => {
+                    let changed = false;
+                    const updated = prev.map(f => {
+                        if (f.id === dataFilterValue.id) {
+                            if (f.label) {
+                                changed = true;
+                                return { ...f, label: '' };
+                            }
+                            return f;
+                        }
+                        return f;
+                    });
+                    return changed ? updated : prev;
+                });
+            }
+        }
+        // We only want this effect to run when the form's showLabel changes or when editing a different filter
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [watch, setValue, dataFilterValue?.id, setSurroundingDataFilter]);
 
     function renderFiledComponent() {
         const currentOperator = (typeof operator === 'string' ? operator : operator?.value) as Operator | undefined;
@@ -201,14 +234,9 @@ export function FilterContent(props: FilterContentProps) {
                 <>
                     <Field label="Value" invalid={!!errors.value} error={(errors.value as any)?.message}>
                         {/* Allow empty string as a valid value: treat undefined as missing but accept '' */}
-                        <Input {...register('value', { validate: (v: any) => v !== undefined || 'Enter the value' })} list="field-value-list" />
+                        <Input {...register('value', { validate: (v: any) => v !== undefined || 'Enter the value' })} />
                     </Field>
-                    <datalist id="field-value-list">
-                        {tableFieldValue.map((item, idx) => (
-                            <option key={idx} value={item.value} />
-                        ))}
-                    </datalist>
-                </>
+                 </>
             );
         }
         if (currentOperator === 'in' || currentOperator === 'not in') {
@@ -255,6 +283,23 @@ export function FilterContent(props: FilterContentProps) {
                             render={({ field }) => (
                                 <Select
                                     {...field}
+                                    onChange={(selected) => {
+                                        // Only update tableFieldValue when we actually have table data and a selected field
+                                        if (selected?.value && Array.isArray(tableData) && tableData.length > 0) {
+                                            setTableFieldValue(
+                                                uniqBy(
+                                                    tableData.map((item) => ({
+                                                        label: selected.value,
+                                                        value: item._original[selected.value],
+                                                    })),
+                                                    'value',
+                                                ),
+                                            );
+                                        } else {
+                                            setTableFieldValue([]);
+                                        }
+                                        field.onChange(selected);
+                                    }}
                                     options={tableFields.map(f => ({
                                         label: f.Field,
                                         value: f.Field,
@@ -310,3 +355,4 @@ export function FilterContent(props: FilterContentProps) {
         </form>
     );
 }
+
