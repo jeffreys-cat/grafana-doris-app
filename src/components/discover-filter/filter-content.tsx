@@ -20,6 +20,7 @@ export function FilterContent({ onHide, dataFilterValue }: { onHide: () => void;
         handleSubmit,
         watch,
         register,
+        setValue,
         formState: { errors },
     } = useForm({
         defaultValues: {
@@ -42,6 +43,33 @@ export function FilterContent({ onHide, dataFilterValue }: { onHide: () => void;
     const field: any = watch('field');
     const operator: any = watch('operator');
     const showLabel: any = watch('showLabel');
+
+    // When user turns off the Custom Label switch, clear the label form value so it won't persist.
+    React.useEffect(() => {
+        if (!showLabel) {
+            // Clear the label in the form state so it won't be saved or re-displayed.
+            setValue('label', '');
+
+            // If we're editing an existing filter, also remove the label from the stored filter
+            // so the filter chip/list updates immediately and the switch remains off when reopened.
+            if (dataFilterValue?.id) {
+                setDataFilter(prev => {
+                    let changed = false;
+                    const updated = prev.map(f => {
+                        if (f.id === dataFilterValue.id) {
+                            if (f.label) {
+                                changed = true;
+                                return { ...f, label: '' };
+                            }
+                            return f;
+                        }
+                        return f;
+                    });
+                    return changed ? updated : prev;
+                });
+            }
+        }
+    }, [showLabel, setValue, dataFilterValue?.id, setDataFilter]);
 
     // use centralized getFieldType from utils
     const selectedFieldType = React.useMemo(() => {
@@ -113,17 +141,14 @@ export function FilterContent({ onHide, dataFilterValue }: { onHide: () => void;
             return getValue(String(v));
         }
 
-        // Fallback: if the value looks like a number, convert it (this handles cases when field type detection isn't set)
-        const asStr = String(v);
-        if (asStr.trim() !== '' && !Number.isNaN(Number(asStr))) {
-            return Number(asStr);
-        }
+        // NOTE: removed previous fallback that converted numeric-looking strings to Number for
+        // non-number fields. Now we only convert to Number when the field type is numeric.
 
         return v;
     };
 
     const onSubmit = (formValues: any) => {
-        const { field, operator: opField, value, minValue, maxValue, label } = formValues;
+        const { field, operator: opField, value, minValue, maxValue, label, showLabel } = formValues;
         const current = dataFilter.find(f => f.id === dataFilterValue?.id);
         const id = dataFilterValue?.id || nanoid();
 
@@ -150,7 +175,8 @@ export function FilterContent({ onHide, dataFilterValue }: { onHide: () => void;
             id,
             fieldName: field.value,
             operator: opValue,
-            label,
+            // Only persist label when showLabel is true. Otherwise ensure it's empty.
+            label: showLabel ? label : '',
             value: newValue,
         };
         if (current) {
@@ -199,13 +225,8 @@ export function FilterContent({ onHide, dataFilterValue }: { onHide: () => void;
                 <>
                     <Field label="Value" invalid={!!errors.value} error={(errors.value as any)?.message}>
                         {/* Allow empty string as a valid value: treat undefined as missing but accept '' */}
-                        <Input {...register('value', { validate: (v: any) => v !== undefined || 'Enter the value' })} list="field-value-list" />
+                        <Input {...register('value', { validate: (v: any) => v !== undefined || 'Enter the value' })} />
                     </Field>
-                    <datalist id="field-value-list">
-                        {tableFieldValue.map((item, idx) => (
-                            <option key={idx} value={item.value} />
-                        ))}
-                    </datalist>
                 </>
             );
         }
@@ -255,10 +276,20 @@ export function FilterContent({ onHide, dataFilterValue }: { onHide: () => void;
                                 <Select
                                     {...field}
                                     onChange={(selected) => {
-                                        setTableFieldValue(uniqBy(tableData.map((item) => ({
-                                            label: selected.value,
-                                            value: item._original[selected.value]
-                                        })), 'value'))
+                                        // Only update tableFieldValue when we actually have table data and a selected field
+                                        if (selected?.value && Array.isArray(tableData) && tableData.length > 0) {
+                                            setTableFieldValue(
+                                                uniqBy(
+                                                    tableData.map((item) => ({
+                                                        label: selected.value,
+                                                        value: item._original[selected.value],
+                                                    })),
+                                                    'value',
+                                                ),
+                                            );
+                                        } else {
+                                            setTableFieldValue([]);
+                                        }
                                         field.onChange(selected)
                                     }}
 
