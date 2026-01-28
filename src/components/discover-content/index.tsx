@@ -59,7 +59,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetch
     const { logsConfig = {} } = jsonData as AppPluginSettings;
     const { database = "", datasource = {}, logsTable = "", targetTraceTable = "" } = logsConfig;
 
-    const isTargetLogTable = discoverCurrent.table === logsTable && discoverCurrent.database === database && currentDatasource?.id === datasource?.id; //todo 补充完整 
+    const isTargetLogTable = discoverCurrent.table === logsTable && discoverCurrent.database === database && currentDatasource?.id === datasource?.id;
 
     useEffect(() => {
         if (theme.isDark) {
