@@ -30,6 +30,8 @@ import SurroundingLogs from 'components/surrounding-logs';
 import TraceDetail from 'components/trace-detail';
 import { usePluginContext } from '@grafana/data';
 import type { AppPluginSettings } from 'components/AppConfig/AppConfig';
+import { QUERY_TRACE_FIELDS, formatTimestampToDateTime, isValidTimeFieldType  } from 'utils/data';
+
 
 export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetchNextPage: (page: number) => void; getTraceData: (traceId: string, table?: string, callback?: Function) => any }) {
     const theme = useTheme2();
@@ -58,6 +60,12 @@ export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetch
     const jsonData = context.meta.jsonData;
     const { logsConfig = {} } = jsonData as AppPluginSettings;
     const { database = "", datasource = {}, logsTable = "", targetTraceTable = "" } = logsConfig;
+    // local input state for page-jump control
+    const [jumpPage, setJumpPage] = useState<string>(String(page));
+
+    useEffect(() => {
+        setJumpPage(String(page));
+    }, [page]);
 
     const isTargetLogTable = discoverCurrent.table === logsTable && discoverCurrent.database === database && currentDatasource?.id === datasource?.id;
 
@@ -361,38 +369,57 @@ export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetch
                 },
             },
             {
-                header: 'Time',
+                header: () => currentTimeField || 'Time',
                 accessorKey: 'time',
                 cell: ({ row, getValue }) => {
                     const fieldValue = getValue<string>();
                     const fieldName = currentTimeField;
-                    const fieldType = 'DATE';
-                    const timeField = fieldValue;
-                    return (
-                        <div
-                            className={`${css`
-                                width: 240px;
-                            `} ${HoverStyle}`}
-                        >
-                            <div
-                                className={css`
-                                    display: flex;
-                                    align-items: center;
-                                `}
-                            >
-                                {timeField}
-                                <div
-                                    className={`filter-content ${css`
-                                        visibility: hidden;
-                                    `}`}
-                                >
-                                    <ContentItem fieldName={fieldName} fieldValue={fieldValue} fieldType={fieldType} />
-                                </div>
-                            </div>
-                        </div>
-                    );
-                },
-            },
+                    // try to find field type from tableFields
+                    const fieldInfo = tableFields.find((f: any) => f.value === currentTimeField);
+                    const fieldType = fieldInfo?.Type || '';
+                    let timeField: any = fieldValue;
+
+                    // If this field is a valid time field type, try to format it
+                    try {
+                        if (fieldInfo && isValidTimeFieldType(String(fieldInfo.Type).toUpperCase())) {
+                            // if numeric timestamp, convert
+                            const num = Number(fieldValue);
+                            if (!Number.isNaN(num)) {
+                                timeField = formatTimestampToDateTime(num);
+                            } else {
+                                // otherwise keep raw string (or attempt Date parse)
+                                timeField = String(fieldValue || '');
+                            }
+                        }
+                    } catch (e) {
+                        // fallback to raw
+                        timeField = fieldValue;
+                    }
+                     return (
+                         <div
+                             className={`${css`
+                                 width: 240px;
+                             `} ${HoverStyle}`}
+                         >
+                             <div
+                                 className={css`
+                                     display: flex;
+                                     align-items: center;
+                                 `}
+                             >
+                                 {timeField}
+                                 <div
+                                     className={`filter-content ${css`
+                                         visibility: hidden;
+                                     `}`}
+                                 >
+                                     <ContentItem fieldName={fieldName} fieldValue={fieldValue} fieldType={fieldType} />
+                                 </div>
+                             </div>
+                         </div>
+                     );
+                 },
+             },
         ];
         if (!hasSelectedFields) {
             dynamicColumns.push({
@@ -592,14 +619,81 @@ export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetch
                 `}
             >
                 <div>Total {tableTotalCount} rows</div>
-                <Pagination
-                    currentPage={page}
-                    numberOfPages={Math.ceil(tableTotalCount / pageSize) || 1}
-                    onNavigate={toPage => {
-                        setPage(toPage);
-                    }}
-                />
-            </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Pagination
+                        currentPage={page}
+                        numberOfPages={Math.ceil(tableTotalCount / pageSize) || 1}
+                        onNavigate={toPage => {
+                            setPage(toPage);
+                        }}
+                    />
+                    {/* Page jump input */}
+                    <div
+                        className={css`
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                        `}
+                    >
+                        {/* local controlled input for typing page number */}
+                        <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={jumpPage}
+                            onChange={e => {
+                                setJumpPage(e.target.value);
+                            }}
+                            onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                    const num = Number(jumpPage);
+                                    const total = Math.max(Math.ceil(tableTotalCount / pageSize) || 1, 1);
+                                    if (!Number.isNaN(num)) {
+                                        const target = Math.min(Math.max(1, Math.floor(num)), total);
+                                        setPage(target);
+                                        try {
+                                            fetchNextPage && fetchNextPage(target);
+                                        } catch {}
+                                        setJumpPage(String(target));
+                                    } else {
+                                        // reset to current page if invalid
+                                        setJumpPage(String(page));
+                                    }
+                                }
+                            }}
+                            className={css`
+                                width: 72px;
+                                padding: 6px 8px;
+                                border-radius: 4px;
+                                border: 1px solid rgba(0,0,0,0.15);
+                            `}
+                        />
+                        <button
+                            onClick={() => {
+                                const num = Number(jumpPage);
+                                const total = Math.max(Math.ceil(tableTotalCount / pageSize) || 1, 1);
+                                if (!Number.isNaN(num)) {
+                                    const target = Math.min(Math.max(1, Math.floor(num)), total);
+                                    setPage(target);
+                                    try {
+                                        fetchNextPage && fetchNextPage(target);
+                                    } catch {}
+                                    setJumpPage(String(target));
+                                } else {
+                                    setJumpPage(String(page));
+                                }
+                            }}
+                            className={css`
+                                padding: 6px 10px;
+                                border-radius: 4px;
+                                border: 1px solid rgba(0,0,0,0.15);
+                                background: transparent;
+                                cursor: pointer;
+                            `}
+                        >Go</button>
+                     </div>
+                 </div>
+              </div>
             <TraceDetail onClose={() => setDrawerOpen(false)} open={drawerOpen} traceId={selectedRow?.trace_id} traceTable="otel_traces" />
 
             {surroundingLogsOpen && (
