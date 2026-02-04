@@ -757,9 +757,11 @@ export function generateHighlightedResults(data: { search_value: string; indexes
                 if (isWrappedInQuotes(keyword)) {
                     const parsedKeyword = parseKeywords(keyword);
                     if (parsedKeyword === strValue) {
-                        highlightValue = `<mark>${itemValue}</mark>`;
+                        // highlightValue = `<mark>${itemValue}</mark>`;
+                        highlightValue = itemValue;
                     } else if (strValue.includes(parsedKeyword)) {
-                        highlightValue = highlightDelimiter(strValue, parsedKeyword);
+                        // highlightValue = highlightDelimiter(strValue, parsedKeyword);
+                          highlightValue = strValue;
                     }
                 } else {
                     const tokenizedAns = Array.from(jsTokens(strValue)).map(item => item.value);
@@ -781,12 +783,12 @@ export function generateHighlightedResults(data: { search_value: string; indexes
 
                     if (ans.length > 0) {
                         highlightValue = ans.reduce((acc: string, curr: string) => {
-                            if (
-                                keywordsTokens.filter(token => !isIgnorableHighlightToken(token)).find(token => compare_ignore_quotes(token, curr.toLowerCase())) ||
-                                compare_ignore_quotes(keyword.toLowerCase(), curr.toLowerCase())
-                            ) {
-                                return acc + `<mark>${curr}</mark>`;
-                            }
+                            // if (
+                            //     keywordsTokens.filter(token => !isIgnorableHighlightToken(token)).find(token => compare_ignore_quotes(token, curr.toLowerCase())) ||
+                            //     compare_ignore_quotes(keyword.toLowerCase(), curr.toLowerCase())
+                            // ) {
+                            //     return acc + `<mark>${curr}</mark>`;
+                            // }
                             return acc + curr;
                         }, '');
                     }
@@ -805,7 +807,6 @@ export function generateHighlightedResults(data: { search_value: string; indexes
                 data-trace-id="${traceId}"
             >${content}</a>`;
             }
-
             itemSource += `<span class="field-key">${key}:</span>${highlightValue} `;
         }
 

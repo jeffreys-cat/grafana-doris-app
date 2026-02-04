@@ -20,7 +20,7 @@ import {
     tableFieldsAtom
 } from 'store/discover';
 import { get } from 'lodash-es';
-import { Button as AntButton } from 'antd';
+import { Button as AntButton, Tooltip } from 'antd';
 import SDCollapsibleTable from 'components/selectdb-ui/sd-collapsible-table';
 import { ColumnStyleWrapper, HoverStyle } from './discover-content.style';
 import { css } from '@emotion/css';
@@ -30,7 +30,7 @@ import SurroundingLogs from 'components/surrounding-logs';
 import TraceDetail from 'components/trace-detail';
 import { usePluginContext } from '@grafana/data';
 import type { AppPluginSettings } from 'components/AppConfig/AppConfig';
-import { formatTimestampToDateTime, isValidTimeFieldType  } from 'utils/data';
+import { formatTimestampToDateTime, isValidTimeFieldType } from 'utils/data';
 
 
 export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetchNextPage: (page: number) => void; getTraceData: (traceId: string, table?: string, callback?: Function) => any }) {
@@ -58,8 +58,8 @@ export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetch
     const context = usePluginContext();
     // user settings
     const jsonData = context.meta.jsonData || {};
-    console.log('jsonData',jsonData);
-    
+    console.log('jsonData', jsonData);
+
     const { logsConfig = {} } = jsonData as AppPluginSettings;
     const { database = "", datasource = {}, logsTable = "", targetTraceTable = "" } = logsConfig;
     // local input state for page-jump control
@@ -316,13 +316,14 @@ export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetch
                         </div>
                     )}
                 </TabContent>
-                <a
-                    onClick={() => {
-                        console.log('row', row);
-                        setSurroundingLogsOpen(true);
-                        setSelectedRow(row.original);
-                    }}
-                    className={css`
+                <Tooltip title="Surrounding Items will ignore the existing interface's filter conditions and view the context through time.">
+                    <a
+                        onClick={() => {
+                            console.log('row', row);
+                            setSurroundingLogsOpen(true);
+                            setSelectedRow(row.original);
+                        }}
+                        className={css`
                         position: absolute;
                         right: 1rem;
                         top: 0;
@@ -332,9 +333,10 @@ export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetch
                             color: #3D71D9;
                         }
                     `}
-                >
-                    Surrounding Logs
-                </a>
+                    >
+                        Surrounding items
+                    </a>
+                </Tooltip>
             </div>
         );
     };
@@ -397,31 +399,31 @@ export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetch
                         // fallback to raw
                         timeField = fieldValue;
                     }
-                     return (
-                         <div
-                             className={`${css`
+                    return (
+                        <div
+                            className={`${css`
                                  width: 240px;
                              `} ${HoverStyle}`}
-                         >
-                             <div
-                                 className={css`
+                        >
+                            <div
+                                className={css`
                                      display: flex;
                                      align-items: center;
                                  `}
-                             >
-                                 {timeField}
-                                 <div
-                                     className={`filter-content ${css`
+                            >
+                                {timeField}
+                                <div
+                                    className={`filter-content ${css`
                                          visibility: hidden;
                                      `}`}
-                                 >
-                                     <ContentItem fieldName={fieldName} fieldValue={fieldValue} fieldType={fieldType} />
-                                 </div>
-                             </div>
-                         </div>
-                     );
-                 },
-             },
+                                >
+                                    <ContentItem fieldName={fieldName} fieldValue={fieldValue} fieldType={fieldType} />
+                                </div>
+                            </div>
+                        </div>
+                    );
+                },
+            },
         ];
         if (!hasSelectedFields) {
             dynamicColumns.push({
@@ -655,7 +657,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetch
                                         setPage(target);
                                         try {
                                             fetchNextPage && fetchNextPage(target);
-                                        } catch {}
+                                        } catch { }
                                         setJumpPage(String(target));
                                     } else {
                                         // reset to current page if invalid
@@ -679,7 +681,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetch
                                     setPage(target);
                                     try {
                                         fetchNextPage && fetchNextPage(target);
-                                    } catch {}
+                                    } catch { }
                                     setJumpPage(String(target));
                                 } else {
                                     setJumpPage(String(page));
@@ -693,15 +695,15 @@ export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetch
                                 cursor: pointer;
                             `}
                         >Go</button>
-                     </div>
-                 </div>
-              </div>
+                    </div>
+                </div>
+            </div>
             <TraceDetail onClose={() => setDrawerOpen(false)} open={drawerOpen} traceId={selectedRow?.trace_id} traceTable="otel_traces" />
 
             {surroundingLogsOpen && (
                 <Drawer
                     size="lg"
-                    title="Surrounding Logs"
+                    title="Surrounding items"
                     onClose={() => {
                         setSurroundingTableData([]);
                         setSurroundingDataFilter([]);
