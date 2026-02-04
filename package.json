@@ -15,7 +15,7 @@
     "sign": "npx --yes @grafana/sign-plugin@latest",
     "release": "release-it"
   },
-  "author": "Selectdb",
+  "author": "VeloDB",
   "license": "Apache-2.0",
   "devDependencies": {
     "@grafana/eslint-config": "^8.0.0",

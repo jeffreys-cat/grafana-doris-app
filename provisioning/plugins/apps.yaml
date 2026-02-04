@@ -3,7 +3,7 @@ apiVersion: 1
 apps:
   - type: 'doris-app'
     org_id: 1
-    org_name: 'selectdb'
+    org_name: 'velodb'
     disabled: false
     jsonData:
       apiUrl: http://default-url.com
