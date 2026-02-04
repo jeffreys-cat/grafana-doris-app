@@ -18,12 +18,12 @@ export default function SearchType() {
     const theme = useTheme2();
        
     const options = [
-        {
-            label: t`Search`,
-            value: 'Search',
-            disabled: indexes.length === 0,
-            tips: t`Discover.SearchType.Search.DisabledText`,
-        },
+        // {
+        //     label: t`Search`,
+        //     value: 'Search',
+        //     disabled: indexes.length === 0,
+        //     tips: t`Discover.SearchType.Search.DisabledText`,
+        // },
         { label: 'SQL', value: 'SQL' },
         { label: 'Lucene', value: 'Lucene' },
     ];

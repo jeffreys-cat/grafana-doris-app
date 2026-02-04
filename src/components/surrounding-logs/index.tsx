@@ -462,7 +462,7 @@ export default function SurroundingLogs() {
                         </div>
                     )}
                 </TabContent>
-                {/* Surrounding Logs link is handled by parent (DiscoverContent). No action here. */}
+                {/* Surrounding items link is handled by parent (DiscoverContent). No action here. */}
              </div>
          );
      };
