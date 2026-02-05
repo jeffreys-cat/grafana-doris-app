@@ -180,6 +180,7 @@ WITH
     WHERE (parent_span_id IS NULL
     OR parent_span_id = '')
     AND ${timeFilter}
+    AND ${rootSpansFilter}
     group by trace_id,operation,root_service
   ),
   aggregated AS (
