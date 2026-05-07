@@ -34,6 +34,7 @@ export const disabledOptionsAtom = atom<string[]>([]);
 
 export const selectedFieldsAtom = atom<any[]>([]);
 export const tableFieldsAtom = atomWithStorage<any[]>('discover-table-fields', []);
+export const discoverRowsExpandedAtom = atomWithStorage<boolean>('discover-rows-expanded', false);
 
 export const timeFieldsAtom = atomWithStorage<any[]>('discover-time-fields',[]);
 export const tableDataAtom = atom<any[]>([]);
