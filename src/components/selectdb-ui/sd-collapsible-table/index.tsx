@@ -1,6 +1,6 @@
-import React, { Fragment } from 'react';
-import { ColumnDef, Row, flexRender, getCoreRowModel, getExpandedRowModel, useReactTable } from '@tanstack/react-table';
-import { EmptySearchResult, useTheme2 } from '@grafana/ui';
+import React, { Fragment, useEffect, useState } from 'react';
+import { ColumnDef, ExpandedState, Row, flexRender, getCoreRowModel, getExpandedRowModel, useReactTable } from '@tanstack/react-table';
+import { EmptySearchResult, IconButton, useTheme2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 
 interface SDCollapsibleTableProps<TData> {
@@ -9,14 +9,29 @@ interface SDCollapsibleTableProps<TData> {
     renderSubComponent: (props: { row: Row<TData> }) => React.ReactElement;
     getRowCanExpand: (row: Row<TData>) => boolean;
     className?: string;
+    showExpandAllToggle?: boolean;
+    allRowsExpanded?: boolean;
+    onAllRowsExpandedChange?: (expanded: boolean) => void;
 }
 
 export default function SDCollapsibleTable<T>(props: SDCollapsibleTableProps<T>) {
-    const { data, columns, renderSubComponent, getRowCanExpand, className } = props;
+    const { data, columns, renderSubComponent, getRowCanExpand, className, showExpandAllToggle, allRowsExpanded, onAllRowsExpandedChange } = props;
     const theme = useTheme2();
+    const [expanded, setExpanded] = useState<ExpandedState>(allRowsExpanded ? true : {});
+
+    useEffect(() => {
+        if (typeof allRowsExpanded === 'boolean') {
+            setExpanded(allRowsExpanded ? true : {});
+        }
+    }, [allRowsExpanded]);
+
     const table = useReactTable<any>({
         data,
         columns,
+        state: {
+            expanded,
+        },
+        onExpandedChange: setExpanded,
         getRowCanExpand,
         getCoreRowModel: getCoreRowModel(),
         getExpandedRowModel: getExpandedRowModel(),
@@ -27,7 +42,9 @@ export default function SDCollapsibleTable<T>(props: SDCollapsibleTableProps<T>)
             <thead>
                 {table.getHeaderGroups().map(headerGroup => (
                     <tr key={headerGroup.id} className={css`${theme.isDark ? 'border-bottom: 1px solid hsl(var(--border-dark));' : 'border-bottom: 1px solid hsl(var(--border));'} `}>
-                        {headerGroup.headers.map(header => {
+                        {headerGroup.headers.map((header, index) => {
+                            const renderExpandAllToggle = showExpandAllToggle && index === 0;
+                            const isAllRowsExpanded = typeof allRowsExpanded === 'boolean' ? allRowsExpanded : table.getIsAllRowsExpanded();
                             return (
                                 <th
                                     key={header.id}
@@ -52,6 +69,17 @@ export default function SDCollapsibleTable<T>(props: SDCollapsibleTableProps<T>)
                                             }
                                         `}
                                 >
+                                    {renderExpandAllToggle && (
+                                        <IconButton
+                                            name={isAllRowsExpanded ? 'arrow-down' : 'arrow-right'}
+                                            tooltip={isAllRowsExpanded ? 'Collapse all' : 'Expand all'}
+                                            onClick={() => {
+                                                const nextExpanded = !isAllRowsExpanded;
+                                                table.toggleAllRowsExpanded(nextExpanded);
+                                                onAllRowsExpandedChange?.(nextExpanded);
+                                            }}
+                                        />
+                                    )}
                                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                                 </th>
                             );

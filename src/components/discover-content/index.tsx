@@ -17,7 +17,8 @@ import {
     currentTimeFieldAtom,
     discoverCurrentAtom,
     selectedDatasourceAtom,
-    tableFieldsAtom
+    tableFieldsAtom,
+    discoverRowsExpandedAtom
 } from 'store/discover';
 import { get } from 'lodash-es';
 import { Button as AntButton, Tooltip } from 'antd';
@@ -55,6 +56,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetch
     const discoverCurrent = useAtomValue(discoverCurrentAtom);
     const currentDatasource = useAtomValue(selectedDatasourceAtom);
     const tableFields = useAtomValue(tableFieldsAtom);
+    const [discoverRowsExpanded, setDiscoverRowsExpanded] = useAtom(discoverRowsExpandedAtom);
     const context = usePluginContext();
     // user settings
     const jsonData = context.meta.jsonData || {};
@@ -621,6 +623,9 @@ export default function DiscoverContent({ fetchNextPage, getTraceData }: { fetch
                 columns={columns}
                 getRowCanExpand={() => true}
                 renderSubComponent={renderSubComponent}
+                showExpandAllToggle
+                allRowsExpanded={discoverRowsExpanded}
+                onAllRowsExpandedChange={setDiscoverRowsExpanded}
             />
             <div
                 className={css`
