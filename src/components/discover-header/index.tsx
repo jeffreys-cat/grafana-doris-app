@@ -335,7 +335,9 @@ export default function DiscoverHeader(
                             });
 
                         const preferredTimeField = (initOptions?.preferredTimeField ?? currentTimeField ?? '').trim();
-                        const targetTimeField = preferredTimeField || options[0]?.value || '';
+                        const targetTimeField = options.some(option => option.value === preferredTimeField)
+                            ? preferredTimeField
+                            : options[0]?.value || '';
 
                         setDiscoverCurrent(prev => ({
                             ...prev,

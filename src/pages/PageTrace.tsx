@@ -62,7 +62,7 @@ export default function PageTrace() {
     const hasExplicitTraceTableConfig = Boolean(rawLogsConfig?.targetTraceTable);
 
     const showTraceQueryError = React.useCallback((err: any) => {
-        if (!hasExplicitTraceTableConfig) {
+        if (!hasExplicitTraceTableConfig && !currentTable) {
             message.error({
                 content: 'Trace table is not configured. Please configure a trace table in the app settings, or switch to a trace table before querying.',
                 key: TRACE_TABLE_MISMATCH_ERROR_KEY,
@@ -71,7 +71,7 @@ export default function PageTrace() {
             return;
         }
 
-        if (currentTable && configuredTraceTable && currentTable !== configuredTraceTable) {
+        if (hasExplicitTraceTableConfig && currentTable && configuredTraceTable && currentTable !== configuredTraceTable) {
             message.error({
                 content: `The current table "${currentTable}" is not the configured trace table "${configuredTraceTable}". Please switch to the configured trace table and try again.`,
                 key: TRACE_TABLE_MISMATCH_ERROR_KEY,
@@ -80,8 +80,17 @@ export default function PageTrace() {
             return;
         }
 
+        if (!hasExplicitTraceTableConfig) {
+            message.error({
+                content: 'Trace query failed. No default trace table is configured, so the selected table may not match the expected trace schema. Please verify the table, time field, and required trace columns, or configure a default trace table in app settings.',
+                key: TRACE_TABLE_MISMATCH_ERROR_KEY,
+                duration: 5,
+            });
+            return;
+        }
+
         message.error({
-            content: getErrorText(err),
+            content: getErrorText(err) || 'Trace query failed. Please verify the selected trace table, time field, datasource permissions, and required trace columns.',
             key: TRACE_TABLE_MISMATCH_ERROR_KEY,
             duration: 3,
         });
