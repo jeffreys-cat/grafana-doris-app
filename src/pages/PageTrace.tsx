@@ -59,19 +59,19 @@ export default function PageTrace() {
     const rawLogsConfig = (jsonData as AppPluginSettings).logsConfig;
     const logsConfig = mergeLogsConfig(rawLogsConfig);
     const configuredTraceTable = logsConfig.targetTraceTable || '';
-    const hasExplicitTraceTableConfig = Boolean(rawLogsConfig?.targetTraceTable);
+    const hasTraceTableConfig = Boolean(configuredTraceTable);
 
     const showTraceQueryError = React.useCallback((err: any) => {
-        if (!hasExplicitTraceTableConfig && !currentTable) {
+        if (!currentTable) {
             message.error({
-                content: 'Trace table is not configured. Please configure a trace table in the app settings, or switch to a trace table before querying.',
+                content: 'Trace table is not selected. Please select a trace table before querying.',
                 key: TRACE_TABLE_MISMATCH_ERROR_KEY,
                 duration: 4,
             });
             return;
         }
 
-        if (hasExplicitTraceTableConfig && currentTable && configuredTraceTable && currentTable !== configuredTraceTable) {
+        if (hasTraceTableConfig && currentTable !== configuredTraceTable) {
             message.error({
                 content: `The current table "${currentTable}" is not the configured trace table "${configuredTraceTable}". Please switch to the configured trace table and try again.`,
                 key: TRACE_TABLE_MISMATCH_ERROR_KEY,
@@ -80,7 +80,7 @@ export default function PageTrace() {
             return;
         }
 
-        if (!hasExplicitTraceTableConfig) {
+        if (!hasTraceTableConfig) {
             message.error({
                 content: 'Trace query failed. No default trace table is configured, so the selected table may not match the expected trace schema. Please verify the table, time field, and required trace columns, or configure a default trace table in app settings.',
                 key: TRACE_TABLE_MISMATCH_ERROR_KEY,
@@ -94,7 +94,7 @@ export default function PageTrace() {
             key: TRACE_TABLE_MISMATCH_ERROR_KEY,
             duration: 3,
         });
-    }, [configuredTraceTable, currentTable, hasExplicitTraceTableConfig]);
+    }, [configuredTraceTable, currentTable, hasTraceTableConfig]);
 
     const getTraces = React.useCallback(() => {
         if (!currentTable || !currentDatabase || !selectdbDS) {
@@ -216,6 +216,10 @@ export default function PageTrace() {
     }, [currentCatalog, currentDatabase, currentDate, currentTable, currentTimeField, selectdbDS, setTracesServices, showTraceQueryError]);
 
     const getTracesOperations = React.useCallback(() => {
+        if (!currentTable || !currentDatabase || !selectdbDS || !currentTimeField) {
+            return;
+        }
+
         let payload: any = {
             catalog: currentCatalog,
             database: currentDatabase,
@@ -261,7 +265,7 @@ export default function PageTrace() {
             },
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentCatalog, currentDatabase, currentDate, currentService, currentTable, currentTimeField, selectdbDS, setTraceOperations, showTraceQueryError]);
+    }, [currentCatalog, currentDatabase, currentDate, currentService.value, currentTable, currentTimeField, selectdbDS, setTraceOperations, showTraceQueryError]);
 
     useEffect(() => {
         if (currentTimeField && currentTable && currentCatalog && currentDatabase && currentDate) {
@@ -279,7 +283,7 @@ export default function PageTrace() {
         if (currentTimeField && currentTable && currentCatalog && currentDatabase && currentService) {
             getTracesOperations();
         }
-    }, [currentTimeField, currentService, getTracesOperations, currentTable, currentCatalog, currentDatabase]);
+    }, [currentTimeField, currentService, getTracesOperations, currentTable, currentCatalog, currentDatabase, selectdbDS]);
 
     return (
         <div
