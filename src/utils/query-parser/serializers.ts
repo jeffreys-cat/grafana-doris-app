@@ -350,7 +350,7 @@ export abstract class SQLSerializer implements Serializer {
             return this.NOT_FOUND_QUERY;
         }
 
-        if (variantRoot && supportsTextSearch && sourceColumn) {
+        if (supportsTextSearch && sourceColumn) {
             const usePhrasePrefix = !isPhrase && suffixWildcard && !prefixWildcard;
             const matchTerm = isPhrase
                 ? term
@@ -362,8 +362,9 @@ export abstract class SQLSerializer implements Serializer {
                 : usePhrasePrefix
                     ? 'MATCH_PHRASE_PREFIX'
                     : 'MATCH_ANY';
+            const searchTarget = variantRoot ? sourceColumn : `CAST(${column} AS STRING)`;
             return SqlString.format(`(? ${isNegatedField ? 'NOT ' : ''}${operator} ?)`, [
-                SqlString.raw(sourceColumn),
+                SqlString.raw(searchTarget),
                 matchTerm,
             ]);
         }
@@ -858,7 +859,7 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
                                     candidatePropertyType === JSDataType.Variant) &&
                                 candidateExpression.sourceColumn &&
                                 (candidateExpression.columnExpression === candidateExpression.sourceColumn ||
-                                    candidateExpression.variantRoot)
+                                    candidateExpression.variantRoot !== undefined)
                             ) {
                                 candidateSupportsTextSearch = await this.columnHasInvertedIndex(
                                     candidateExpression.sourceColumn,
@@ -905,7 +906,7 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
         if (
             (propertyType === JSDataType.String || propertyType === JSDataType.JSON || propertyType === JSDataType.Variant) &&
             expression.sourceColumn &&
-            (expression.columnExpression === expression.sourceColumn || expression.variantRoot)
+            (expression.columnExpression === expression.sourceColumn || expression.variantRoot !== undefined)
         ) {
             supportsTextSearch = await this.columnHasInvertedIndex(expression.sourceColumn);
         } else if (propertyType === JSDataType.String || propertyType === JSDataType.JSON || propertyType === JSDataType.Variant) {

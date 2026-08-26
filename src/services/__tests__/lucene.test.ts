@@ -251,6 +251,28 @@ describe('getWhereSQLViaLucene', () => {
         expect(result).toBe("(attrs MATCH_ANY 'error')");
     });
 
+    it('uses a VARIANT root inverted index for nested text searches', async () => {
+        mockedGetColumn.mockImplementation(async ({ column }) => {
+            if (column === 'attrs') {
+                return {
+                    name: 'attrs',
+                    normalizedType: 'Variant',
+                    dataType: 'variant',
+                    columnType: 'variant',
+                };
+            }
+            return null;
+        });
+        mockedGetInvertedIndexColumns.mockResolvedValue(['attrs']);
+
+        const result = await getWhereSQLViaLucene({
+            ...baseParams,
+            query: 'attrs.message:error',
+        });
+
+        expect(result).toBe("(CAST(`attrs`['message'] AS STRING) MATCH_ANY 'error')");
+    });
+
     it('falls back to LIKE for variant root text searches without inverted indexes', async () => {
         mockedGetColumn.mockImplementation(async ({ column }) => {
             if (column === 'attrs') {
