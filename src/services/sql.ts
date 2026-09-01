@@ -3,10 +3,10 @@ import { addSqlFilter, transformFieldPath } from 'utils/sql-filter';
 
 export { addSqlFilter, getFilterSQL, transformFieldPath } from 'utils/sql-filter';
 
-export function getQueryOrderBySQL(params: Pick<QueryTableDataParams, 'sort' | 'sortField' | 'timeField'>) {
+export function getQueryOrderBySQL(params: Pick<QueryTableDataParams, 'sort' | 'sortField' | 'timeField'> & { sortFieldPath?: string[] }) {
     const sortField = params.sortField?.trim() || params.timeField;
     const direction = params.sort === 'ASC' ? 'ASC' : 'DESC';
-    const primaryOrder = `${transformFieldPath(sortField)} ${direction}`;
+    const primaryOrder = `${transformFieldPath(sortField, params.sortFieldPath)} ${direction}`;
 
     if (sortField === params.timeField) {
         return primaryOrder;

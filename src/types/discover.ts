@@ -31,6 +31,7 @@ export type DiscoverQueryState = {
 export type DiscoverSort = {
     field: string;
     direction: 'ASC' | 'DESC';
+    variantPath?: string[];
 };
 
 export type DiscoverColumnLayout = {

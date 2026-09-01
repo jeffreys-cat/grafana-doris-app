@@ -16,6 +16,7 @@ import {
     locationAtom,
     // currentClusterAtom,
     tableFieldsAtom,
+    variantFieldsAtom,
     timeFieldsAtom,
     currentDateAtom,
     currentTimeFieldAtom,
@@ -152,6 +153,7 @@ export default function DiscoverHeader(
     const [loc, setLoc] = useAtom(locationAtom);
     // const [currentCluster, setCurrentCluster] = useAtom(currentClusterAtom);
     const [tableFields, setTableFields] = useAtom(tableFieldsAtom);
+    const setVariantFields = useSetAtom(variantFieldsAtom);
     const [timeFields, setTimeFields] = useAtom(timeFieldsAtom);
     const [_currentDate, setCurrentDate] = useAtom(currentDateAtom);
     const currentTimeField = useAtomValue(currentTimeFieldAtom);
@@ -345,6 +347,7 @@ export default function DiscoverHeader(
                     });
 
                     setTableFields(tableFields);
+                    setVariantFields([]);
                     setResolvedFieldsContext(`${effectiveDatasource.uid || ''}\u0000${effectiveDatabase}\u0000${selectedTable.value}`);
 
                     if (values) {

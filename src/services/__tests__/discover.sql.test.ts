@@ -33,6 +33,11 @@ describe('Discover result sorting SQL', () => {
             .toBe("`attributes`['http']['method'] DESC, `timestamp` DESC");
         expect(getQueryOrderBySQL({ ...baseParams, sortField: 'bad`field' }))
             .toContain('`bad``field` DESC');
+        expect(getQueryOrderBySQL({
+            ...baseParams,
+            sortField: 'resource_attributes.k8s.namespace.name',
+            sortFieldPath: ['resource_attributes', 'k8s.namespace.name'],
+        })).toBe("`resource_attributes`['k8s.namespace.name'] DESC, `timestamp` DESC");
     });
 
     it('falls back to the time field when the requested field is not in table metadata', () => {

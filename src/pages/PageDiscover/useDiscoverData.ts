@@ -21,6 +21,7 @@ import {
     tableDataAtom,
     tableDataChartsAtom,
     tableFieldsAtom,
+    variantFieldsAtom,
     tableTotalCountAtom,
     tableTracesDataAtom,
     timeZoneAtom,
@@ -40,6 +41,7 @@ import { formatTimeInZone } from 'utils/time';
 import { createDiscoverQueryError } from 'utils/query-error';
 import { DiscoverQuerySource, DiscoverSort } from 'types/discover';
 import { resolveQuerySortField } from 'services/sql';
+import { deriveVariantFields, flattenVariantLeaves } from 'utils/variant-fields';
 
 type RefreshOptions = {
     skipPageReset?: boolean;
@@ -64,12 +66,15 @@ export function useDiscoverData() {
     const [page, setPage] = useAtom(pageAtom);
     const pageSize = useAtomValue(pageSizeAtom);
     const setTableData = useSetAtom(tableDataAtom);
+    const setVariantFields = useSetAtom(variantFieldsAtom);
     const setTableDataCharts = useSetAtom(tableDataChartsAtom);
     const selectdbDS = useAtomValue(selectedDatasourceAtom);
     const currentTimeField = useAtomValue(currentTimeFieldAtom);
     const interval = useAtomValue(intervalAtom);
     const currentIndexes = useAtomValue(currentIndexAtom);
     const tableFields = useAtomValue(tableFieldsAtom);
+    const variantFields = useAtomValue(variantFieldsAtom);
+    const variantFieldsRef = useRef(variantFields);
     const searchType = useAtomValue(searchTypeAtom);
     const dataFilter = useAtomValue(dataFilterAtom);
     const searchValue = useAtomValue(searchValueAtom);
@@ -87,6 +92,9 @@ export function useDiscoverData() {
     const buildLuceneWhereClause = useLuceneWhereClause();
     const sortContextKey = `${selectdbDS?.uid || ''}\u0000${currentDatabase}\u0000${currentTable}\u0000${currentTimeField}`;
     const sortContextRef = useRef(sortContextKey);
+    useEffect(() => {
+        variantFieldsRef.current = variantFields;
+    }, [variantFields]);
     const formatCurrentTime = useCallback(
         (time?: Dayjs) => {
             return time ? formatTimeInZone(time, timeZone) : undefined;
@@ -124,7 +132,10 @@ export function useDiscoverData() {
             const requestStartedAt = performance.now();
             const nextPage = options?.nextPage ?? page;
             const requestedSort = options?.nextSort ?? (sortContextRef.current === sortContextKey ? sort : { field: currentTimeField, direction: 'DESC' as const });
-            const availableFields = tableFields.map((field: any) => String(field?.Field || field?.value || ''));
+            const availableFields = [
+                ...tableFields.map((field: any) => String(field?.Field || field?.value || '')),
+                ...flattenVariantLeaves(variantFieldsRef.current).map(field => field.Field),
+            ];
             const sortField = resolveQuerySortField(requestedSort.field, currentTimeField, availableFields);
             setLoading(prev => ({ ...prev, getTableData: true }));
             const indexesStatement = getIndexesStatement(currentIndexes, tableFields, searchValue);
@@ -138,6 +149,7 @@ export function useDiscoverData() {
                 cluster: '',
                 sort: requestedSort.direction,
                 sortField,
+                sortFieldPath: sortField === requestedSort.field ? requestedSort.variantPath : undefined,
                 search_type: searchType,
                 indexes: '',
                 page: nextPage,
@@ -192,6 +204,7 @@ export function useDiscoverData() {
                     const frames = data?.results?.getTableData?.frames;
                     if (!frames || !frames[0]) {
                         setTableData([]);
+                        setVariantFields([]);
                         setQueryState(previous => ({
                             ...previous,
                             status: 'success',
@@ -202,6 +215,7 @@ export function useDiscoverData() {
                         return;
                     }
                     const rowsData = convertColumnToRowViaFieldsType(frames[0], tableFields);
+                    setVariantFields(deriveVariantFields(tableFields, rowsData));
                     const resData = generateHighlightedResults(
                         {
                             search_value: searchValue,
@@ -229,6 +243,7 @@ export function useDiscoverData() {
                     }
                     setLoading(prev => ({ ...prev, getTableData: false }));
                     setTableData([]);
+                    setVariantFields([]);
                     setQueryState(previous => ({
                         status: 'error',
                         rowCount: 0,
@@ -258,6 +273,7 @@ export function useDiscoverData() {
             setLoading,
             setQueryState,
             setTableData,
+            setVariantFields,
             sort,
             sortContextKey,
             tableFields,
