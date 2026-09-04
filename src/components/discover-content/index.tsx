@@ -675,7 +675,12 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                 ? nextColumn.id.slice(FIELD_COLUMN_PREFIX.length)
                 : currentTimeField;
         const selectedField = selectedFields.find((item: any) => item.Field === field);
-        onSortChange({ field, direction: nextColumn.desc ? 'DESC' : 'ASC', variantPath: selectedField?.variantPath });
+        onSortChange({
+            field,
+            direction: nextColumn.desc ? 'DESC' : 'ASC',
+            variantPath: selectedField?.variantPath,
+            variantType: selectedField?.Type,
+        });
     }, [currentTimeField, onSortChange, selectedFields, tableSorting]);
 
     const emptyContent = queryState.status === 'error' ? (

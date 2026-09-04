@@ -137,6 +137,15 @@ export function useDiscoverData() {
                 ...flattenVariantLeaves(variantFieldsRef.current).map(field => field.Field),
             ];
             const sortField = resolveQuerySortField(requestedSort.field, currentTimeField, availableFields);
+            // Recover the concrete VARIANT path from the current field catalogue
+            // as well. This keeps sorting safe when a stale table interaction
+            // only supplies the display name.
+            const sortFieldPath = sortField === requestedSort.field
+                ? requestedSort.variantPath || flattenVariantLeaves(variantFieldsRef.current).find(field => field.Field === sortField)?.variantPath
+                : undefined;
+            const sortFieldType = sortFieldPath?.length
+                ? requestedSort.variantType || flattenVariantLeaves(variantFieldsRef.current).find(field => field.Field === sortField)?.Type
+                : undefined;
             setLoading(prev => ({ ...prev, getTableData: true }));
             const indexesStatement = getIndexesStatement(currentIndexes, tableFields, searchValue);
             const payload: any = {
@@ -149,7 +158,8 @@ export function useDiscoverData() {
                 cluster: '',
                 sort: requestedSort.direction,
                 sortField,
-                sortFieldPath: sortField === requestedSort.field ? requestedSort.variantPath : undefined,
+                sortFieldPath,
+                sortFieldType,
                 search_type: searchType,
                 indexes: '',
                 page: nextPage,

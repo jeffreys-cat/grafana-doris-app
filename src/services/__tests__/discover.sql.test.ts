@@ -37,7 +37,13 @@ describe('Discover result sorting SQL', () => {
             ...baseParams,
             sortField: 'resource_attributes.k8s.namespace.name',
             sortFieldPath: ['resource_attributes', 'k8s.namespace.name'],
-        })).toBe("`resource_attributes`['k8s.namespace.name'] DESC, `timestamp` DESC");
+        })).toBe("CAST(`resource_attributes`['k8s.namespace.name'] AS STRING) DESC, `timestamp` DESC");
+        expect(getQueryOrderBySQL({
+            ...baseParams,
+            sortField: 'log_attributes.duration_ms',
+            sortFieldPath: ['log_attributes', 'duration_ms'],
+            sortFieldType: 'DOUBLE',
+        })).toBe("CAST(`log_attributes`['duration_ms'] AS DOUBLE) DESC, `timestamp` DESC");
     });
 
     it('falls back to the time field when the requested field is not in table metadata', () => {

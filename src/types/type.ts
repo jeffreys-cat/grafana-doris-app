@@ -10,6 +10,7 @@ export interface QueryTableDataParams {
     sort: 'ASC' | 'DESC';
     sortField?: string;
     sortFieldPath?: string[];
+    sortFieldType?: string;
     timeField: string;
     data_filters: any[];
     interval?: IntervalEnum;

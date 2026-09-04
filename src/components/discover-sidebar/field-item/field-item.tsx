@@ -64,7 +64,15 @@ export default function FieldItem({ depth = 0, searchActive = '', showChildren =
     return (
         <div>
             {hasChildren || props.type === 'remove' ? item : <Tooltip placement="right" interactive content={<TopData field={field} />}>{item}</Tooltip>}
-            {hasChildren && isExpanded && field.children.map((child: any) => <FieldItem key={child.variantPath?.join('\u0000') || child.Field} {...props} field={child} depth={depth + 1} />)}
+            {hasChildren && isExpanded && field.children.map((child: any) => (
+                <FieldItem
+                    key={child.variantPath?.join('\u0000') || child.Field}
+                    {...props}
+                    field={child}
+                    depth={depth + 1}
+                    searchActive={searchActive}
+                />
+            ))}
         </div>
     );
 }
