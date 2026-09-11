@@ -61,6 +61,7 @@ This plugin is frontend-only and does not include a Go backend.
 ## User guides
 
 - [使用 Doris 数据源配置 Grafana Alert](./docs/grafana-alerting-configuration-zh.md)
+- [Doris SSO Datasource 使用指南](./docs/doris-sso-user-guide-zh.md)
 - [VARIANT 功能与测试说明](./docs/variant-feature-test-zh.md)
 
 # Distributing your plugin

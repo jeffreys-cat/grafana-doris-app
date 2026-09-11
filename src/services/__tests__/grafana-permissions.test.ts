@@ -1,7 +1,7 @@
 import { DataSourceInstanceSettings, DataSourceJsonData } from '@grafana/data';
-import { filterDatasourcesByTeamPermissions } from '../grafana-permissions';
+import { DORIS_DATASOURCE_TYPE, filterDatasourcesByTeamPermissions } from '../grafana-permissions';
 
-function datasource(uid: string, type = 'mysql'): DataSourceInstanceSettings<DataSourceJsonData> {
+function datasource(uid: string, type = DORIS_DATASOURCE_TYPE): DataSourceInstanceSettings<DataSourceJsonData> {
   return {
     uid,
     type,
@@ -16,7 +16,7 @@ describe('filterDatasourcesByTeamPermissions', () => {
     datasource('postgres-a', 'postgres'),
   ];
 
-  test('returns all mysql datasources when user has no teams', () => {
+  test('returns all Doris SSO datasources when user has no teams', () => {
     expect(filterDatasourcesByTeamPermissions(datasources, [], [])).toEqual([
       datasource('doris-a'),
       datasource('doris-b'),

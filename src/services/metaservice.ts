@@ -4,6 +4,7 @@ import { lastValueFrom } from 'rxjs';
 import { withErrorHandler } from 'components/with-error-handler/withErrorHandler';
 import { toError } from 'utils/errors';
 import { escapeSqlIdentifier, quoteSqlLiteral } from 'utils/sql-filter';
+import { DORIS_DATASOURCE_TYPE } from './grafana-permissions';
 
 type GetColumnParams = {
     connectionId: string;
@@ -140,7 +141,7 @@ export async function getColumn({
     database,
     table,
     column,
-    datasourceType = 'mysql',
+    datasourceType = DORIS_DATASOURCE_TYPE,
 }: GetColumnParams): Promise<(ColumnMetadata & { normalizedType: string }) | null> {
     if (!connectionId || !database || !table || !column) {
         return null;
@@ -223,7 +224,7 @@ export async function getInvertedIndexColumns({
     connectionId,
     database,
     table,
-    datasourceType = 'mysql',
+    datasourceType = DORIS_DATASOURCE_TYPE,
 }: GetIndexesParams): Promise<string[]> {
     if (!connectionId || !database || !table) {
         return [];
@@ -309,7 +310,7 @@ export function getDatabases(selectdbDS: any) {
                 {
                     refId: 'getDatabases',
                     datasource: {
-                        type: 'mysql',
+                        type: selectdbDS.type || DORIS_DATASOURCE_TYPE,
                         uid: selectdbDS.uid,
                     },
                     rawSql: 'SHOW DATABASES',
@@ -329,7 +330,7 @@ export function getTablesService({ selectdbDS, database }: { selectdbDS: any; da
             queries: [
                 {
                     refId: 'getTables',
-                    datasource: { type: 'mysql', uid: selectdbDS.uid },
+                    datasource: { type: selectdbDS.type || DORIS_DATASOURCE_TYPE, uid: selectdbDS.uid },
                     rawSql: `SHOW TABLES FROM \`${database}\``,
                     format: 'table',
                 },
@@ -346,7 +347,7 @@ export function getFieldsService({ selectdbDS, database, table }: { selectdbDS: 
             queries: [
                 {
                     refId: 'getFields',
-                    datasource: { type: 'mysql', uid: selectdbDS.uid },
+                    datasource: { type: selectdbDS.type || DORIS_DATASOURCE_TYPE, uid: selectdbDS.uid },
                     rawSql: `SHOW COLUMNS FROM \`${database}\`.\`${table}\``,
                     format: 'table',
                 },
@@ -388,7 +389,7 @@ export function getApplicationValuesService(params: GetApplicationValuesParams) 
             queries: [
                 {
                     refId: 'getApplicationValues',
-                    datasource: { type: 'mysql', uid: selectdbDS.uid },
+                    datasource: { type: selectdbDS.type || DORIS_DATASOURCE_TYPE, uid: selectdbDS.uid },
                     rawSql: getApplicationValuesSQL(queryParams),
                     format: 'table',
                 },
@@ -422,7 +423,7 @@ export function getIndexesService({ selectdbDS, database, table }: { selectdbDS:
             queries: [
                 {
                     refId: 'getIndexes',
-                    datasource: { type: 'mysql', uid: selectdbDS.uid },
+                    datasource: { type: selectdbDS.type || DORIS_DATASOURCE_TYPE, uid: selectdbDS.uid },
                     rawSql: `SHOW INDEXES FROM \`${database}\`.\`${table}\``,
                     format: 'table',
                 },

@@ -1,0 +1,126 @@
+import React from 'react';
+import type { DataSourcePluginOptionsEditorProps } from '@grafana/data';
+import { getBackendSrv } from '@grafana/runtime';
+import { Button, Field, Input, TextArea } from '@grafana/ui';
+import type { DorisSSOJsonData, GroupRoleMapping } from './types';
+
+type Props = DataSourcePluginOptionsEditorProps<DorisSSOJsonData>;
+export interface SSOProfileStatus {
+  configured: boolean;
+  issuer?: string;
+  jwksPublicUrl?: string;
+  signingKeyID?: string;
+  audience?: string;
+  message?: string;
+}
+
+const sectionHeadingStyle = { fontSize: '20px', lineHeight: '28px' };
+function normalizedJsonData(data: DorisSSOJsonData): DorisSSOJsonData {
+  return {
+    ...data,
+    providerMode: 'oidcDiscovery',
+    groupRoleMappings: data.groupRoleMappings?.map(mapping => ({ oidcGroup: mapping.oidcGroup ?? mapping.keycloakGroup ?? '', dorisRole: mapping.dorisRole })),
+  };
+}
+const update = (props: Props, key: keyof DorisSSOJsonData, value: unknown) => props.onOptionsChange({ ...props.options, jsonData: { ...normalizedJsonData(props.options.jsonData), [key]: value } });
+const updateMappings = (props: Props, mappings: GroupRoleMapping[]) => update(props, 'groupRoleMappings', mappings);
+function quoteIdentifier(value: string) {
+  return `\`${value.replace(/`/g, '``')}\``;
+}
+
+function quoteCelString(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/'/g, "\\'");
+}
+
+function bootstrapIdentifier(profile?: SSOProfileStatus) {
+  const uid = profile?.audience?.startsWith('velodb-doris:') ? profile.audience.slice('velodb-doris:'.length) : 'datasource';
+  const suffix = uid.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'datasource';
+  return `grafana_doris_sso_${suffix}`;
+}
+
+export function buildDorisBootstrapSQL(data: DorisSSOJsonData, profile?: SSOProfileStatus) {
+  const mappings = data.groupRoleMappings ?? [];
+  const mappedRoles = Array.from(new Set(mappings.map(mapping => mapping.dorisRole.trim()).filter(Boolean))).sort();
+  const roles = Array.from(new Set([data.dorisRole?.trim() || 'doris_reader', ...mappedRoles]));
+  const roleSQL = roles.map(role => `CREATE ROLE ${quoteIdentifier(role)};`).join('\n');
+  const mappingSQL = roles.map(role => `RULE (USING CEL 'has_group("${quoteCelString(role)}")' GRANT ROLE ${quoteIdentifier(role)})`).join(',\n');
+  const integration = bootstrapIdentifier(profile);
+  const roleMapping = `${integration}_roles`;
+  return `CREATE AUTHENTICATION INTEGRATION ${quoteIdentifier(integration)} PROPERTIES (
+  'type'='oidc', 'enable_jit_user'='true',
+  'oidc.issuer'='${profile?.issuer || '<doris-issuer>'}',
+  'oidc.jwks_uri'='${profile?.jwksPublicUrl || '<public-jwks-url>'}',
+  'oidc.allowed_audiences'='${profile?.audience || '<datasource-audience>'}',
+  'oidc.required_scopes'='doris.query',
+  'oidc.username_claim'='username', 'oidc.subject_claim'='sub',
+  'oidc.groups_claim'='doris_groups', 'oidc.allowed_algorithms'='RS256'
+);
+${roleSQL}
+CREATE ROLE MAPPING ${quoteIdentifier(roleMapping)} ON AUTHENTICATION INTEGRATION ${quoteIdentifier(integration)}
+${mappingSQL};`;
+}
+
+export function ConfigEditor(props: Props) {
+  const data = props.options.jsonData;
+  const mappings = data.groupRoleMappings ?? [];
+  const datasourceUID = props.options.uid;
+  const [profile, setProfile] = React.useState<SSOProfileStatus | undefined>();
+
+  React.useEffect(() => {
+    if (!datasourceUID) {
+      setProfile(undefined);
+      return;
+    }
+    const subscription = getBackendSrv().fetch<SSOProfileStatus>({ url: `/api/datasources/uid/${datasourceUID}/resources/profile` }).subscribe({
+      next: response => setProfile(response.data),
+      error: error => setProfile({ configured: false, message: error?.message ?? 'Unable to read the deployment SSO Profile.' }),
+    });
+    return () => subscription.unsubscribe();
+  }, [datasourceUID]);
+
+  const dorisSQL = buildDorisBootstrapSQL(data, profile);
+  return <>
+    <h2 style={sectionHeadingStyle}>Connection</h2>
+    <Field label="Doris host"><Input value={data.host ?? ''} onChange={e => update(props, 'host', e.currentTarget.value)} /></Field>
+    <Field label="Doris MySQL port"><Input type="number" value={data.port ?? 9030} onChange={e => update(props, 'port', Number(e.currentTarget.value))} /></Field>
+    <Field label="Default database"><Input value={data.database ?? ''} onChange={e => update(props, 'database', e.currentTarget.value)} /></Field>
+    <h2 style={sectionHeadingStyle}>Identity and access</h2>
+    <Field label="OIDC issuer" description="The issuer must expose /.well-known/openid-configuration."><Input placeholder="https://idp.example.com/realms/velodb" value={data.oidcIssuer ?? ''} onChange={e => update(props, 'oidcIssuer', e.currentTarget.value)} /></Field>
+    <Field label="OIDC audience / Grafana OAuth Client ID"><Input value={data.oidcAudience ?? ''} onChange={e => update(props, 'oidcAudience', e.currentTarget.value)} /></Field>
+    <Field label="Resolved identity provider" description="Derived values are validated by Save & test; they are not independently editable.">
+      <TextArea readOnly rows={4} value={`Issuer: ${data.oidcIssuer || '<not configured>'}\nJWKS: Resolved through OIDC Discovery when saved/tested\nAudience: ${data.oidcAudience || '<not configured>'}`} />
+    </Field>
+    <Field label="Default Doris role" description="Only granted when the user has no matching OIDC group mapping."><Input value={data.dorisRole ?? 'doris_reader'} onChange={e => update(props, 'dorisRole', e.currentTarget.value)} /></Field>
+    <Field label="OIDC group to Doris role mappings" description="Match complete OIDC group paths exactly, for example /team/readers. Matched roles replace the default role; multiple matches grant the union of roles.">
+      <div>
+        {mappings.map((mapping, index) => <div key={index} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <Input aria-label={`OIDC group ${index + 1}`} placeholder="/team/readers" value={mapping.oidcGroup ?? mapping.keycloakGroup ?? ''} onChange={e => {
+            const next = [...mappings];
+            next[index] = { oidcGroup: e.currentTarget.value, dorisRole: mapping.dorisRole };
+            updateMappings(props, next);
+          }} />
+          <Input aria-label={`Doris role ${index + 1}`} placeholder="doris_reader" value={mapping.dorisRole} onChange={e => {
+            const next = [...mappings];
+            next[index] = { ...mapping, dorisRole: e.currentTarget.value };
+            updateMappings(props, next);
+          }} />
+          <Button aria-label={`Remove group mapping ${index + 1}`} variant="secondary" onClick={() => updateMappings(props, mappings.filter((_, row) => row !== index))}>Remove</Button>
+        </div>)}
+        <Button variant="secondary" onClick={() => updateMappings(props, [...mappings, { oidcGroup: '', dorisRole: '' }])}>Add group mapping</Button>
+      </div>
+    </Field>
+    <h2 style={sectionHeadingStyle}>Doris SSO bootstrap</h2>
+    {!datasourceUID ? <p>Save this datasource first to generate its Doris token audience and bootstrap SQL.</p> : null}
+    {datasourceUID && !profile ? <p>Loading the deployment SSO Profile…</p> : null}
+    {profile && !profile.configured ? <p>Doris SSO Profile is unavailable: {profile.message ?? 'Contact the Grafana deployment administrator.'}</p> : null}
+    {profile?.configured ? <div>
+      <p>Doris SSO Profile: Configured ✓</p>
+      <p>Issuer: {profile.issuer}<br />JWKS: {profile.jwksPublicUrl}<br />Audience: {profile.audience}<br />Signing key: configured ✓</p>
+    </div> : null}
+    {profile?.configured ? <div style={{ marginTop: 32 }}>
+      <Field label="Doris bootstrap SQL" description="Run this once for this datasource as a Doris administrator after enabling FE TLS. Each datasource has its own integration and audience; the datasource never applies SQL automatically.">
+        <TextArea value={dorisSQL} readOnly rows={14} />
+      </Field>
+    </div> : null}
+  </>;
+}

@@ -16,7 +16,7 @@ import {
   type TeamDatasourcePermission,
 } from 'types/plugin-settings';
 import { toError } from 'utils/errors';
-import { fetchTeams, getMysqlDatasources, GrafanaTeam } from 'services/grafana-permissions';
+import { DORIS_DATASOURCE_TYPE, fetchTeams, getMysqlDatasources, GrafanaTeam } from 'services/grafana-permissions';
 
 export type { AppPluginSettings, LogsConfig };
 export { DEFAULT_LOGS_CONFIG, mergeLogsConfig };
@@ -294,11 +294,11 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
           <Field label="Default Datasource">
             <DataSourcePicker
               width={20}
-              type={'mysql'}
+              type={DORIS_DATASOURCE_TYPE}
               current={currentLogsConfig.datasource}
               placeholder="Choose"
               noDefault
-              filter={ds => ds.type === 'mysql'}
+              filter={ds => ds.type === DORIS_DATASOURCE_TYPE}
               onChange={item => {
                 setCurrentLogsConfig({ ...currentLogsConfig, datasource: item });
                 // Always fetch databases even if the same datasource is selected

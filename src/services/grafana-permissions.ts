@@ -8,6 +8,8 @@ export type GrafanaTeam = {
   name: string;
 };
 
+export const DORIS_DATASOURCE_TYPE = 'velodb-doris-datasource';
+
 type TeamSearchResponse = {
   teams?: GrafanaTeam[];
 };
@@ -37,7 +39,7 @@ export async function fetchTeams(): Promise<GrafanaTeam[]> {
 export function getMysqlDatasources(
   datasources: Array<DataSourceInstanceSettings<DataSourceJsonData>>,
 ): Array<DataSourceInstanceSettings<DataSourceJsonData>> {
-  return datasources.filter(ds => ds.type === 'mysql');
+  return datasources.filter(ds => ds.type === DORIS_DATASOURCE_TYPE);
 }
 
 export function filterDatasourcesByTeamPermissions(

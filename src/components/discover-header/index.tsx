@@ -36,6 +36,7 @@ import {
 import { DISCOVER_SHORTCUTS, getLatestTime, isValidTimeFieldType } from 'utils/data';
 import { Select, Field, Button, Icon, Tooltip, useTheme2, TimeRangeInput } from '@grafana/ui';
 import { getApplicationValuesService, getDatabases, getFieldsService, getIndexesService, getTablesService } from 'services/metaservice';
+import { DORIS_DATASOURCE_TYPE } from 'services/grafana-permissions';
 import { Subscription } from 'rxjs';
 import Lucene from './lucene';
 import { toError } from 'utils/errors';
@@ -724,13 +725,13 @@ export default function DiscoverHeader(
                     {/* filter 这个版本无效 */}
                     <DataSourcePicker
                         width={15}
-                        type={'mysql'}
+                        type={DORIS_DATASOURCE_TYPE}
                         current={selectedDatasource}
                         placeholder="Choose"
                         noDefault
                         disabled={datasourcePermissionsLoading || allowedDatasources.length === 0}
                         isLoading={datasourcePermissionsLoading}
-                        filter={ds => ds.type === 'mysql' && allowedDatasourceUids.has(ds.uid)}
+                        filter={ds => ds.type === DORIS_DATASOURCE_TYPE && allowedDatasourceUids.has(ds.uid)}
                         onChange={item => {
                             if (!allowedDatasourceUids.has(item.uid)) {
                                 return;
