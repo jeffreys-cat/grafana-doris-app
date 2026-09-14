@@ -21,29 +21,12 @@ type Settings struct {
 	AllowInsecureIDP   bool   `json:"allowInsecureIdp"`
 	// Legacy fields remain readable so existing provisioned datasources keep
 	// working until their next save migrates them to the Keyrock preset.
-	KeyrockIssuer     string             `json:"keyrockIssuer"`
-	KeyrockJWKSURL    string             `json:"keyrockJwksUrl"`
-	KeyrockAudience   string             `json:"keyrockAudience"`
-	DorisRole         string             `json:"dorisRole"`
-	GroupRoleMappings []GroupRoleMapping `json:"groupRoleMappings"`
-	TLSServerName     string             `json:"tlsServerName"`
-	TLSSkipVerify     bool               `json:"tlsSkipVerify"`
-	OAuthPassThru     bool               `json:"oauthPassThru"`
-}
-
-// GroupRoleMapping grants a Doris role when a verified OIDC groups claim
-// contains the exact configured group path.
-type GroupRoleMapping struct {
-	OIDCGroup           string `json:"oidcGroup"`
-	LegacyKeycloakGroup string `json:"keycloakGroup"`
-	DorisRole           string `json:"dorisRole"`
-}
-
-func (m GroupRoleMapping) group() string {
-	if m.OIDCGroup != "" {
-		return m.OIDCGroup
-	}
-	return m.LegacyKeycloakGroup
+	KeyrockIssuer   string `json:"keyrockIssuer"`
+	KeyrockJWKSURL  string `json:"keyrockJwksUrl"`
+	KeyrockAudience string `json:"keyrockAudience"`
+	TLSServerName   string `json:"tlsServerName"`
+	TLSSkipVerify   bool   `json:"tlsSkipVerify"`
+	OAuthPassThru   bool   `json:"oauthPassThru"`
 }
 
 type Secrets struct {
@@ -57,9 +40,6 @@ func parseSettings(raw json.RawMessage, secure map[string]string) (Settings, Sec
 	}
 	if settings.Port == 0 {
 		settings.Port = 9030
-	}
-	if settings.DorisRole == "" {
-		settings.DorisRole = "doris_reader"
 	}
 	if settings.ProviderMode == "" && !(settings.KeyrockIssuer != "" && settings.KeyrockJWKSURL != "" && settings.KeyrockAudience != "") {
 		settings.ProviderMode = providerModeOIDCDiscovery

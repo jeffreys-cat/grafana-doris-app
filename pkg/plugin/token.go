@@ -10,7 +10,6 @@ import (
 	"io"
 	"math/big"
 	"net/http"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -116,33 +115,6 @@ func stringGroups(value any) ([]string, error) {
 		groups = append(groups, group)
 	}
 	return groups, nil
-}
-
-func (s Settings) resolveDorisGroups(identity verifiedIdentity) []string {
-	if identity.ProviderMode != providerModeOIDCDiscovery {
-		return []string{s.DorisRole}
-	}
-	mappings := make(map[string]string, len(s.GroupRoleMappings))
-	for _, mapping := range s.GroupRoleMappings {
-		if mapping.group() != "" && mapping.DorisRole != "" {
-			mappings[mapping.group()] = mapping.DorisRole
-		}
-	}
-	roles := make(map[string]struct{})
-	for _, group := range identity.Groups {
-		if role, ok := mappings[group]; ok {
-			roles[role] = struct{}{}
-		}
-	}
-	if len(roles) == 0 {
-		return []string{s.DorisRole}
-	}
-	result := make([]string, 0, len(roles))
-	for role := range roles {
-		result = append(result, role)
-	}
-	sort.Strings(result)
-	return result
 }
 
 func (e tokenExchanger) fetchKey(ctx context.Context, url, kid string) (*rsa.PublicKey, error) {

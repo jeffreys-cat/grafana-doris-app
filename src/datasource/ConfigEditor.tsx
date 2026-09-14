@@ -39,11 +39,13 @@ function bootstrapIdentifier(profile?: SSOProfileStatus) {
 }
 
 export function buildDorisBootstrapSQL(data: DorisSSOJsonData, profile?: SSOProfileStatus) {
-  const mappings = data.groupRoleMappings ?? [];
-  const mappedRoles = Array.from(new Set(mappings.map(mapping => mapping.dorisRole.trim()).filter(Boolean))).sort();
-  const roles = Array.from(new Set([data.dorisRole?.trim() || 'doris_reader', ...mappedRoles]));
+  const mappings = (data.groupRoleMappings ?? []).map(mapping => ({
+    oidcGroup: (mapping.oidcGroup ?? mapping.keycloakGroup ?? '').trim(),
+    dorisRole: mapping.dorisRole.trim(),
+  })).filter(mapping => mapping.oidcGroup && mapping.dorisRole);
+  const roles = Array.from(new Set(mappings.map(mapping => mapping.dorisRole))).sort();
   const roleSQL = roles.map(role => `CREATE ROLE ${quoteIdentifier(role)};`).join('\n');
-  const mappingSQL = roles.map(role => `RULE (USING CEL 'has_group("${quoteCelString(role)}")' GRANT ROLE ${quoteIdentifier(role)})`).join(',\n');
+  const mappingSQL = mappings.map(mapping => `RULE (USING CEL 'has_group("${quoteCelString(mapping.oidcGroup)}")' GRANT ROLE ${quoteIdentifier(mapping.dorisRole)})`).join(',\n');
   const integration = bootstrapIdentifier(profile);
   const roleMapping = `${integration}_roles`;
   return `CREATE AUTHENTICATION INTEGRATION ${quoteIdentifier(integration)} PROPERTIES (
@@ -55,9 +57,9 @@ export function buildDorisBootstrapSQL(data: DorisSSOJsonData, profile?: SSOProf
   'oidc.username_claim'='username', 'oidc.subject_claim'='sub',
   'oidc.groups_claim'='doris_groups', 'oidc.allowed_algorithms'='RS256'
 );
-${roleSQL}
-CREATE ROLE MAPPING ${quoteIdentifier(roleMapping)} ON AUTHENTICATION INTEGRATION ${quoteIdentifier(integration)}
-${mappingSQL};`;
+${roleSQL || '-- No Doris roles configured.'}
+${mappingSQL ? `CREATE ROLE MAPPING ${quoteIdentifier(roleMapping)} ON AUTHENTICATION INTEGRATION ${quoteIdentifier(integration)}
+${mappingSQL};` : '-- Add an OIDC group to Doris role mapping before creating a role mapping.'}`;
 }
 
 export function ConfigEditor(props: Props) {
@@ -90,8 +92,7 @@ export function ConfigEditor(props: Props) {
     <Field label="Resolved identity provider" description="Derived values are validated by Save & test; they are not independently editable.">
       <TextArea readOnly rows={4} value={`Issuer: ${data.oidcIssuer || '<not configured>'}\nJWKS: Resolved through OIDC Discovery when saved/tested\nAudience: ${data.oidcAudience || '<not configured>'}`} />
     </Field>
-    <Field label="Default Doris role" description="Only granted when the user has no matching OIDC group mapping."><Input value={data.dorisRole ?? 'doris_reader'} onChange={e => update(props, 'dorisRole', e.currentTarget.value)} /></Field>
-    <Field label="OIDC group to Doris role mappings" description="Match complete OIDC group paths exactly, for example /team/readers. Matched roles replace the default role; multiple matches grant the union of roles.">
+    <Field label="OIDC group to Doris role mappings" description="Match complete OIDC group paths exactly, for example /team/readers. These rules generate the Doris authorization SQL; the datasource forwards verified OIDC groups unchanged.">
       <div>
         {mappings.map((mapping, index) => <div key={index} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
           <Input aria-label={`OIDC group ${index + 1}`} placeholder="/team/readers" value={mapping.oidcGroup ?? mapping.keycloakGroup ?? ''} onChange={e => {

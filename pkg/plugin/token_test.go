@@ -23,9 +23,9 @@ func TestVerifyAndExchangeKeyrockToken(t *testing.T) {
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { writeJWKS(w, &key.PublicKey, "keyrock-key") }))
 	defer server.Close()
-	settings := Settings{KeyrockIssuer: "https://keyrock.example", KeyrockAudience: "grafana-client", KeyrockJWKSURL: server.URL, DorisRole: "reader"}
+	settings := Settings{KeyrockIssuer: "https://keyrock.example", KeyrockAudience: "grafana-client", KeyrockJWKSURL: server.URL}
 	dorisIssuer, dorisAudience, keyID := "https://grafana.example/doris", "velodb-doris:test", "doris-key"
-	input := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{"iss": settings.KeyrockIssuer, "aud": settings.KeyrockAudience, "sub": "user-123", "exp": time.Now().Add(time.Minute).Unix()})
+	input := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{"iss": settings.KeyrockIssuer, "aud": settings.KeyrockAudience, "sub": "user-123", "groups": []string{"/team/readers", "/team/ops"}, "exp": time.Now().Add(time.Minute).Unix()})
 	input.Header["kid"] = "keyrock-key"
 	raw, err := input.SignedString(key)
 	if err != nil {
@@ -39,7 +39,7 @@ func TestVerifyAndExchangeKeyrockToken(t *testing.T) {
 	if identity.Subject != "user-123" {
 		t.Fatalf("subject = %q", identity.Subject)
 	}
-	output, err := exchanger.issueDorisToken(identity.Subject, settings.resolveDorisGroups(identity), dorisIssuer, dorisAudience, keyID, key)
+	output, err := exchanger.issueDorisToken(identity.Subject, identity.Groups, dorisIssuer, dorisAudience, keyID, key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestVerifyAndExchangeKeyrockToken(t *testing.T) {
 		t.Fatalf("unexpected Doris claims: %#v", claims)
 	}
 	groups, ok := claims["doris_groups"].([]any)
-	if !ok || len(groups) != 1 || groups[0] != "reader" {
+	if !ok || len(groups) != 2 || groups[0] != "/team/readers" || groups[1] != "/team/ops" {
 		t.Fatalf("unexpected Doris groups: %#v", claims["doris_groups"])
 	}
 }
@@ -172,26 +172,6 @@ func TestStringGroups(t *testing.T) {
 	}
 	if _, err := stringGroups(map[string]any{"group": "/doris-readers"}); err == nil {
 		t.Fatal("expected invalid groups type failure")
-	}
-}
-
-func TestResolveDorisGroups(t *testing.T) {
-	settings := Settings{DorisRole: "doris_reader", GroupRoleMappings: []GroupRoleMapping{
-		{OIDCGroup: "/doris-readers", DorisRole: "doris_reader"},
-		{OIDCGroup: "/doris-writers", DorisRole: "doris_writer"},
-		{OIDCGroup: "/duplicate-reader", DorisRole: "doris_reader"},
-	}}
-	roles := settings.resolveDorisGroups(verifiedIdentity{ProviderMode: providerModeOIDCDiscovery, Groups: []string{"/doris-writers", "/duplicate-reader", "/unknown"}})
-	if len(roles) != 2 || roles[0] != "doris_reader" || roles[1] != "doris_writer" {
-		t.Fatalf("expected sorted mapped role union, got %#v", roles)
-	}
-	fallback := settings.resolveDorisGroups(verifiedIdentity{ProviderMode: providerModeOIDCDiscovery, Groups: []string{"/unknown"}})
-	if len(fallback) != 1 || fallback[0] != "doris_reader" {
-		t.Fatalf("expected default role fallback, got %#v", fallback)
-	}
-	keyrock := settings.resolveDorisGroups(verifiedIdentity{ProviderMode: providerModeKeyrock, Groups: []string{"/doris-writers"}})
-	if len(keyrock) != 1 || keyrock[0] != "doris_reader" {
-		t.Fatalf("expected fixed Keyrock role, got %#v", keyrock)
 	}
 }
 

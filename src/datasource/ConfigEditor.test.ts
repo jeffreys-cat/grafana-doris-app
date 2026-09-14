@@ -1,7 +1,7 @@
 import { buildDorisBootstrapSQL } from './ConfigEditor';
 
 describe('buildDorisBootstrapSQL', () => {
-  it('maps deduplicated Doris roles through the signed groups claim', () => {
+  it('maps original OIDC groups to Doris roles in bootstrap SQL', () => {
     const sql = buildDorisBootstrapSQL({
       dorisRole: 'doris_reader',
       groupRoleMappings: [
@@ -20,7 +20,16 @@ describe('buildDorisBootstrapSQL', () => {
     expect(sql).toContain('CREATE AUTHENTICATION INTEGRATION `grafana_doris_sso_datasource_a`');
     expect(sql).toContain('CREATE ROLE MAPPING `grafana_doris_sso_datasource_a_roles`');
     expect(sql.match(/CREATE ROLE `doris_reader`;/g)).toHaveLength(1);
-    expect(sql).toContain(`has_group("doris_reader")`);
-    expect(sql).toContain(`has_group("doris_writer")`);
+    expect(sql).toContain(`has_group("/doris-readers")`);
+    expect(sql).toContain(`has_group("/doris-writers")`);
+    expect(sql).not.toContain(`has_group("doris_reader")`);
+  });
+
+  it('does not create an implicit default role mapping', () => {
+    const sql = buildDorisBootstrapSQL({ dorisRole: 'doris_reader' });
+
+    expect(sql).toContain('-- No Doris roles configured.');
+    expect(sql).toContain('-- Add an OIDC group to Doris role mapping before creating a role mapping.');
+    expect(sql).not.toContain('CREATE ROLE `doris_reader`;');
   });
 });

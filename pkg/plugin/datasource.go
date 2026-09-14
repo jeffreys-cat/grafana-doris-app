@@ -60,8 +60,9 @@ func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataReques
 	if err != nil {
 		return nil, err
 	}
-	dorisGroups := settings.resolveDorisGroups(identity)
-	dorisToken, err := d.exchanger.issueDorisToken(identity.Subject, dorisGroups, profile.Issuer, audience, profile.SigningKeyID, profile.SigningKey)
+	// Authorization is owned by Doris. Forward only the verified source groups;
+	// the Doris administrator maps them to roles in the bootstrap SQL.
+	dorisToken, err := d.exchanger.issueDorisToken(identity.Subject, identity.Groups, profile.Issuer, audience, profile.SigningKeyID, profile.SigningKey)
 	if err != nil {
 		return nil, err
 	}
