@@ -2,12 +2,12 @@
 
 This environment is isolated from the repository's existing development container. It starts:
 
-- Grafana at <http://localhost:3003> (`admin` / `admin`)
-- Doris HTTP at <http://localhost:18030>
-- Doris MySQL at `127.0.0.1:19030` (`root`, empty password)
-- Datasource JWKS endpoint at `127.0.0.1:8999/.well-known/jwks.json` once a signing key is configured
-- A provisioned `Doris Test` datasource and enabled `velodb-doris-app`
-- An `otel.otel_logs` table with recent `app1`, `app2`, and `app3` records
+-   Grafana at <http://localhost:3003> (`admin` / `admin`)
+-   Doris HTTP at <http://localhost:18030>
+-   Doris MySQL at `127.0.0.1:19030` (`root`, empty password)
+-   Datasource JWKS endpoint at `127.0.0.1:8999/.well-known/jwks.json` once a signing key is configured
+-   A provisioned `Doris Test` datasource and enabled `velodb-doris-app`
+-   An `otel.otel_logs` table with recent `app1`, `app2`, and `app3` records
 
 ## Start
 
@@ -63,4 +63,4 @@ IDP_ENV_FILE=./keycloak.env docker compose -f test-env/docker-compose.yaml up -d
 
 The Compose environment mounts the ignored local signing key into Grafana and configures the deployment-level Doris SSO Profile automatically. It also configures the local Doris authentication integration with the provisioned datasource audience `velodb-doris:velodb-doris-sso`. Configure the datasource with `OIDC Discovery`, issuer `http://localhost:8085/realms/velodb`, and audience `grafana-keycloak-local`. The local datasource provisioning supplies the internal OIDC backchannel URL for Docker. The local Keycloak credentials are in ignored `test-env/keycloak.env`; do not reuse them outside this development environment.
 
-The imported client emits a full-path `groups` claim in the ID Token. Configure the Datasource mappings `/doris-readers` → `doris_reader` and `/doris-writers` → `doris_writer`. The realm provides `doris.keycloak.tester`, `doris.keycloak.writer`, and `doris.keycloak.multi`; all use the local test password. A user with no mapped group receives the Datasource default `doris_reader` role.
+The imported client emits a full-path `groups` claim in the ID Token. Configure the Datasource mappings `/doris-readers` → `doris_reader` and `/doris-writers` → `doris_writer`, then execute the generated Bootstrap SQL (or use the supplied local role mapping). The realm provides `doris.keycloak.tester`, `doris.keycloak.writer`, and `doris.keycloak.multi`; all use the local test password. Groups are forwarded unchanged to Doris, and a user without a matching Doris role mapping receives no implicit default role. See [OIDC user acceptance and test guide](../docs/oidc-user-test-zh.md).

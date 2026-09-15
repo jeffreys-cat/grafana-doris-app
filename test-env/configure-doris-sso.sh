@@ -32,8 +32,8 @@ fi
 
 doris_mysql -e "DROP ROLE MAPPING IF EXISTS grafana_doris_sso_roles;
 CREATE ROLE MAPPING grafana_doris_sso_roles ON AUTHENTICATION INTEGRATION ${integration}
-RULE (USING CEL 'has_group(\"doris_reader\")' GRANT ROLE doris_reader),
-RULE (USING CEL 'has_group(\"doris_writer\")' GRANT ROLE doris_writer); 
+RULE (USING CEL 'has_group(\"/doris-readers\")' GRANT ROLE doris_reader),
+RULE (USING CEL 'has_group(\"/doris-writers\")' GRANT ROLE doris_writer);
 ADMIN SET FRONTEND CONFIG ('authentication_chain' = '${integration}');"
 
 echo "Configured local Doris SSO integration for ${audience}"

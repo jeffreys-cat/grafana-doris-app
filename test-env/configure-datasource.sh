@@ -19,7 +19,6 @@ payload="$(jq -n '{
     oidcAudience: "grafana-keycloak-local",
     oidcBackchannelUrl: "http://host.docker.internal:8085",
     allowInsecureIdp: true,
-    dorisRole: "doris_reader",
     groupRoleMappings: [
       { oidcGroup: "/doris-readers", dorisRole: "doris_reader" },
       { oidcGroup: "/doris-writers", dorisRole: "doris_writer" }
