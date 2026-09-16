@@ -1,5 +1,5 @@
 import { get } from 'lodash-es';
-import { isVariantType } from './data';
+import { isStructuredJsonType } from './data';
 
 export type VariantPath = string[];
 
@@ -59,7 +59,7 @@ function buildLeafField(leaf: Leaf, root: string): VariantField {
  */
 export function deriveVariantFields(tableFields: any[], rows: Array<Record<string, unknown>>): VariantField[] {
     return tableFields
-        .filter(field => isVariantType(field?.Type || ''))
+        .filter(field => isStructuredJsonType(field?.Type || ''))
         .map(field => {
             const root = String(field.Field);
             const leaves = new Map<string, Leaf>();

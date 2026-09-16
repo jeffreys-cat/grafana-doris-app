@@ -34,4 +34,11 @@ describe('VariantValueViewer', () => {
         rerender(<VariantValueViewer value={null} />);
         expect(screen.getByText('-')).toBeInTheDocument();
     });
+
+    it('uses the supplied root label for a full log-record JSON view', () => {
+        render(<VariantValueViewer value={{ log_attributes: { source: 'nginx' } }} rootName="JSON" />);
+
+        expect(screen.getByRole('button', { name: /JSON: Object \(1\)/ })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '展开全部 JSON 字段' })).toBeInTheDocument();
+    });
 });

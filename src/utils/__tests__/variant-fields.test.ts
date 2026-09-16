@@ -33,4 +33,17 @@ describe('VARIANT sidebar fields', () => {
         expect(leaves.find(field => field.Field === 'resource_attributes.tags')).toEqual(expect.objectContaining({ Type: 'ARRAY' }));
         expect(getVariantFieldValue({ resource_attributes: { 'http.route': '/checkout' } }, route)).toBe('/checkout');
     });
+
+    it('derives children for JSON fields as well as VARIANT fields', () => {
+        const [tree] = deriveVariantFields(
+            [{ Field: 'log_attributes', Type: 'JSON' }],
+            [{ log_attributes: { source: { ip: '127.0.0.1' }, status: 200 } }],
+        );
+
+        expect(tree.Field).toBe('log_attributes');
+        expect(tree.children).toEqual(expect.arrayContaining([
+            expect.objectContaining({ Field: 'log_attributes.source.ip', Type: 'VARCHAR' }),
+            expect.objectContaining({ Field: 'log_attributes.status', Type: 'DOUBLE' }),
+        ]));
+    });
 });

@@ -35,7 +35,7 @@ import {
 import { sortBy } from 'lodash-es';
 import { getSurroundingDataService } from 'services/discover';
 import { lastValueFrom } from 'rxjs';
-import { convertColumnToRowViaFieldsType, escapeHtml, formatFieldDisplayValue, formatTimestampToDateTime, isVariantType, parseJsonLikeValue } from 'utils/data';
+import { convertColumnToRowViaFieldsType, escapeHtml, formatFieldDisplayValue, formatTimestampToDateTime, isStructuredJsonType, parseJsonLikeValue } from 'utils/data';
 import { generateTableDataUID } from 'utils/utils';
 import { SurroundingContentTableActions } from './content/content-table-actions';
 import { logError } from '@grafana/runtime';
@@ -367,7 +367,7 @@ export default function SurroundingLogs() {
                                             <td className="h-8 text-xs">{fieldName || '-'}</td>
                                             <td className="h-8 whitespace-normal text-xs">
                                                 <div className="w-full break-all">
-                                                    {isVariantType(fieldType) ? <VariantValueViewer value={item.value} /> : fieldValue}
+                                                    {isStructuredJsonType(fieldType) ? <VariantValueViewer value={item.value} /> : fieldValue}
                                                 </div>
                                             </td>
                                         </tr>
@@ -377,7 +377,7 @@ export default function SurroundingLogs() {
                         </table>
                     )}
                     {state[1].active && (
-                        <VariantValueViewer value={processedData} />
+                        <VariantValueViewer value={processedData} rootName="JSON" />
                     )}
                 </TabContent>
                 {/* Surrounding items link is handled by parent (DiscoverContent). No action here. */}
@@ -559,7 +559,7 @@ export default function SurroundingLogs() {
                                 >
                                     <div className={`max-h-48 overflow-auto`}>
                                         <div className="flex items-center break-all py-4">
-                                            {isVariantType(fieldType) ? <VariantValueViewer value={rawFieldValue} /> : field.value === 'trace_id' && fieldValue ? <Button>{fieldValue}</Button> : <span className="text-xs">{fieldValue}</span>}
+                                            {isStructuredJsonType(fieldType) ? <VariantValueViewer value={rawFieldValue} /> : field.value === 'trace_id' && fieldValue ? <Button>{fieldValue}</Button> : <span className="text-xs">{fieldValue}</span>}
                                         </div>
                                     </div>
                                     {

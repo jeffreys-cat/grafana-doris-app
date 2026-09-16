@@ -6,6 +6,7 @@ import { formatFieldDisplayValue, parseJsonLikeValue } from 'utils/data';
 type VariantValueViewerProps = {
     value: unknown;
     className?: string;
+    rootName?: string;
 };
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
@@ -104,7 +105,7 @@ function VariantTreeNode({
 }
 
 /** Displays parsed Doris VARIANT values without adding a second React runtime to Grafana. */
-export function VariantValueViewer({ value, className }: VariantValueViewerProps) {
+export function VariantValueViewer({ value, className, rootName = 'VARIANT' }: VariantValueViewerProps) {
     const theme = useTheme2();
     const [allExpanded, setAllExpanded] = useState(false);
     const parsedValue = useMemo(() => parseJsonLikeValue(value), [value]);
@@ -131,7 +132,7 @@ export function VariantValueViewer({ value, className }: VariantValueViewerProps
                     name={allExpanded ? 'angle-double-up' : 'angle-double-down'}
                     size="md"
                     tooltip={allExpanded ? '收起全部' : '展开全部'}
-                    aria-label={allExpanded ? '收起全部 VARIANT 字段' : '展开全部 VARIANT 字段'}
+                    aria-label={allExpanded ? `收起全部 ${rootName} 字段` : `展开全部 ${rootName} 字段`}
                     onClick={() => setAllExpanded(current => !current)}
                 />
             </div>
@@ -150,7 +151,7 @@ export function VariantValueViewer({ value, className }: VariantValueViewerProps
             >
                 <VariantTreeNode
                     key={allExpanded ? 'all-expanded' : 'root-expanded'}
-                    name="VARIANT"
+                    name={rootName}
                     value={parsedValue}
                     initiallyExpanded
                     initiallyExpandChildren={allExpanded}

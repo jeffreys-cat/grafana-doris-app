@@ -215,7 +215,11 @@ func (e tokenExchanger) issueDorisToken(subject string, dorisGroups []string, is
 	now := time.Now()
 	claims := jwt.MapClaims{
 		"iss": issuer, "aud": audience, "sub": subject, "username": subject,
-		"client_id": "velodb-doris-datasource", "scope": "doris.query", "doris_groups": dorisGroups,
+		"client_id": "velodb-doris-datasource", "scope": "doris.query",
+		// Doris 4.1's OIDC authentication plugin reads the standard claim even
+		// when oidc.groups_claim is configured. Keep the explicit claim for
+		// newer deployments and emit the standard alias for compatibility.
+		"doris_groups": dorisGroups, "groups": dorisGroups,
 		"iat": now.Unix(), "nbf": now.Unix(), "exp": now.Add(dorisTokenLifetime).Unix(), "jti": base64.RawURLEncoding.EncodeToString(identifier),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)

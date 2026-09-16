@@ -50,6 +50,12 @@ export const isVariantType = (columnType: string | undefined) => {
         .includes('VARIANT');
 };
 
+/** JSON/JSONB fields use the same nested-value shape as Doris VARIANT values in the sidebar. */
+export const isStructuredJsonType = (columnType: string | undefined) => {
+    const normalizedType = String(columnType || '').toLocaleUpperCase();
+    return normalizedType.includes('VARIANT') || normalizedType.includes('JSON');
+};
+
 export function parseJsonLikeValue(value: any): any {
     if (typeof value !== 'string') {
         if (Array.isArray(value)) {
@@ -608,7 +614,7 @@ export function convertColumnToRow(frame: any): Array<Record<string, any>> {
                 // 如果是时间字段，转换为 Dayjs 对象
                 row[fieldNames[j]] = formatTimestampToDateTime(row[fieldNames[j]], frame.schema.fields[j].precision || 3);
             }
-            if (isVariantType(frame.schema.fields[j].type)) {
+            if (isStructuredJsonType(frame.schema.fields[j].type)) {
                 // 如果是 VARIANT 类型，转换为 JSON 对象
                 row[fieldNames[j]] = parseJsonLikeValue(row[fieldNames[j]]);
             }
@@ -643,7 +649,7 @@ export function convertColumnToRowViaFieldsType(frame: any, fields: any): Array<
             }
             const currentFieldInfo = fieldsByName.get(frame.schema.fields[j].name);
             // 如果是 VARIANT 类型，转换为 JSON 对象
-            if (currentFieldInfo && isVariantType(currentFieldInfo.Type)) {
+            if (currentFieldInfo && isStructuredJsonType(currentFieldInfo.Type)) {
                 row[fieldNames[j]] = parseJsonLikeValue(row[fieldNames[j]]);
             }
         }

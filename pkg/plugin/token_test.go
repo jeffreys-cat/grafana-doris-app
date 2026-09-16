@@ -55,6 +55,10 @@ func TestVerifyAndExchangeKeyrockToken(t *testing.T) {
 	if !ok || len(groups) != 2 || groups[0] != "/team/readers" || groups[1] != "/team/ops" {
 		t.Fatalf("unexpected Doris groups: %#v", claims["doris_groups"])
 	}
+	standardGroups, ok := claims["groups"].([]any)
+	if !ok || len(standardGroups) != 2 || standardGroups[0] != "/team/readers" || standardGroups[1] != "/team/ops" {
+		t.Fatalf("unexpected standard groups: %#v", claims["groups"])
+	}
 }
 
 func TestRejectsWrongAudienceAndAlgorithm(t *testing.T) {

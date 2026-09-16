@@ -31,7 +31,7 @@ import SurroundingLogs from 'components/surrounding-logs';
 import TraceDetail from 'components/trace-detail';
 import { usePluginContext } from '@grafana/data';
 import { mergeLogsConfig, type AppPluginSettings } from 'types/plugin-settings';
-import { formatFieldDisplayValue, formatTimestampToDateTime, isComplexType, isValidTimeFieldType, isVariantType, parseJsonLikeValue } from 'utils/data';
+import { formatFieldDisplayValue, formatTimestampToDateTime, isComplexType, isStructuredJsonType, isValidTimeFieldType, parseJsonLikeValue } from 'utils/data';
 import { DiscoverQueryState, DiscoverSort } from 'types/discover';
 import { reconcileColumnOrder, reconcileColumnSizing } from 'utils/column-layout';
 import { VariantValueViewer } from './variant-value-viewer';
@@ -333,7 +333,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                                         word-break: break-all;
                                                     `}
                                                 >
-                                                    {isVariantType(fieldType) ? <VariantValueViewer value={item.value} /> : fieldValue}
+                                                    {isStructuredJsonType(fieldType) ? <VariantValueViewer value={item.value} /> : fieldValue}
                                                 </div>
                                             </td>
                                         </tr>
@@ -343,7 +343,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                         </table>
                     )}
                     {state[1].active && (
-                        <VariantValueViewer value={processedData} />
+                        <VariantValueViewer value={processedData} rootName="JSON" />
                     )}
                 </TabContent>
                 <Tooltip title="Surrounding Items will ignore the existing interface's filter conditions and view the context through time.">
@@ -598,7 +598,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                                 word-break: break-all;
                                             `}
                                         >
-                                            {isVariantType(fieldType) ? <VariantValueViewer value={rawFieldValue} /> : field.value === 'trace_id' ? <AntButton
+                                            {isStructuredJsonType(fieldType) ? <VariantValueViewer value={rawFieldValue} /> : field.value === 'trace_id' ? <AntButton
                                                 className={css`padding-left: 0px;`}
                                                 onClick={() => {
                                                     if (isTargetLogTable && targetTraceTable) {

@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import FieldItem from './field-item/field-item';
 import { FilterContent } from './filter-content/filter-content';
 import { selectedFieldsAtom, tableFieldsAtom, variantFieldsAtom, searchableAtom, aggregatableAtom, fieldTypeAtom, indexesAtom, surroundingSelectedFieldsAtom } from 'store/discover';
-import { AggregatableEnum, getFieldType, SearchableEnum, FieldTypeEnum, isVariantType } from 'utils/data';
+import { AggregatableEnum, getFieldType, SearchableEnum, FieldTypeEnum, isStructuredJsonType } from 'utils/data';
 import { Button, CollapsableSection, Icon, Input, useTheme2, Toggletip } from '@grafana/ui';
 import { css } from '@emotion/css';
 
@@ -54,7 +54,7 @@ export default function DiscoverSidebar() {
     const availableFields = useMemo(() => {
         const treeByRoot = new Map(variantFields.map((field: any) => [field.Field, field]));
         return filteredFields
-            .map((field: any) => isVariantType(field.Type) ? treeByRoot.get(field.Field) || field : field)
+            .map((field: any) => isStructuredJsonType(field.Type) ? treeByRoot.get(field.Field) || field : field)
             .filter((field: any) => {
                 if (!field.children?.length) return !selectedFieldNames.has(field.Field);
                 return !selectedFieldNames.has(field.Field) || field.children.some((child: any) => !selectedFieldNames.has(child.Field));
