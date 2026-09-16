@@ -36,7 +36,7 @@ import {
 import { DISCOVER_SHORTCUTS, getLatestTime, isValidTimeFieldType } from 'utils/data';
 import { Select, Field, Button, Icon, Tooltip, useTheme2, TimeRangeInput } from '@grafana/ui';
 import { getApplicationValuesService, getDatabases, getFieldsService, getIndexesService, getTablesService } from 'services/metaservice';
-import { DORIS_DATASOURCE_TYPE } from 'services/grafana-permissions';
+import { SUPPORTED_DATASOURCE_TYPES, isSupportedDatasourceType } from 'services/grafana-permissions';
 import { Subscription } from 'rxjs';
 import Lucene from './lucene';
 import { toError } from 'utils/errors';
@@ -725,13 +725,13 @@ export default function DiscoverHeader(
                     {/* filter 这个版本无效 */}
                     <DataSourcePicker
                         width={15}
-                        type={DORIS_DATASOURCE_TYPE}
+                        type={SUPPORTED_DATASOURCE_TYPES}
                         current={selectedDatasource}
                         placeholder="Choose"
                         noDefault
                         disabled={datasourcePermissionsLoading || allowedDatasources.length === 0}
                         isLoading={datasourcePermissionsLoading}
-                        filter={ds => ds.type === DORIS_DATASOURCE_TYPE && allowedDatasourceUids.has(ds.uid)}
+                        filter={ds => isSupportedDatasourceType(ds.type) && allowedDatasourceUids.has(ds.uid)}
                         onChange={item => {
                             if (!allowedDatasourceUids.has(item.uid)) {
                                 return;

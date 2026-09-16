@@ -46,6 +46,14 @@ Doris 根据 doris_groups 授予 Doris role
 
     `VELODB_DORIS_SSO_ALLOW_INSECURE_HTTP=true` 仅限本地开发，生产环境不要设置。
 
+    如果通过 ZIP 或本地目录安装的是未签名版本，还必须允许 App 和其内置 Datasource 两个插件 ID：
+
+    ```bash
+    GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=velodb-doris-app,velodb-doris-datasource
+    ```
+
+    Grafana 会分别校验这两个 ID。若只允许 `velodb-doris-app`，Doris App 虽能打开，但 **Connections → Add new connection** 中不会出现 **Doris SSO**，App 页面也无法选择数据源。更新变量后重启全部 Grafana 副本。
+
 3. 在 Grafana Generic OAuth 配置公司的标准 OIDC Provider，确保 scope 包含 `openid`，且 Grafana 能取得 ID Token。Datasource 会强制使用 Grafana 转发的身份；Basic 登录、Service Account 和 Alerting 没有交互式用户 token，不能用来查询。
 
 4. 在 Doris FE 开启 TLS，安装并启用 OIDC authentication plugin。多 Grafana 副本必须使用同一私钥，并让 Doris 访问同一个 JWKS URL。
