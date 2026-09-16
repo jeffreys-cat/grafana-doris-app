@@ -12,6 +12,8 @@ type Settings struct {
 	Host               string `json:"host"`
 	Port               int    `json:"port"`
 	Database           string `json:"database"`
+	Username           string `json:"username"`
+	EnableSSO          bool   `json:"enableSso"`
 	ProviderMode       string `json:"providerMode"`
 	OIDCIssuer         string `json:"oidcIssuer"`
 	OIDCAudience       string `json:"oidcAudience"`
@@ -31,6 +33,7 @@ type Settings struct {
 
 type Secrets struct {
 	TLSCACert string
+	Password  string
 }
 
 func parseSettings(raw json.RawMessage, secure map[string]string) (Settings, Secrets, error) {
@@ -44,9 +47,21 @@ func parseSettings(raw json.RawMessage, secure map[string]string) (Settings, Sec
 	if settings.ProviderMode == "" && !(settings.KeyrockIssuer != "" && settings.KeyrockJWKSURL != "" && settings.KeyrockAudience != "") {
 		settings.ProviderMode = providerModeOIDCDiscovery
 	}
-	// Interactive OIDC authentication is mandatory for this datasource.
-	settings.OAuthPassThru = true
-	return settings, Secrets{TLSCACert: secure["tlsCACert"]}, nil
+	// Saved datasources from before enableSso existed were SSO-only. Preserve
+	// that behavior when they contain an identity-provider configuration.
+	var mode struct {
+		EnableSSO *bool `json:"enableSso"`
+	}
+	if err := json.Unmarshal(raw, &mode); err != nil {
+		return Settings{}, Secrets{}, fmt.Errorf("invalid datasource authentication mode: %w", err)
+	}
+	if mode.EnableSSO == nil {
+		settings.EnableSSO = settings.OIDCIssuer != "" || settings.KeyrockIssuer != "" || settings.OAuthPassThru
+	} else {
+		settings.EnableSSO = *mode.EnableSSO
+	}
+	settings.OAuthPassThru = settings.EnableSSO
+	return settings, Secrets{TLSCACert: secure["tlsCACert"], Password: secure["password"]}, nil
 }
 
 func parsePrivateKey(value string) (*rsa.PrivateKey, error) {

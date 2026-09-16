@@ -1,16 +1,16 @@
 {
   "$schema": "https://raw.githubusercontent.com/grafana/grafana/main/docs/sources/developers/plugins/plugin.schema.json",
   "type": "datasource",
-  "name": "Doris SSO",
+  "name": "Doris",
   "id": "velodb-doris-datasource",
   "backend": true,
   "executable": "velodb-doris-datasource",
   "metrics": true,
   "alerting": false,
   "info": {
-    "description": "Apache Doris datasource with standard OIDC identity exchange",
+    "description": "Apache Doris datasource with optional OIDC SSO identity exchange",
     "author": { "name": "VeloDB" },
-    "keywords": ["doris", "oidc", "sso"],
+    "keywords": ["doris", "mysql", "oidc", "sso"],
     "version": "%VERSION%",
     "updated": "%TODAY%"
   },

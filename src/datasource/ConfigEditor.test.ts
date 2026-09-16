@@ -1,4 +1,12 @@
-import { buildDorisBootstrapSQL } from './ConfigEditor';
+import { buildDorisBootstrapSQL, isSSOEnabled } from './ConfigEditor';
+
+describe('SSO mode selection', () => {
+  it('defaults new datasources to basic authentication while preserving legacy SSO configurations', () => {
+    expect(isSSOEnabled({})).toBe(false);
+    expect(isSSOEnabled({ oidcIssuer: 'https://idp.example' })).toBe(true);
+    expect(isSSOEnabled({ oidcIssuer: 'https://idp.example', enableSso: false })).toBe(false);
+  });
+});
 
 describe('buildDorisBootstrapSQL', () => {
   it('maps original OIDC groups to Doris roles in bootstrap SQL', () => {

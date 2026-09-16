@@ -3,6 +3,7 @@ import { DataQuery, DataSourceJsonData } from '@grafana/data';
 export interface DorisQuery extends DataQuery {
   rawSql: string;
   format?: 'table' | 'time_series';
+  describeExtendVariantColumn?: boolean;
 }
 
 export interface GroupRoleMapping {
@@ -16,6 +17,8 @@ export interface DorisSSOJsonData extends DataSourceJsonData {
   host?: string;
   port?: number;
   database?: string;
+  username?: string;
+  enableSso?: boolean;
   tlsServerName?: string;
   tlsSkipVerify?: boolean;
   providerMode?: 'oidcDiscovery' | 'keyrock';

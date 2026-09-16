@@ -38,15 +38,39 @@ func queryDorisOIDC(ctx context.Context, settings Settings, secrets Secrets, use
 	config.OIDCTokenProvider = func() (string, error) { return identityToken, nil }
 	config.Timeout, config.ReadTimeout, config.WriteTimeout = 10*time.Second, 30*time.Second, 30*time.Second
 	config.AllowFallbackToPlaintext = false
+	return queryDorisWithConfig(ctx, config, statement, describeExtendVariantColumn, "Doris OIDC")
+}
+
+func queryDorisBasic(ctx context.Context, settings Settings, secrets Secrets, statement string, describeExtendVariantColumn bool) (*data.Frame, error) {
+	if settings.Host == "" {
+		return nil, fmt.Errorf("Doris host is required")
+	}
+	if settings.Username == "" {
+		return nil, fmt.Errorf("Doris username is required when SSO is disabled")
+	}
+	tlsConfig, err := dorisTLSConfig(settings, secrets)
+	if err != nil {
+		return nil, err
+	}
+	config := gomysql.NewConfig()
+	config.User, config.Passwd, config.Net = settings.Username, secrets.Password, "tcp"
+	config.Addr = net.JoinHostPort(settings.Host, fmt.Sprintf("%d", settings.Port))
+	config.DBName, config.TLS = settings.Database, tlsConfig
+	config.Timeout, config.ReadTimeout, config.WriteTimeout = 10*time.Second, 30*time.Second, 30*time.Second
+	config.AllowFallbackToPlaintext = false
+	return queryDorisWithConfig(ctx, config, statement, describeExtendVariantColumn, "Doris")
+}
+
+func queryDorisWithConfig(ctx context.Context, config *gomysql.Config, statement string, describeExtendVariantColumn bool, connectionName string) (*data.Frame, error) {
 	connector, err := gomysql.NewConnector(config)
 	if err != nil {
-		return nil, fmt.Errorf("configure Doris OIDC connection: %w", err)
+		return nil, fmt.Errorf("configure %s connection: %w", connectionName, err)
 	}
 	db := sql.OpenDB(connector)
 	defer db.Close()
 	conn, err := db.Conn(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("open Doris OIDC connection: %w", err)
+		return nil, fmt.Errorf("open %s connection: %w", connectionName, err)
 	}
 	defer conn.Close()
 	if describeExtendVariantColumn {
@@ -56,7 +80,7 @@ func queryDorisOIDC(ctx context.Context, settings Settings, secrets Secrets, use
 	}
 	rows, err := conn.QueryContext(ctx, statement)
 	if err != nil {
-		return nil, fmt.Errorf("Doris OIDC query failed: %w", err)
+		return nil, fmt.Errorf("%s query failed: %w", connectionName, err)
 	}
 	defer rows.Close()
 	return rowsToFrame(rows)

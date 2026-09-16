@@ -50,22 +50,26 @@ func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataReques
 	if err != nil {
 		return nil, err
 	}
-	profile, audience, err := d.profileForRequest(req.PluginContext.DataSourceInstanceSettings.UID)
-	if err != nil {
-		return nil, err
-	}
-	if err := d.ensureJWKS(profile); err != nil {
-		return nil, err
-	}
-	identity, err := d.exchanger.verifyKeyrockIDToken(ctx, idTokenFromHeader(req.GetHTTPHeader(idTokenHeader)), settings)
-	if err != nil {
-		return nil, err
-	}
-	// Authorization is owned by Doris. Forward only the verified source groups;
-	// the Doris administrator maps them to roles in the bootstrap SQL.
-	dorisToken, err := d.exchanger.issueDorisToken(identity.Subject, identity.Groups, profile.Issuer, audience, profile.SigningKeyID, profile.SigningKey)
-	if err != nil {
-		return nil, err
+	var username, dorisToken string
+	if settings.EnableSSO {
+		profile, audience, err := d.profileForRequest(req.PluginContext.DataSourceInstanceSettings.UID)
+		if err != nil {
+			return nil, err
+		}
+		if err := d.ensureJWKS(profile); err != nil {
+			return nil, err
+		}
+		identity, err := d.exchanger.verifyKeyrockIDToken(ctx, idTokenFromHeader(req.GetHTTPHeader(idTokenHeader)), settings)
+		if err != nil {
+			return nil, err
+		}
+		// Authorization is owned by Doris. Forward only the verified source groups;
+		// the Doris administrator maps them to roles in the bootstrap SQL.
+		dorisToken, err = d.exchanger.issueDorisToken(identity.Subject, identity.Groups, profile.Issuer, audience, profile.SigningKeyID, profile.SigningKey)
+		if err != nil {
+			return nil, err
+		}
+		username = identity.Subject
 	}
 
 	response := backend.NewQueryDataResponse()
@@ -79,7 +83,12 @@ func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataReques
 			response.Responses[query.RefID] = backend.ErrDataResponse(backend.StatusBadRequest, "SQL is required")
 			continue
 		}
-		frame, err := queryDorisOIDC(ctx, settings, secrets, identity.Subject, dorisToken, model.RawSQL, model.DescribeExtendVariantColumn)
+		var frame *data.Frame
+		if settings.EnableSSO {
+			frame, err = queryDorisOIDC(ctx, settings, secrets, username, dorisToken, model.RawSQL, model.DescribeExtendVariantColumn)
+		} else {
+			frame, err = queryDorisBasic(ctx, settings, secrets, model.RawSQL, model.DescribeExtendVariantColumn)
+		}
 		if err != nil {
 			response.Responses[query.RefID] = backend.ErrDataResponse(backend.StatusInternal, err.Error())
 			continue
@@ -90,9 +99,21 @@ func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataReques
 }
 
 func (d *Datasource) CheckHealth(ctx context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
-	settings, _, err := parseSettings(req.PluginContext.DataSourceInstanceSettings.JSONData, req.PluginContext.DataSourceInstanceSettings.DecryptedSecureJSONData)
+	settings, secrets, err := parseSettings(req.PluginContext.DataSourceInstanceSettings.JSONData, req.PluginContext.DataSourceInstanceSettings.DecryptedSecureJSONData)
 	if err != nil {
 		return &backend.CheckHealthResult{Status: backend.HealthStatusError, Message: err.Error()}, nil
+	}
+	if settings.Host == "" {
+		return &backend.CheckHealthResult{Status: backend.HealthStatusError, Message: "Doris connection configuration is incomplete"}, nil
+	}
+	if !settings.EnableSSO {
+		if settings.Username == "" {
+			return &backend.CheckHealthResult{Status: backend.HealthStatusError, Message: "Doris username is required when SSO is disabled"}, nil
+		}
+		if _, err := queryDorisBasic(ctx, settings, secrets, "SELECT 1", false); err != nil {
+			return &backend.CheckHealthResult{Status: backend.HealthStatusError, Message: err.Error()}, nil
+		}
+		return &backend.CheckHealthResult{Status: backend.HealthStatusOk, Message: "Doris username/password connection succeeded"}, nil
 	}
 	profile, _, err := d.profileForRequest(req.PluginContext.DataSourceInstanceSettings.UID)
 	if err != nil {
@@ -104,9 +125,6 @@ func (d *Datasource) CheckHealth(ctx context.Context, req *backend.CheckHealthRe
 	provider, err := d.exchanger.providers.resolve(ctx, settings)
 	if err != nil {
 		return &backend.CheckHealthResult{Status: backend.HealthStatusError, Message: err.Error()}, nil
-	}
-	if settings.Host == "" {
-		return &backend.CheckHealthResult{Status: backend.HealthStatusError, Message: "Doris connection configuration is incomplete"}, nil
 	}
 	return &backend.CheckHealthResult{Status: backend.HealthStatusOk, Message: "OIDC " + provider.Mode + " provider resolved; token exchange and Doris JWKS are configured"}, nil
 }
