@@ -4,6 +4,7 @@ import { IconButton, useTheme2, Tooltip } from '@grafana/ui';
 import { css } from '@emotion/css';
 import { cn } from 'utils/tailwind';
 import { TopData } from './top-data/top-data';
+import { isStructuredJsonType } from 'utils/data';
 
 interface FieldItemProps {
     field: any;
@@ -26,7 +27,7 @@ export default function FieldItem({ depth = 0, searchActive = '', showChildren =
     const theme = useTheme2();
     const { field } = props;
     const [expanded, setExpanded] = useState(false);
-    const hasChildren = showChildren && Boolean(field.children?.length);
+    const hasChildren = showChildren && (Boolean(field.children?.length) || (depth === 0 && isStructuredJsonType(field.Type)));
     const isExpanded = searchActive || expanded;
     const selected = props.isSelected?.(field) || false;
 
@@ -64,7 +65,7 @@ export default function FieldItem({ depth = 0, searchActive = '', showChildren =
     return (
         <div>
             {hasChildren || props.type === 'remove' ? item : <Tooltip placement="right" interactive content={<TopData field={field} />}>{item}</Tooltip>}
-            {hasChildren && isExpanded && field.children.map((child: any) => (
+            {hasChildren && isExpanded && (field.children?.length ? field.children.map((child: any) => (
                 <FieldItem
                     key={child.variantPath?.join('\u0000') || child.Field}
                     {...props}
@@ -72,6 +73,16 @@ export default function FieldItem({ depth = 0, searchActive = '', showChildren =
                     depth={depth + 1}
                     searchActive={searchActive}
                 />
+            )) : (
+                <div
+                    className={css`
+                        padding: 4px 8px 8px 48px;
+                        color: ${theme.colors.text.secondary};
+                        font-size: 12px;
+                    `}
+                >
+                    暂无可发现的内部字段
+                </div>
             ))}
         </div>
     );

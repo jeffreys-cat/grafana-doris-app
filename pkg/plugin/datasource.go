@@ -40,8 +40,9 @@ func newDatasource(client *http.Client, profile *SSOProfile, profileErr error) *
 }
 
 type queryModel struct {
-	RawSQL string `json:"rawSql"`
-	Format string `json:"format"`
+	RawSQL                      string `json:"rawSql"`
+	Format                      string `json:"format"`
+	DescribeExtendVariantColumn bool   `json:"describeExtendVariantColumn"`
 }
 
 func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
@@ -78,7 +79,7 @@ func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataReques
 			response.Responses[query.RefID] = backend.ErrDataResponse(backend.StatusBadRequest, "SQL is required")
 			continue
 		}
-		frame, err := queryDorisOIDC(ctx, settings, secrets, identity.Subject, dorisToken, model.RawSQL)
+		frame, err := queryDorisOIDC(ctx, settings, secrets, identity.Subject, dorisToken, model.RawSQL, model.DescribeExtendVariantColumn)
 		if err != nil {
 			response.Responses[query.RefID] = backend.ErrDataResponse(backend.StatusInternal, err.Error())
 			continue

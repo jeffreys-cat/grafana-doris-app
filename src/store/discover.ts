@@ -36,6 +36,7 @@ export const disabledOptionsAtom = atom<string[]>([]);
 
 export const selectedFieldsAtom = atom<any[]>([]);
 export const tableFieldsAtom = atomWithStorage<any[]>('discover-table-fields', []);
+export const variantMetadataFieldsAtom = atom<any[]>([]);
 // Sample-derived children of physical VARIANT columns. Kept separate so result
 // decoding always uses the physical Doris schema only.
 export const variantFieldsAtom = atom<any[]>([]);

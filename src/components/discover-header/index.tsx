@@ -17,6 +17,7 @@ import {
     // currentClusterAtom,
     tableFieldsAtom,
     variantFieldsAtom,
+    variantMetadataFieldsAtom,
     timeFieldsAtom,
     currentDateAtom,
     currentTimeFieldAtom,
@@ -35,7 +36,7 @@ import {
 } from 'store/discover';
 import { DISCOVER_SHORTCUTS, getLatestTime, isValidTimeFieldType } from 'utils/data';
 import { Select, Field, Button, Icon, Tooltip, useTheme2, TimeRangeInput } from '@grafana/ui';
-import { getApplicationValuesService, getDatabases, getFieldsService, getIndexesService, getTablesService } from 'services/metaservice';
+import { getApplicationValuesService, getDatabases, getFieldsService, getIndexesService, getTablesService, getVariantFieldsService } from 'services/metaservice';
 import { SUPPORTED_DATASOURCE_TYPES, isSupportedDatasourceType } from 'services/grafana-permissions';
 import { Subscription } from 'rxjs';
 import Lucene from './lucene';
@@ -44,6 +45,7 @@ import { getLuceneFieldsWithoutInvertedIndex } from 'utils/query-parser/lucene-i
 import { useDatasourcePermissions } from 'hooks/useDatasourcePermissions';
 import { buildAbsoluteTimeRange, buildRelativeTimeRange, formatTimeInZone, normalizeTimeZone, parseTimeInZone, toDayjsRange } from 'utils/time';
 import { APPLICATION_FILTER_ID, applyApplicationFilter, getCommittedApplication, getConfiguredApplicationAttributeKey } from './application-filter';
+import { deriveVariantFields, deriveVariantFieldsFromMetadata } from 'utils/variant-fields';
 
 function getStoredValue<T>(key: string): T | undefined {
     if (typeof window === 'undefined') {
@@ -155,6 +157,7 @@ export default function DiscoverHeader(
     // const [currentCluster, setCurrentCluster] = useAtom(currentClusterAtom);
     const [tableFields, setTableFields] = useAtom(tableFieldsAtom);
     const setVariantFields = useSetAtom(variantFieldsAtom);
+    const setVariantMetadataFields = useSetAtom(variantMetadataFieldsAtom);
     const [timeFields, setTimeFields] = useAtom(timeFieldsAtom);
     const [_currentDate, setCurrentDate] = useAtom(currentDateAtom);
     const currentTimeField = useAtomValue(currentTimeFieldAtom);
@@ -348,8 +351,28 @@ export default function DiscoverHeader(
                     });
 
                     setTableFields(tableFields);
-                    setVariantFields([]);
+                    setVariantFields(deriveVariantFields(tableFields, []));
+                    setVariantMetadataFields([]);
                     setResolvedFieldsContext(`${effectiveDatasource.uid || ''}\u0000${effectiveDatabase}\u0000${selectedTable.value}`);
+
+                    getVariantFieldsService({ selectdbDS: effectiveDatasource, database: effectiveDatabase, table: selectedTable.value }).subscribe({
+                        next: ({ data, ok }: any) => {
+                            const metadataFrame = data?.results?.getVariantFields?.frames?.[0];
+                            if (!ok || !metadataFrame) return;
+                            const metadata = toDataFrame(metadataFrame);
+                            const names = Array.from(metadata.fields[0]?.values || []);
+                            const types = Array.from(metadata.fields[1]?.values || []);
+                            const variantMetadata = deriveVariantFieldsFromMetadata(
+                                tableFields,
+                                names.map((Field: any, index: number) => ({ Field, Type: types[index] })),
+                            );
+                            setVariantMetadataFields(variantMetadata);
+                            setVariantFields(variantMetadata);
+                        },
+                        error: () => {
+                            // Extended DESC is optional. Sampling remains available below.
+                        },
+                    });
 
                     if (values) {
                         const options = values

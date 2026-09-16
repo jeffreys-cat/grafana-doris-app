@@ -22,6 +22,7 @@ import {
     tableDataChartsAtom,
     tableFieldsAtom,
     variantFieldsAtom,
+    variantMetadataFieldsAtom,
     tableTotalCountAtom,
     tableTracesDataAtom,
     timeZoneAtom,
@@ -41,7 +42,7 @@ import { formatTimeInZone } from 'utils/time';
 import { createDiscoverQueryError } from 'utils/query-error';
 import { DiscoverQuerySource, DiscoverSort } from 'types/discover';
 import { resolveQuerySortField } from 'services/sql';
-import { deriveVariantFields, flattenVariantLeaves } from 'utils/variant-fields';
+import { deriveVariantFields, flattenVariantLeaves, mergeVariantFields } from 'utils/variant-fields';
 
 type RefreshOptions = {
     skipPageReset?: boolean;
@@ -73,8 +74,10 @@ export function useDiscoverData() {
     const interval = useAtomValue(intervalAtom);
     const currentIndexes = useAtomValue(currentIndexAtom);
     const tableFields = useAtomValue(tableFieldsAtom);
+    const variantMetadataFields = useAtomValue(variantMetadataFieldsAtom);
     const variantFields = useAtomValue(variantFieldsAtom);
     const variantFieldsRef = useRef(variantFields);
+    const variantMetadataFieldsRef = useRef(variantMetadataFields);
     const searchType = useAtomValue(searchTypeAtom);
     const dataFilter = useAtomValue(dataFilterAtom);
     const searchValue = useAtomValue(searchValueAtom);
@@ -95,6 +98,9 @@ export function useDiscoverData() {
     useEffect(() => {
         variantFieldsRef.current = variantFields;
     }, [variantFields]);
+    useEffect(() => {
+        variantMetadataFieldsRef.current = variantMetadataFields;
+    }, [variantMetadataFields]);
     const formatCurrentTime = useCallback(
         (time?: Dayjs) => {
             return time ? formatTimeInZone(time, timeZone) : undefined;
@@ -214,7 +220,7 @@ export function useDiscoverData() {
                     const frames = data?.results?.getTableData?.frames;
                     if (!frames || !frames[0]) {
                         setTableData([]);
-                        setVariantFields([]);
+                        setVariantFields(mergeVariantFields(variantMetadataFieldsRef.current, deriveVariantFields(tableFields, [])));
                         setQueryState(previous => ({
                             ...previous,
                             status: 'success',
@@ -225,7 +231,7 @@ export function useDiscoverData() {
                         return;
                     }
                     const rowsData = convertColumnToRowViaFieldsType(frames[0], tableFields);
-                    setVariantFields(deriveVariantFields(tableFields, rowsData));
+                    setVariantFields(mergeVariantFields(variantMetadataFieldsRef.current, deriveVariantFields(tableFields, rowsData)));
                     const resData = generateHighlightedResults(
                         {
                             search_value: searchValue,
@@ -253,7 +259,7 @@ export function useDiscoverData() {
                     }
                     setLoading(prev => ({ ...prev, getTableData: false }));
                     setTableData([]);
-                    setVariantFields([]);
+                    setVariantFields(mergeVariantFields(variantMetadataFieldsRef.current, deriveVariantFields(tableFields, [])));
                     setQueryState(previous => ({
                         status: 'error',
                         rowCount: 0,

@@ -17,7 +17,9 @@ import (
 // queryDorisOIDC opens a one-query, one-user TLS connection. The vendored
 // driver patch implements authentication_openid_connect_client. The token has
 // a dedicated provider and is never stored in the driver's password field.
-func queryDorisOIDC(ctx context.Context, settings Settings, secrets Secrets, username, identityToken, statement string) (*data.Frame, error) {
+// A narrow, internal flag is used for extended VARIANT descriptions because
+// Doris stores that setting at connection scope.
+func queryDorisOIDC(ctx context.Context, settings Settings, secrets Secrets, username, identityToken, statement string, describeExtendVariantColumn bool) (*data.Frame, error) {
 	if settings.Host == "" {
 		return nil, fmt.Errorf("Doris host is required")
 	}
@@ -42,7 +44,17 @@ func queryDorisOIDC(ctx context.Context, settings Settings, secrets Secrets, use
 	}
 	db := sql.OpenDB(connector)
 	defer db.Close()
-	rows, err := db.QueryContext(ctx, statement)
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("open Doris OIDC connection: %w", err)
+	}
+	defer conn.Close()
+	if describeExtendVariantColumn {
+		if _, err := conn.ExecContext(ctx, "SET describe_extend_variant_column = true"); err != nil {
+			return nil, fmt.Errorf("enable extended VARIANT descriptions: %w", err)
+		}
+	}
+	rows, err := conn.QueryContext(ctx, statement)
 	if err != nil {
 		return nil, fmt.Errorf("Doris OIDC query failed: %w", err)
 	}

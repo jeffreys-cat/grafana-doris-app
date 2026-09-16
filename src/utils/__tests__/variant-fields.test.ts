@@ -1,4 +1,10 @@
-import { deriveVariantFields, flattenVariantLeaves, getVariantFieldValue } from '../variant-fields';
+import {
+    deriveVariantFields,
+    deriveVariantFieldsFromMetadata,
+    flattenVariantLeaves,
+    getVariantFieldValue,
+    mergeVariantFields,
+} from '../variant-fields';
 
 describe('VARIANT sidebar fields', () => {
     const fields = [{ Field: 'resource_attributes', Type: 'VARIANT' }];
@@ -45,5 +51,35 @@ describe('VARIANT sidebar fields', () => {
             expect.objectContaining({ Field: 'log_attributes.source.ip', Type: 'VARCHAR' }),
             expect.objectContaining({ Field: 'log_attributes.status', Type: 'DOUBLE' }),
         ]));
+    });
+
+    it('uses extended DESC subpaths without requiring result rows, then supplements them with samples', () => {
+        const metadata = deriveVariantFieldsFromMetadata(fields, [
+            { Field: 'resource_attributes.app', Type: 'VARCHAR' },
+            { Field: "resource_attributes['k8s.namespace.name']", Type: 'VARCHAR' },
+        ]);
+        const sampled = deriveVariantFields(fields, [
+            { resource_attributes: { app: 'checkout', k8s: { pod: { name: 'checkout-1' } } } },
+        ]);
+        const [merged] = mergeVariantFields(metadata, sampled);
+
+        expect(metadata[0]).toEqual(expect.objectContaining({ leafCount: 2 }));
+        expect(metadata[0].children).toEqual(expect.arrayContaining([
+            expect.objectContaining({ label: 'app', variantPath: ['resource_attributes', 'app'] }),
+            expect.objectContaining({ label: 'k8s.namespace.name', variantPath: ['resource_attributes', 'k8s.namespace.name'] }),
+        ]));
+        expect(merged.children).toEqual(expect.arrayContaining([
+            expect.objectContaining({ label: 'app', Type: 'VARCHAR' }),
+            expect.objectContaining({ label: 'k8s.pod.name', variantPath: ['resource_attributes', 'k8s', 'pod', 'name'] }),
+        ]));
+    });
+
+    it('keeps an empty VARIANT parent when neither DESC nor result rows expose leaves', () => {
+        const [tree] = mergeVariantFields(
+            deriveVariantFieldsFromMetadata(fields, []),
+            deriveVariantFields(fields, []),
+        );
+
+        expect(tree).toEqual(expect.objectContaining({ Field: 'resource_attributes', leafCount: 0, children: [] }));
     });
 });

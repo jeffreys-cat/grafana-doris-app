@@ -48,4 +48,12 @@ describe('VARIANT sidebar field item', () => {
         expect(screen.getByText('k8s.namespace.name')).toBeInTheDocument();
         expect(screen.queryByText('app')).not.toBeInTheDocument();
     });
+
+    it('keeps a zero-leaf VARIANT parent expandable and explains the empty state', () => {
+        render(<FieldItem type="add" field={{ Field: 'log_attributes', Type: 'VARIANT', children: [], leafCount: 0 }} />);
+
+        expect(screen.getByText('0')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Expand' }));
+        expect(screen.getByText('暂无可发现的内部字段')).toBeInTheDocument();
+    });
 });

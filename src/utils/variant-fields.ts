@@ -82,6 +82,53 @@ export function deriveVariantFields(tableFields: any[], rows: Array<Record<strin
         });
 }
 
+export function deriveVariantFieldsFromMetadata(tableFields: any[], metadataFields: any[]): VariantField[] {
+    return tableFields.filter(field => isStructuredJsonType(field?.Type || '')).map(rootField => {
+        const root = String(rootField.Field);
+        const children = metadataFields.map(field => metadataFieldToLeaf(root, field)).filter((field): field is VariantField => Boolean(field));
+        return { ...rootField, Field: root, value: root, label: root, children, leafCount: children.length } as VariantField;
+    });
+}
+
+function metadataFieldToLeaf(root: string, field: any): VariantField | undefined {
+    const name = String(field?.Field ?? field?.field ?? field?.name ?? '');
+    if (!name || name === root || !name.startsWith(root)) return undefined;
+    const suffix = name.slice(root.length);
+    if (!suffix.startsWith('.') && !suffix.startsWith('[')) return undefined;
+    const path = [root, ...parseMetadataPath(suffix)];
+    if (path.length === 1) return undefined;
+    return { Field: path.join('.'), value: path.join('.'), label: path.slice(1).join('.'), Type: String(field?.Type ?? field?.type ?? 'VARIANT'), variantPath: path, variantParent: root };
+}
+
+function parseMetadataPath(suffix: string): string[] {
+    const path: string[] = [];
+    const segment = /(?:\.([^.[\]]+)|\[['"]([^'"]+)['"]\])/g;
+    let match: RegExpExecArray | null;
+    while ((match = segment.exec(suffix))) path.push(match[1] ?? match[2]);
+    return path;
+}
+
+export function mergeVariantFields(metadata: VariantField[], sampled: VariantField[]): VariantField[] {
+    const sampledByRoot = new Map(sampled.map(field => [field.Field, field]));
+    const metadataByRoot = new Map(metadata.map(field => [field.Field, field]));
+    const roots = new Set([...metadataByRoot.keys(), ...sampledByRoot.keys()]);
+    return Array.from(roots).map(root => {
+        const metadataRoot = metadataByRoot.get(root);
+        const sampleRoot = sampledByRoot.get(root);
+        const base = metadataRoot || sampleRoot!;
+        const childrenByPath = new Map<string, VariantField>();
+        (metadataRoot?.children || []).forEach(child => childrenByPath.set(JSON.stringify(child.variantPath || [child.Field]), child));
+        (sampleRoot?.children || []).forEach(child => {
+            const path = JSON.stringify(child.variantPath || [child.Field]);
+            if (!childrenByPath.has(path)) {
+                childrenByPath.set(path, child);
+            }
+        });
+        const children = Array.from(childrenByPath.values());
+        return { ...base, children, leafCount: children.length };
+    });
+}
+
 function collectLeaves(value: unknown, path: VariantPath, leaves: Map<string, Leaf>) {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
         Object.entries(value as Record<string, unknown>).forEach(([key, childValue]) => collectLeaves(childValue, [...path, key], leaves));

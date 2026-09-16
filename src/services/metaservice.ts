@@ -356,6 +356,27 @@ export function getFieldsService({ selectdbDS, database, table }: { selectdbDS: 
     }));
 }
 
+export function getVariantFieldsService({ selectdbDS, database, table }: { selectdbDS: any; database: string; table: string }) {
+    return withErrorHandler(getBackendSrv().fetch({
+        url: '/api/ds/query',
+        method: 'POST',
+        data: {
+            queries: [
+                {
+                    refId: 'getVariantFields',
+                    datasource: { type: selectdbDS.type || DORIS_DATASOURCE_TYPE, uid: selectdbDS.uid },
+                    rawSql: `DESC \`${database}\`.\`${table}\``,
+                    format: 'table',
+                    // The datasource executes this setting and DESC through the
+                    // same Doris connection. A standalone SET would be lost,
+                    // because normal datasource queries use fresh connections.
+                    describeExtendVariantColumn: true,
+                },
+            ],
+        },
+    }));
+}
+
 export function getApplicationValuesSQL({
     database,
     table,
