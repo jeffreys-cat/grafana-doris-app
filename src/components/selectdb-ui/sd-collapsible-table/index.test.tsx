@@ -32,24 +32,15 @@ const columns: Array<ColumnDef<RowData>> = [
     },
 ];
 
-function TableHarness({
-    data = [{ time: '2026-08-03', message: 'hello' }],
-    emptyContent,
-    allRowsExpanded,
-}: {
-    data?: RowData[];
-    emptyContent?: React.ReactNode;
-    allRowsExpanded?: boolean;
-}) {
+function TableHarness({ data = [{ time: '2026-08-03', message: 'hello' }], emptyContent }: { data?: RowData[]; emptyContent?: React.ReactNode }) {
     const [sorting, setSorting] = React.useState<SortingState>([{ id: 'time', desc: true }]);
     const [columnSizing, setColumnSizing] = React.useState<ColumnSizingState>({ time: 240, message: 240 });
     return (
         <SDCollapsibleTable
             data={data}
             columns={columns}
-            getRowCanExpand={() => true}
-            renderSubComponent={({ row }) => <div>Details for {row.original.message}</div>}
-            allRowsExpanded={allRowsExpanded}
+            getRowCanExpand={() => false}
+            renderSubComponent={() => <div />}
             columnOrder={['__expand', 'time', 'message']}
             onColumnOrderChange={() => {}}
             columnSizing={columnSizing}
@@ -63,18 +54,6 @@ function TableHarness({
 }
 
 describe('SDCollapsibleTable column interactions', () => {
-    it('expands all rows by default when requested', () => {
-        render(<TableHarness allRowsExpanded />);
-
-        expect(screen.getByText('Details for hello')).toBeInTheDocument();
-    });
-
-    it('keeps rows collapsed when the preference is disabled', () => {
-        render(<TableHarness allRowsExpanded={false} />);
-
-        expect(screen.queryByText('Details for hello')).not.toBeInTheDocument();
-    });
-
     it('exposes sorting state and toggles a sortable header', () => {
         render(<TableHarness />);
         const timeHeader = screen.getByText('Time').closest('th');

@@ -2,7 +2,7 @@
 import { ColumnDef, ColumnOrderState, ColumnSizingState, OnChangeFn, Row, SortingState } from '@tanstack/react-table';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { Drawer, IconButton, Pagination, Tab, TabContent, TabsBar, useTheme2 } from '@grafana/ui';
+import { Drawer, IconButton, Pagination, Switch, Tab, TabContent, TabsBar, useTheme2 } from '@grafana/ui';
 import {
     tableTotalCountAtom,
     tableDataAtom,
@@ -19,6 +19,7 @@ import {
     selectedDatasourceAtom,
     tableFieldsAtom,
     discoverRowsExpandedAtom,
+    discoverRowsWrappedAtom,
     discoverColumnLayoutsAtom,
 } from 'store/discover';
 import { Button as AntButton, Tooltip } from 'antd';
@@ -76,6 +77,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
     const currentDatasource = useAtomValue(selectedDatasourceAtom);
     const tableFields = useAtomValue(tableFieldsAtom);
     const [discoverRowsExpanded, setDiscoverRowsExpanded] = useAtom(discoverRowsExpandedAtom);
+    const [discoverRowsWrapped, setDiscoverRowsWrapped] = useAtom(discoverRowsWrappedAtom);
     const [columnLayouts, setColumnLayouts] = useAtom(discoverColumnLayoutsAtom);
     const availableColumnIds = useMemo(
         () => [
@@ -524,10 +526,13 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                     onClick={handleClick}
                                     dangerouslySetInnerHTML={{ __html: html }}
                                     className={css`
-                                        max-height: 12rem;
-                                        overflow: auto;
-                                        word-break: break-all;
-                                        white-space: pre-wrap;
+                                        display: block;
+                                        width: 100%;
+                                        max-height: ${discoverRowsWrapped ? '12rem' : '1.25rem'};
+                                        overflow: ${discoverRowsWrapped ? 'auto' : 'hidden'};
+                                        word-break: ${discoverRowsWrapped ? 'break-all' : 'normal'};
+                                        white-space: ${discoverRowsWrapped ? 'pre-wrap' : 'nowrap'};
+                                        text-overflow: ${discoverRowsWrapped ? 'clip' : 'ellipsis'};
                                     `}
                                 />
                             </ColumnStyleWrapper>
@@ -615,9 +620,10 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                                         display: block;
                                                         width: 100%;
                                                         font-size: 12px;
-                                                        white-space: nowrap;
-                                                        text-overflow: ellipsis;
-                                                        overflow: hidden;
+                                                        white-space: ${discoverRowsWrapped ? 'pre-wrap' : 'nowrap'};
+                                                        text-overflow: ${discoverRowsWrapped ? 'clip' : 'ellipsis'};
+                                                        overflow: ${discoverRowsWrapped ? 'visible' : 'hidden'};
+                                                        overflow-wrap: anywhere;
                                                     `}
                                                 >
                                                     {fieldValue}
@@ -641,7 +647,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
         }
         return dynamicColumns;
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentTimeField, handleRemove, hasSelectedFields, selectedFields, theme.isDark]);
+    }, [currentTimeField, discoverRowsWrapped, handleRemove, hasSelectedFields, selectedFields, theme.isDark]);
 
     const tableSorting = useMemo<SortingState>(() => {
         const selectedColumnId = sort.field === currentTimeField || !sort.field
@@ -714,10 +720,31 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                 className={css`
                     display: flex;
                     justify-content: flex-end;
+                    align-items: center;
+                    gap: 12px;
                     min-height: 28px;
                     padding: 0 8px 4px;
                 `}
             >
+                <label
+                    htmlFor="discover-wrap-rows"
+                    className={css`
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 6px;
+                        cursor: pointer;
+                        font-size: 12px;
+                        color: ${theme.colors.text.secondary};
+                    `}
+                >
+                    换行
+                    <Switch
+                        id="discover-wrap-rows"
+                        aria-label="长文本换行"
+                        value={discoverRowsWrapped}
+                        onChange={event => setDiscoverRowsWrapped(event.currentTarget.checked)}
+                    />
+                </label>
                 <IconButton
                     name="history"
                     tooltip="Reset column layout"

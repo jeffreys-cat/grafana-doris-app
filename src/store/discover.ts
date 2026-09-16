@@ -39,9 +39,8 @@ export const tableFieldsAtom = atomWithStorage<any[]>('discover-table-fields', [
 // Sample-derived children of physical VARIANT columns. Kept separate so result
 // decoding always uses the physical Doris schema only.
 export const variantFieldsAtom = atom<any[]>([]);
-// Log entries are most useful when their full payload is visible on first load.
-// atomWithStorage still honors an existing user's saved preference.
-export const discoverRowsExpandedAtom = atomWithStorage<boolean>('discover-rows-expanded', true);
+export const discoverRowsExpandedAtom = atomWithStorage<boolean>('discover-rows-expanded', false);
+export const discoverRowsWrappedAtom = atomWithStorage<boolean>('discover-rows-wrapped', true);
 export const discoverColumnLayoutsAtom = atomWithStorage<DiscoverColumnLayouts>('discover-column-layouts', {});
 export const discoverSortAtom = atom<DiscoverSort>({ field: '', direction: 'DESC' });
 export const discoverQueryStateAtom = atom<DiscoverQueryState>({
