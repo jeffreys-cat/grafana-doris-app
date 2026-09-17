@@ -31,6 +31,7 @@ import {
 import { getTableDataChartsService, getTableDataCountService, getTableDataService, getTopDataService } from 'services/discover';
 import { getTableDataTraceService } from 'services/traces';
 import { encodeBase64, getChartsData, convertColumnToRowViaFieldsType, generateHighlightedResults, formatTracesResData, getIndexesStatement } from 'utils/data';
+import { normalizeCount } from 'utils/count';
 import { generateTableDataUID } from 'utils/utils';
 import { message } from 'antd';
 import { getAutoInterval, IntervalEnum } from '../../constants';
@@ -566,12 +567,7 @@ export function useDiscoverData() {
                     setLoading(prev => ({ ...prev, getTableDataCount: false }));
                     const frameData = data?.results?.getTableCountData?.frames?.[0];
                     const frame = frameData ? toDataFrame(frameData) : undefined;
-                    const totalCount = frame?.fields[0]?.values[0] as number;
-                    if (!totalCount) {
-                        setTableTotalCount(0);
-                        measureDiscoverPhase(requestId, 'count', 'processing', processingStartedAt);
-                        return;
-                    }
+                    const totalCount = normalizeCount(frame?.fields[0]?.values[0]);
                     setTableTotalCount(totalCount);
                     measureDiscoverPhase(requestId, 'count', 'processing', processingStartedAt);
                 },
