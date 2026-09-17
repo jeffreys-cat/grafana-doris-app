@@ -18,6 +18,7 @@ import {
     timeRangeAtom,
 } from 'store/discover';
 import { css } from '@emotion/css';
+import { normalizeCount } from 'utils/count';
 
 type DiscoverHistogramProps = {
     height?: number;
@@ -41,7 +42,7 @@ export function DiscoverHistogram({ height = 300, collapsed = false, onToggleCol
     if (process.env.NODE_ENV !== 'production') {
         intervalAtom.debugLabel = 'interval';
     }
-    const tableTotalCount = useAtomValue(tableTotalCountAtom);
+    const tableTotalCount = normalizeCount(useAtomValue(tableTotalCountAtom));
     const [_timeRange, setTimeRange] = useAtom(timeRangeAtom);
     const [_pageSize, setPageSize] = useAtom(pageSizeAtom);
     const setPage = useSetAtom(pageAtom);

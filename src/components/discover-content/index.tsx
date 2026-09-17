@@ -37,6 +37,7 @@ import { DiscoverQueryState, DiscoverSort } from 'types/discover';
 import { reconcileColumnOrder, reconcileColumnSizing } from 'utils/column-layout';
 import { VariantValueViewer } from './variant-value-viewer';
 import { getVariantFieldValue } from 'utils/variant-fields';
+import { normalizeCount } from 'utils/count';
 
 const EXPAND_COLUMN_ID = '__expand';
 const TIME_COLUMN_ID = '__time';
@@ -57,7 +58,7 @@ type DiscoverContentProps = {
 export default function DiscoverContent({ fetchNextPage, getTraceData, queryState, sort, onSortChange }: DiscoverContentProps) {
     const theme = useTheme2();
     const [fields, setFields] = useState<any[]>([]);
-    const tableTotalCount = useAtomValue(tableTotalCountAtom);
+    const tableTotalCount = normalizeCount(useAtomValue(tableTotalCountAtom));
     const [tableData, _setTableData] = useAtom(tableDataAtom);
     const [selectedFields, setSelectedFields] = useAtom(selectedFieldsAtom);
     const hasSelectedFields = selectedFields.length > 0;
