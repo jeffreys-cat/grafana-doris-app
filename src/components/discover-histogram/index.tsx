@@ -2,7 +2,7 @@ import ReactECharts from 'echarts-for-react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useEffect, useRef, useState } from 'react';
 import dayjs from 'dayjs';
-import { Select, useTheme2 } from '@grafana/ui';
+import { IconButton, Select, useTheme2 } from '@grafana/ui';
 import { IntervalEnum } from 'types/type';
 import { TIME_INTERVALS } from 'utils/data';
 import { getAutoInterval, FORMAT_DATE, translationDateIntervalType } from '../../constants';
@@ -19,7 +19,13 @@ import {
 } from 'store/discover';
 import { css } from '@emotion/css';
 
-export function DiscoverHistogram() {
+type DiscoverHistogramProps = {
+    height?: number;
+    collapsed?: boolean;
+    onToggleCollapsed?: () => void;
+};
+
+export function DiscoverHistogram({ height = 300, collapsed = false, onToggleCollapsed }: DiscoverHistogramProps) {
     const theme = useTheme2().isDark ? 'dark' : 'light';
     const [currentDate, setCurrentDate] = useAtom(currentDateAtom);
     const ReactEChartsInstance = useRef<ReactECharts>(null);
@@ -246,14 +252,23 @@ export function DiscoverHistogram() {
                         options={TIME_INTERVALS}
                     />
                 </div>
+                <IconButton
+                    aria-label={collapsed ? 'Expand chart' : 'Collapse chart'}
+                    data-testid="discover-chart-toggle"
+                    name={collapsed ? 'angle-down' : 'angle-up'}
+                    tooltip={collapsed ? 'Expand chart' : 'Collapse chart'}
+                    onClick={onToggleCollapsed}
+                />
             </div>
-            <div
-                className={css`
-                    height: 300px;
-                `}
-            >
-                <ReactECharts option={options} ref={ReactEChartsInstance}></ReactECharts>
-            </div>
+            {!collapsed && (
+                <div
+                    className={css`
+                        height: ${height}px;
+                    `}
+                >
+                    <ReactECharts option={options} ref={ReactEChartsInstance} style={{ height: '100%' }} />
+                </div>
+            )}
         </div>
     );
 }
