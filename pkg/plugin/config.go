@@ -26,6 +26,7 @@ type Settings struct {
 	KeyrockIssuer   string `json:"keyrockIssuer"`
 	KeyrockJWKSURL  string `json:"keyrockJwksUrl"`
 	KeyrockAudience string `json:"keyrockAudience"`
+	TLSEnabled      bool   `json:"tlsEnabled"`
 	TLSServerName   string `json:"tlsServerName"`
 	TLSSkipVerify   bool   `json:"tlsSkipVerify"`
 	OAuthPassThru   bool   `json:"oauthPassThru"`

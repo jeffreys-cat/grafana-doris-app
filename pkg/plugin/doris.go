@@ -87,6 +87,13 @@ func queryDorisWithConfig(ctx context.Context, config *gomysql.Config, statement
 }
 
 func dorisTLSConfig(settings Settings, secrets Secrets) (*tls.Config, error) {
+	// Basic username/password connections may target a local Doris FE that
+	// does not expose TLS. SSO always requires TLS because it transports an
+	// identity token. Existing TLS configurations remain enabled when a server
+	// name or CA certificate was supplied before the toggle existed.
+	if !settings.EnableSSO && !settings.TLSEnabled && settings.TLSServerName == "" && secrets.TLSCACert == "" {
+		return nil, nil
+	}
 	config := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: settings.TLSServerName, InsecureSkipVerify: settings.TLSSkipVerify} // #nosec G402 -- explicit test-only datasource option
 	if config.ServerName == "" {
 		config.ServerName = settings.Host
