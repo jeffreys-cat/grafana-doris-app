@@ -743,7 +743,7 @@ export function useDiscoverData() {
         }
         void getTableData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page]);
+    }, [page, pageSize]);
 
     useEffect(() => {
         if (!didRunAutoRefreshEffect.current) {

@@ -2,7 +2,7 @@
 import { ColumnDef, ColumnOrderState, ColumnSizingState, OnChangeFn, Row, SortingState } from '@tanstack/react-table';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { Drawer, IconButton, Pagination, Switch, Tab, TabContent, TabsBar, useTheme2 } from '@grafana/ui';
+import { Drawer, IconButton, Pagination, Select, Switch, Tab, TabContent, TabsBar, useTheme2 } from '@grafana/ui';
 import {
     tableTotalCountAtom,
     tableDataAtom,
@@ -69,7 +69,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
     const setSurroundingDataFilter = useSetAtom(surroundingDataFilterAtom);
     const setBeforeCount = useSetAtom(beforeCountAtom);
     const setAfterCount = useSetAtom(afterCountAtom);
-    const [pageSize, _setPageSize] = useAtom(pageSizeAtom);
+    const [pageSize, setPageSize] = useAtom(pageSizeAtom);
     const [page, setPage] = useAtom(pageAtom);
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [surroundingLogsOpen, setSurroundingLogsOpen] = useState(false);
@@ -785,6 +785,30 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
             >
                 <div>Total {tableTotalCount} rows</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <label
+                        className={css`
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                        `}
+                    >
+                        Rows per page
+                        <Select
+                            aria-label="Rows per page"
+                            options={[20, 50, 100, 200].map(size => ({ label: String(size), value: size }))}
+                            value={pageSize}
+                            onChange={option => {
+                                const nextPageSize = Number(option.value);
+                                if (![20, 50, 100, 200].includes(nextPageSize)) {
+                                    return;
+                                }
+                                setPageSize(nextPageSize);
+                                setPage(1);
+                                setJumpPage('1');
+                            }}
+                            width={10}
+                        />
+                    </label>
                     <Pagination
                         currentPage={page}
                         numberOfPages={Math.ceil(tableTotalCount / pageSize) || 1}
