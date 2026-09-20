@@ -27,7 +27,7 @@ type GetIndexesParams = {
     datasourceType?: string;
 };
 
-type GetDorisVersionParams = {
+type TryCastCapabilityParams = {
     connectionId: string;
     datasourceType?: string;
 };
@@ -44,39 +44,33 @@ export type GetApplicationValuesParams = {
 
 const escapeSqlLiteral = (value: string) => value.replace(/'/g, "''");
 
-// The version of a datasource cannot change during a Grafana session in normal
-// operation. Cache it so building a Lucene filter does not add a query after
-// the first lookup.
-const dorisMajorVersionCache = new Map<string, Promise<number | null>>();
+// Capability support is stable for a datasource during a Grafana session. Keep
+// the probe result so Lucene filtering does not make an extra request per query.
+const tryCastSupportCache = new Map<string, Promise<boolean>>();
 
-function parseDorisMajorVersion(version: unknown): number | null {
-    const match = String(version ?? '').match(/(?:^|\s|v)(\d+)\./i);
-    return match ? Number.parseInt(match[1], 10) : null;
-}
-
-export async function getDorisMajorVersion({
+export async function supportsTryCast({
     connectionId,
     datasourceType = DORIS_DATASOURCE_TYPE,
-}: GetDorisVersionParams): Promise<number | null> {
+}: TryCastCapabilityParams): Promise<boolean> {
     if (!connectionId) {
-        return null;
+        return false;
     }
 
     const cacheKey = `${datasourceType}:${connectionId}`;
-    const cached = dorisMajorVersionCache.get(cacheKey);
+    const cached = tryCastSupportCache.get(cacheKey);
     if (cached) {
         return cached;
     }
 
-    const versionPromise = (async (): Promise<number | null> => {
+    const supportPromise = (async (): Promise<boolean> => {
         const response$ = withErrorHandler(getBackendSrv().fetch({
             url: '/api/ds/query',
             method: 'POST',
             data: {
                 queries: [{
-                    refId: 'getDorisVersion',
+                    refId: 'probeTryCast',
                     datasource: { type: datasourceType, uid: connectionId },
-                    rawSql: 'SELECT VERSION() AS Version',
+                    rawSql: 'SELECT TRY_CAST(1 AS BIGINT) AS try_cast_supported',
                     format: 'table',
                 }],
             },
@@ -84,24 +78,18 @@ export async function getDorisMajorVersion({
 
         try {
             const { data, ok } = await lastValueFrom(response$);
-            if (!ok) {
-                return null;
+            const frame = (data as { results?: Record<string, any> })?.results?.probeTryCast?.frames?.[0];
+            if (!ok || !frame) {
+                return false;
             }
-
-            const frame = (data as { results?: Record<string, any> })?.results?.getDorisVersion?.frames?.[0];
-            const versionField = frame && toDataFrame(frame).fields.find(field => field.name === 'Version');
-            return parseDorisMajorVersion(versionField?.values?.get?.(0));
+            return true;
         } catch {
-            return null;
+            return false;
         }
     })();
 
-    dorisMajorVersionCache.set(cacheKey, versionPromise);
-    const version = await versionPromise;
-    if (version == null) {
-        dorisMajorVersionCache.delete(cacheKey);
-    }
-    return version;
+    tryCastSupportCache.set(cacheKey, supportPromise);
+    return supportPromise;
 }
 
 const normalizeColumnType = ({ dataType, columnType }: { dataType?: string; columnType?: string }): string => {

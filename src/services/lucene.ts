@@ -1,5 +1,5 @@
 import { CustomSchemaSQLSerializerV2, genWhereSQL, parse } from 'utils/query-parser/query-parser';
-import { getDorisMajorVersion } from './metaservice';
+import { supportsTryCast } from './metaservice';
 import { logError } from '@grafana/runtime';
 import { toError } from 'utils/errors';
 
@@ -18,16 +18,16 @@ export async function getWhereSQLViaLucene({ query, databaseName, tableName, con
         return '';
     }
 
-    // TRY_CAST was introduced in Doris 4.0. Older Doris versions accept CAST
-    // but reject TRY_CAST during parsing.
-    const dorisMajorVersion = await getDorisMajorVersion({ connectionId, datasourceType });
+    // Probe the actual SQL capability. VERSION() is always 5.7.99 in Doris for
+    // MySQL compatibility and cannot identify the Doris release.
+    const tryCastSupported = await supportsTryCast({ connectionId, datasourceType });
     const serializer = new CustomSchemaSQLSerializerV2({
         databaseName,
         tableName,
         connectionId,
         implicitColumnExpression,
         datasourceType,
-        supportsTryCast: (dorisMajorVersion ?? 0) >= 4,
+        supportsTryCast: tryCastSupported,
     });
 
     try {
