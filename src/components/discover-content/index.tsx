@@ -13,7 +13,6 @@ import {
     pageAtom,
     afterCountAtom,
     beforeCountAtom,
-    surroundingDataFilterAtom,
     currentTimeFieldAtom,
     discoverCurrentAtom,
     selectedDatasourceAtom,
@@ -67,7 +66,6 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
     // const [surroundingOpen, setSurroundingOpen] = useState(false);
     const [selectedRow, setSelectedRow] = useAtom(selectedRowAtom);
     const setSurroundingTableData = useSetAtom(surroundingTableDataAtom);
-    const setSurroundingDataFilter = useSetAtom(surroundingDataFilterAtom);
     const setBeforeCount = useSetAtom(beforeCountAtom);
     const setAfterCount = useSetAtom(afterCountAtom);
     const [pageSize, setPageSize] = useAtom(pageSizeAtom);
@@ -901,10 +899,8 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                     title="Surrounding items"
                     onClose={() => {
                         setSurroundingTableData([]);
-                        setSurroundingDataFilter([]);
                         setBeforeCount(0);
                         setAfterCount(0);
-                        // setSelectedSurroundingFields([]);
                         setSurroundingLogsOpen(false);
                     }}
                 >

@@ -2,14 +2,13 @@ import { useAtom, useAtomValue } from 'jotai';
 import React, { useMemo, useState } from 'react';
 import FieldItem from './field-item/field-item';
 import { FilterContent } from './filter-content/filter-content';
-import { selectedFieldsAtom, tableFieldsAtom, variantFieldsAtom, searchableAtom, aggregatableAtom, fieldTypeAtom, indexesAtom, surroundingSelectedFieldsAtom } from 'store/discover';
+import { selectedFieldsAtom, tableFieldsAtom, variantFieldsAtom, searchableAtom, aggregatableAtom, fieldTypeAtom, indexesAtom } from 'store/discover';
 import { AggregatableEnum, getFieldType, SearchableEnum, FieldTypeEnum, isStructuredJsonType } from 'utils/data';
 import { Button, CollapsableSection, Icon, Input, useTheme2, Toggletip } from '@grafana/ui';
 import { css } from '@emotion/css';
 
 export default function DiscoverSidebar() {
     const [selectedFields, setSelectedFields] = useAtom(selectedFieldsAtom);
-    const [selectedSurroundingFields, setSelectedSurroundingFields] = useAtom(surroundingSelectedFieldsAtom);
     const tableFields = useAtomValue(tableFieldsAtom);
     const variantFields = useAtomValue(variantFieldsAtom);
     const [searchable, _setSearchable] = useAtom(searchableAtom);
@@ -56,24 +55,19 @@ export default function DiscoverSidebar() {
         return filteredFields
             .map((field: any) => isStructuredJsonType(field.Type) ? treeByRoot.get(field.Field) || field : field)
             .filter((field: any) => {
-                if (!field.children?.length) return !selectedFieldNames.has(field.Field);
+                if (!field.children?.length) {
+                    return !selectedFieldNames.has(field.Field);
+                }
                 return !selectedFieldNames.has(field.Field) || field.children.some((child: any) => !selectedFieldNames.has(child.Field));
             });
     }, [filteredFields, selectedFieldNames, variantFields]);
 
     function handleAdd(field: any) {
         setSelectedFields([...selectedFields, field] as any);
-        setSelectedSurroundingFields([...selectedSurroundingFields, field] as any)
     }
 
     function handleRemove(field: any) {
-        const index = selectedFields.findIndex((item: any) => item.Field === field.Field);
-        selectedFields.splice(index, 1);
-
-        const surIndex = selectedSurroundingFields.findIndex((item: any) => item.Field === field.Field);
-        selectedSurroundingFields.splice(surIndex, 1);
-        setSelectedFields([...selectedFields]);
-        setSelectedSurroundingFields([...selectedSurroundingFields]);
+        setSelectedFields(current => current.filter((item: any) => item.Field !== field.Field));
     }
 
     return (

@@ -6,7 +6,6 @@ import { ColumnStyleWrapper, HoverStyle } from '../discover-content/discover-con
 import { useAtom, useAtomValue } from 'jotai';
 import { useRequest } from 'ahooks';
 import { css } from '@emotion/css';
-import { SurroundingContentItem } from './surrounding-content-item';
 import { SurroundingLogsActions } from './logs-actions';
 import SurroundingDiscoverFilter from './discover-filter';
 import { Button, IconButton, LoadingBar, Tab, TabContent, TabsBar, useTheme2 } from '@grafana/ui';
@@ -27,8 +26,8 @@ import {
     beforeCountAtom,
     beforeTimeAtom,
     beforeTimeFieldPageSizeAtom,
-    surroundingDataFilterAtom,
-    surroundingSelectedFieldsAtom,
+    dataFilterAtom,
+    selectedFieldsAtom,
     tableFieldsAtom,
 } from 'store/discover';
 // import dayjs from 'dayjs';
@@ -37,7 +36,7 @@ import { getSurroundingDataService } from 'services/discover';
 import { lastValueFrom } from 'rxjs';
 import { convertColumnToRowViaFieldsType, escapeHtml, formatFieldDisplayValue, formatTimestampToDateTime, isStructuredJsonType, parseJsonLikeValue } from 'utils/data';
 import { generateTableDataUID } from 'utils/utils';
-import { SurroundingContentTableActions } from './content/content-table-actions';
+import { SurroundingColumnAction } from './column-action';
 import { logError } from '@grafana/runtime';
 import { toError } from 'utils/errors';
 import { VariantValueViewer } from 'components/discover-content/variant-value-viewer';
@@ -48,9 +47,9 @@ export default function SurroundingLogs() {
     const selectedRow = useAtomValue(selectedRowAtom);
     const selectdbDS = useAtomValue(selectedDatasourceAtom);
     const currentTimeField = useAtomValue(currentTimeFieldAtom);
-    const [selectedSurroundingFields, setSelectedSurroundingFields] = useAtom(surroundingSelectedFieldsAtom);
-    const [surroundingDataFilter] = useAtom<any>(surroundingDataFilterAtom);
-    const hasSelectedFields = selectedSurroundingFields.length > 0;
+    const [selectedFields, setSelectedFields] = useAtom(selectedFieldsAtom);
+    const dataFilter = useAtomValue(dataFilterAtom);
+    const hasSelectedFields = selectedFields.length > 0;
     const [fields, setFields] = useState<any[]>([]);
     const currentCluster = useAtomValue(currentClusterAtom);
     const currentTable = useAtomValue(currentTableAtom);
@@ -78,9 +77,7 @@ export default function SurroundingLogs() {
     ]);
 
     function handleRemove(field: any) {
-        const index = selectedSurroundingFields.findIndex((item: any) => item.Field === field.Field);
-        selectedSurroundingFields.splice(index, 1);
-        setSelectedSurroundingFields([...selectedSurroundingFields]);
+        setSelectedFields(current => current.filter((item: any) => item.Field !== field.Field));
     }
 
     const getAfterResultWrap = (result: any[]) => {
@@ -135,8 +132,8 @@ export default function SurroundingLogs() {
             cluster: currentCluster,
             theme: theme.isDark ? 'dark' : 'light',
         };
-        if (surroundingDataFilter.length > 0) {
-            params.data_filters = surroundingDataFilter;
+        if (dataFilter.length > 0) {
+            params.data_filters = dataFilter;
         }
         return params;
     }
@@ -207,7 +204,7 @@ export default function SurroundingLogs() {
             ]);
         },
         {
-            refreshDeps: [surroundingDataFilter],
+            refreshDeps: [dataFilter],
             onSuccess: async (res: any) => {
                 if (res[0].ok && res[1].ok) {
                     const rowsData1 = convertColumnToRowViaFieldsType(res[0].data.results.getSurroundingData.frames[0], tableFields);
@@ -361,7 +358,7 @@ export default function SurroundingLogs() {
                                                         visibility: hidden;
                                                     `}`}
                                                 >
-                                                    <SurroundingContentTableActions fieldName={fieldName} fieldValue={fieldValue} />
+                                                    <SurroundingColumnAction fieldName={fieldName} />
                                                 </div>
                                             </td>
                                             <td className="h-8 text-xs">{fieldName || '-'}</td>
@@ -439,7 +436,6 @@ export default function SurroundingLogs() {
                 cell: ({ row, getValue }) => {
                     const fieldValue = getValue<string>();
                     const fieldName = currentTimeField;
-                    const fieldType = 'DATE';
                     const timeField = formatTimestampToDateTime(fieldValue);
                     return (
                         <div
@@ -459,7 +455,7 @@ export default function SurroundingLogs() {
                                         visibility: hidden;
                                     `}`}
                                 >
-                                    <SurroundingContentItem fieldName={fieldName} fieldValue={fieldValue} fieldType={fieldType} />
+                                    <SurroundingColumnAction fieldName={fieldName} />
                                 </div>
                             </div>
                         </div>
@@ -513,7 +509,7 @@ export default function SurroundingLogs() {
         } else {
             dynamicColumns = [
                 ...dynamicColumns,
-                ...selectedSurroundingFields.map((field: any) => {
+                ...selectedFields.map((field: any) => {
                     return {
                         id: `field:${field.Field}`,
                         accessorFn: (row: any) => getVariantFieldValue(row._original, field),
@@ -568,7 +564,7 @@ export default function SurroundingLogs() {
                                             visibility: hidden;
                                         `}`}
                                         >
-                                            <SurroundingContentItem fieldName={fieldName} fieldValue={fieldValue} fieldType={fieldType} />
+                                            <SurroundingColumnAction fieldName={fieldName} />
                                         </div> : null
                                     }
 
@@ -581,11 +577,11 @@ export default function SurroundingLogs() {
         }
         return dynamicColumns;
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentTimeField, handleRemove, hasSelectedFields, selectedSurroundingFields]);
+    }, [currentTimeField, handleRemove, hasSelectedFields, selectedFields]);
 
     return (
         <div>
-            <SurroundingDiscoverFilter dataFilter={surroundingDataFilter} />
+            <SurroundingDiscoverFilter />
             <div className="h-[2px] bg-b1 dark:bg-black" />
             <div style={{ position: 'relative' }}>
                 <SurroundingLogsActions
