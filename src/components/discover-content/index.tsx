@@ -32,12 +32,13 @@ import SurroundingLogs from 'components/surrounding-logs';
 import TraceDetail from 'components/trace-detail';
 import { usePluginContext } from '@grafana/data';
 import { mergeLogsConfig, type AppPluginSettings } from 'types/plugin-settings';
-import { formatFieldDisplayValue, formatTimestampToDateTime, isComplexType, isStructuredJsonType, isValidTimeFieldType, parseJsonLikeValue } from 'utils/data';
+import { formatFieldDisplayValue, formatRecordDisplayValue, formatTimestampToDateTime, isComplexType, isStructuredJsonType, isValidTimeFieldType, parseJsonLikeValue } from 'utils/data';
 import { DiscoverQueryState, DiscoverSort } from 'types/discover';
 import { reconcileColumnOrder, reconcileColumnSizing } from 'utils/column-layout';
 import { VariantValueViewer } from './variant-value-viewer';
 import { getVariantFieldValue } from 'utils/variant-fields';
 import { normalizeCount } from 'utils/count';
+import { LongTextCell } from 'components/long-text-cell';
 
 const EXPAND_COLUMN_ID = '__expand';
 const TIME_COLUMN_ID = '__time';
@@ -511,8 +512,16 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                     };
 
                     return (
-                        <div
+                        <LongTextCell
+                            copyText={formatRecordDisplayValue(row.original._original)}
                             className={css`
+                                display: block;
+                                width: 100%;
+                                max-height: ${discoverRowsWrapped ? '12rem' : '1.25rem'};
+                                overflow: ${discoverRowsWrapped ? 'auto' : 'hidden'};
+                                word-break: ${discoverRowsWrapped ? 'break-all' : 'normal'};
+                                white-space: ${discoverRowsWrapped ? 'pre-wrap' : 'nowrap'};
+                                text-overflow: ${discoverRowsWrapped ? 'clip' : 'ellipsis'};
                                 padding-top: 0.5rem;
                                 padding-bottom: 0.5rem;
                                 font-size: 0.875rem;
@@ -537,15 +546,10 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                     className={css`
                                         display: block;
                                         width: 100%;
-                                        max-height: ${discoverRowsWrapped ? '12rem' : '1.25rem'};
-                                        overflow: ${discoverRowsWrapped ? 'auto' : 'hidden'};
-                                        word-break: ${discoverRowsWrapped ? 'break-all' : 'normal'};
-                                        white-space: ${discoverRowsWrapped ? 'pre-wrap' : 'nowrap'};
-                                        text-overflow: ${discoverRowsWrapped ? 'clip' : 'ellipsis'};
                                     `}
                                 />
                             </ColumnStyleWrapper>
-                        </div>
+                        </LongTextCell>
                     );
                 },
             });
@@ -598,21 +602,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                         min-height: 48px;
                                     `}`}
                                 >
-                                    <div
-                                        className={css`
-                                            max-height: 192px;
-                                            overflow: auto;
-                                        `}
-                                    >
-                                        <div
-                                            className={css`
-                                                display: flex;
-                                                align-items: center;
-                                                padding: 16px 16px 16px 0;
-                                                word-break: break-all;
-                                            `}
-                                        >
-                                            {isStructuredJsonType(fieldType) ? <VariantValueViewer value={rawFieldValue} /> : field.value === 'trace_id' ? <AntButton
+                                    {isStructuredJsonType(fieldType) ? <VariantValueViewer value={rawFieldValue} /> : field.value === 'trace_id' ? <AntButton
                                                 className={css`padding-left: 0px;`}
                                                 onClick={() => {
                                                     if (isTargetLogTable && targetTraceTable) {
@@ -623,7 +613,21 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                                 }}
                                                 type="link">
                                                 {fieldValue}
-                                            </AntButton> : (
+                                            </AntButton> : <LongTextCell
+                                                copyText={fieldValue}
+                                                className={css`
+                                                    max-height: 192px;
+                                                    overflow: auto;
+                                                `}
+                                            >
+                                                <div
+                                                    className={css`
+                                                        display: flex;
+                                                        align-items: center;
+                                                        padding: 16px 16px 16px 0;
+                                                        word-break: break-all;
+                                                    `}
+                                                >
                                                 <span
                                                     className={css`
                                                         display: block;
@@ -637,9 +641,8 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                                 >
                                                     {fieldValue}
                                                 </span>
-                                            )}
-                                        </div>
-                                    </div>
+                                                </div>
+                                            </LongTextCell>}
                                     <div
                                         className={`filter-content ${css`
                                             visibility: hidden;

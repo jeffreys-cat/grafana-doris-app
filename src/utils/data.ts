@@ -121,6 +121,17 @@ export function formatFieldDisplayValue(value: any, mode: 'compact' | 'pretty' =
     return String(parsedValue);
 }
 
+/** Formats a row for plain-text previews and clipboard use without leaking rendered HTML. */
+export function formatRecordDisplayValue(record: Record<string, any> | null | undefined): string {
+    if (!record || typeof record !== 'object') {
+        return '-';
+    }
+
+    return Object.entries(record)
+        .map(([key, value]) => `${key}: ${formatFieldDisplayValue(value, 'compact')}`)
+        .join(' ');
+}
+
 export function escapeHtml(value: any): string {
     return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }

@@ -34,13 +34,14 @@ import {
 import { sortBy } from 'lodash-es';
 import { getSurroundingDataService } from 'services/discover';
 import { lastValueFrom } from 'rxjs';
-import { convertColumnToRowViaFieldsType, escapeHtml, formatFieldDisplayValue, formatTimestampToDateTime, isStructuredJsonType, parseJsonLikeValue } from 'utils/data';
+import { convertColumnToRowViaFieldsType, escapeHtml, formatFieldDisplayValue, formatRecordDisplayValue, formatTimestampToDateTime, isStructuredJsonType, parseJsonLikeValue } from 'utils/data';
 import { generateTableDataUID } from 'utils/utils';
 import { SurroundingColumnAction } from './column-action';
 import { logError } from '@grafana/runtime';
 import { toError } from 'utils/errors';
 import { VariantValueViewer } from 'components/discover-content/variant-value-viewer';
 import { getVariantFieldValue } from 'utils/variant-fields';
+import { LongTextCell } from 'components/long-text-cell';
 
 export default function SurroundingLogs() {
     const theme = useTheme2();
@@ -477,8 +478,15 @@ export default function SurroundingLogs() {
                         return { __html: getValue<string>() };
                     }
                     return (
-                        <div
+                        <LongTextCell
+                            copyText={formatRecordDisplayValue(row.original._original)}
                             className={css`
+                                display: block;
+                                width: 100%;
+                                max-height: 12rem;
+                                overflow: auto;
+                                word-break: break-all;
+                                white-space: pre-wrap;
                                 padding-top: 0.5rem;
                                 padding-bottom: 0.5rem;
                                 font-size: 0.875rem;
@@ -495,14 +503,12 @@ export default function SurroundingLogs() {
                                 <div
                                     dangerouslySetInnerHTML={createMarkup()}
                                     className={css`
-                                        max-height: 12rem;
-                                        overflow: auto;
-                                        word-break: break-all;
-                                        white-space: pre-wrap;
+                                        display: block;
+                                        width: 100%;
                                     `}
                                 />
                             </ColumnStyleWrapper>
-                        </div>
+                        </LongTextCell>
                     );
                 },
             });
@@ -553,11 +559,11 @@ export default function SurroundingLogs() {
                                         min-height: 48px;
                                     `}`}
                                 >
-                                    <div className={`max-h-48 overflow-auto`}>
+                                    {isStructuredJsonType(fieldType) ? <VariantValueViewer value={rawFieldValue} /> : field.value === 'trace_id' && fieldValue ? <Button>{fieldValue}</Button> : <LongTextCell copyText={fieldValue} className="max-h-48 overflow-auto">
                                         <div className="flex items-center break-all py-4">
-                                            {isStructuredJsonType(fieldType) ? <VariantValueViewer value={rawFieldValue} /> : field.value === 'trace_id' && fieldValue ? <Button>{fieldValue}</Button> : <span className="text-xs">{fieldValue}</span>}
+                                            <span className="text-xs">{fieldValue}</span>
                                         </div>
-                                    </div>
+                                    </LongTextCell>}
                                     {
                                         fieldValue ? <div
                                             className={`filter-content ${css`
