@@ -148,6 +148,25 @@ describe('getWhereSQLViaLucene', () => {
             .resolves.toBe("(TRY_CAST(`attrs`['is.ready'] AS BOOLEAN) = CAST('true' AS BOOLEAN))");
     });
 
+    it('uses JSON_EXTRACT for Lucene queries on JSON child paths', async () => {
+        mockedGetColumn.mockImplementation(async ({ column }) => {
+            if (column === 'log_attributes') {
+                return { name: 'log_attributes', normalizedType: 'JSON', dataType: 'json', columnType: 'json' };
+            }
+            return null;
+        });
+        mockedGetInvertedIndexColumns.mockResolvedValue([]);
+
+        await expect(getWhereSQLViaLucene({ ...baseParams, query: 'log_attributes["http.status"]:200' }))
+            .resolves.toBe("(CAST(JSON_EXTRACT(`log_attributes`, '$.\"http.status\"') AS DOUBLE) = CAST('200' AS DOUBLE))");
+        await expect(getWhereSQLViaLucene({ ...baseParams, query: 'log_attributes["is.ready"]:true' }))
+            .resolves.toBe("(CAST(JSON_EXTRACT(`log_attributes`, '$.\"is.ready\"') AS BOOLEAN) = CAST('true' AS BOOLEAN))");
+        await expect(getWhereSQLViaLucene({ ...baseParams, query: 'log_attributes["http.route"]:"/checkout"' }))
+            .resolves.toBe("(lower(CAST(JSON_EXTRACT(`log_attributes`, '$.\"http.route\"') AS STRING)) LIKE lower('%/checkout%'))");
+        await expect(getWhereSQLViaLucene({ ...baseParams, query: 'log_attributes.duration:[100 TO 500]' }))
+            .resolves.toBe("((CAST(JSON_EXTRACT(`log_attributes`, '$.\"duration\"') AS DOUBLE) >= CAST('100' AS DOUBLE)) AND (CAST(JSON_EXTRACT(`log_attributes`, '$.\"duration\"') AS DOUBLE) <= CAST('500' AS DOUBLE)))");
+    });
+
     it('uses CAST for VARIANT comparisons on Doris versions before 4.0', async () => {
         mockedSupportsTryCast.mockResolvedValue(false);
         mockedGetColumn.mockImplementation(async ({ column }) => column === 'attrs'

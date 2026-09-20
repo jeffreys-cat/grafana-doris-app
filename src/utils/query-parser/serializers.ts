@@ -4,7 +4,7 @@ import { getColumn as getColumnMetadata, getInvertedIndexColumns } from '../../s
 import { convertCHTypeToPrimitiveJSType, JSDataType } from './enums';
 import { splitAndTrimWithBracket } from './utils';
 import { splitVariantFieldPath } from './tokenUtils';
-import { CLICK_HOUSE_JSON_NUMBER_TYPES, IMPLICIT_FIELD } from './constants';
+import { IMPLICIT_FIELD } from './constants';
 
 export type ColumnLookup = {
     name: string;
@@ -142,7 +142,6 @@ export abstract class SQLSerializer implements Serializer {
 
     abstract getColumnForField(field: string): Promise<{
         column?: string;
-        columnJSON?: { string: string; number: string };
         propertyType?: JSDataType;
         supportsTextSearch?: boolean;
         sourceColumn?: string;
@@ -171,7 +170,7 @@ export abstract class SQLSerializer implements Serializer {
     }
 
     async eq(field: string, term: string, isNegatedField: boolean) {
-        const { column, columnJSON, found, propertyType, supportsTextSearch, sourceColumn, variantRoot } =
+        const { column, found, propertyType, supportsTextSearch, sourceColumn, variantRoot } =
             await this.getColumnForField(field);
         if (!found) {
             return this.NOT_FOUND_QUERY;
@@ -185,7 +184,7 @@ export abstract class SQLSerializer implements Serializer {
         } else if (propertyType === JSDataType.Number) {
             return SqlString.format(`(${column} ${isNegatedField ? '!' : ''}= CAST(? AS DOUBLE))`, [term]);
         } else if (propertyType === JSDataType.JSON) {
-            return SqlString.format(`(${columnJSON?.string} ${isNegatedField ? '!' : ''}= ?)`, [term]);
+            return this.jsonEquality(column, term, isNegatedField, Boolean(variantRoot));
         } else if (propertyType === JSDataType.Variant) {
             return this.variantEquality(column, term, isNegatedField, supportsTextSearch, sourceColumn, Boolean(variantRoot));
         } else if (propertyType === JSDataType.String && supportsTextSearch) {
@@ -202,12 +201,12 @@ export abstract class SQLSerializer implements Serializer {
     }
 
     async isNotNull(field: string, isNegatedField: boolean) {
-        const { column, columnJSON, found, propertyType } = await this.getColumnForField(field);
+        const { column, found, propertyType } = await this.getColumnForField(field);
         if (!found) {
             return this.NOT_FOUND_QUERY;
         }
         if (propertyType === JSDataType.JSON) {
-            return `notEmpty(${columnJSON?.string}) ${isNegatedField ? '!' : ''}= 1`;
+            return `${column} IS ${isNegatedField ? '' : 'NOT '}NULL`;
         }
         if (propertyType === JSDataType.Variant) {
             return `CAST(${column} AS STRING) IS ${isNegatedField ? '' : 'NOT '}NULL`;
@@ -216,12 +215,12 @@ export abstract class SQLSerializer implements Serializer {
     }
 
     async gte(field: string, term: string) {
-        const { column, columnJSON, found, propertyType, variantRoot } = await this.getColumnForField(field);
+        const { column, found, propertyType, variantRoot } = await this.getColumnForField(field);
         if (!found) {
             return this.NOT_FOUND_QUERY;
         }
         if (propertyType === JSDataType.JSON) {
-            return SqlString.format(`(${columnJSON?.number} >= ?)`, [term]);
+            return this.jsonNumericComparison(column, '>=', term, Boolean(variantRoot));
         }
         if (propertyType === JSDataType.Variant) {
             return this.variantNumericComparison(column, '>=', term, Boolean(variantRoot));
@@ -230,12 +229,12 @@ export abstract class SQLSerializer implements Serializer {
     }
 
     async lte(field: string, term: string) {
-        const { column, columnJSON, found, propertyType, variantRoot } = await this.getColumnForField(field);
+        const { column, found, propertyType, variantRoot } = await this.getColumnForField(field);
         if (!found) {
             return this.NOT_FOUND_QUERY;
         }
         if (propertyType === JSDataType.JSON) {
-            return SqlString.format(`(${columnJSON?.number} <= ?)`, [term]);
+            return this.jsonNumericComparison(column, '<=', term, Boolean(variantRoot));
         }
         if (propertyType === JSDataType.Variant) {
             return this.variantNumericComparison(column, '<=', term, Boolean(variantRoot));
@@ -244,12 +243,12 @@ export abstract class SQLSerializer implements Serializer {
     }
 
     async lt(field: string, term: string) {
-        const { column, columnJSON, found, propertyType, variantRoot } = await this.getColumnForField(field);
+        const { column, found, propertyType, variantRoot } = await this.getColumnForField(field);
         if (!found) {
             return this.NOT_FOUND_QUERY;
         }
         if (propertyType === JSDataType.JSON) {
-            return SqlString.format(`(${columnJSON?.number} < ?)`, [term]);
+            return this.jsonNumericComparison(column, '<', term, Boolean(variantRoot));
         }
         if (propertyType === JSDataType.Variant) {
             return this.variantNumericComparison(column, '<', term, Boolean(variantRoot));
@@ -258,12 +257,12 @@ export abstract class SQLSerializer implements Serializer {
     }
 
     async gt(field: string, term: string) {
-        const { column, columnJSON, found, propertyType, variantRoot } = await this.getColumnForField(field);
+        const { column, found, propertyType, variantRoot } = await this.getColumnForField(field);
         if (!found) {
             return this.NOT_FOUND_QUERY;
         }
         if (propertyType === JSDataType.JSON) {
-            return SqlString.format(`(${columnJSON?.number} > ?)`, [term]);
+            return this.jsonNumericComparison(column, '>', term, Boolean(variantRoot));
         }
         if (propertyType === JSDataType.Variant) {
             return this.variantNumericComparison(column, '>', term, Boolean(variantRoot));
@@ -325,6 +324,59 @@ export abstract class SQLSerializer implements Serializer {
 
     protected variantCast(column: string, targetType: 'DOUBLE' | 'BOOLEAN'): string {
         return `${this.supportsTryCast ? 'TRY_CAST' : 'CAST'}(${column} AS ${targetType})`;
+    }
+
+    private jsonCast(column: string, targetType: 'DOUBLE' | 'BOOLEAN' | 'STRING'): string {
+        return `CAST(${column} AS ${targetType})`;
+    }
+
+    private jsonNumericComparison(
+        column: string | undefined,
+        operator: '=' | '>' | '>=' | '<' | '<=',
+        term: string,
+        jsonRoot: boolean,
+    ): string {
+        if (!column || jsonRoot || !this.isNumericTerm(term)) {
+            return this.NOT_FOUND_QUERY;
+        }
+        return SqlString.format(`(${this.jsonCast(column, 'DOUBLE')} ${operator} CAST(? AS DOUBLE))`, [term]);
+    }
+
+    private jsonBooleanComparison(column: string | undefined, term: string, isNegatedField: boolean): string {
+        if (!column || !this.isBooleanTerm(term)) {
+            return this.NOT_FOUND_QUERY;
+        }
+        const clause = SqlString.format(`(${this.jsonCast(column, 'BOOLEAN')} = CAST(? AS BOOLEAN))`, [
+            `${term}`.trim().toLowerCase(),
+        ]);
+        return this.wrapNegation(clause, isNegatedField);
+    }
+
+    private jsonTextSearch(
+        column: string | undefined,
+        term: string,
+        isNegatedField: boolean,
+        prefixWildcard: boolean,
+        suffixWildcard: boolean,
+        isPhrase: boolean,
+    ): string {
+        if (!column) {
+            return this.NOT_FOUND_QUERY;
+        }
+        return SqlString.format(`(lower(${this.jsonCast(column, 'STRING')}) ${isNegatedField ? 'NOT ' : ''}LIKE lower(?))`, [
+            this.variantLikePattern(term, prefixWildcard, suffixWildcard, isPhrase),
+        ]);
+    }
+
+    private jsonEquality(column: string | undefined, term: string, isNegatedField: boolean, jsonRoot: boolean): string {
+        if (this.isBooleanTerm(term)) {
+            return this.jsonBooleanComparison(column, term, isNegatedField);
+        }
+        if (this.isNumericTerm(term)) {
+            const clause = this.jsonNumericComparison(column, '=', term, jsonRoot);
+            return clause === this.NOT_FOUND_QUERY ? clause : this.wrapNegation(clause, isNegatedField);
+        }
+        return this.jsonTextSearch(column, term, isNegatedField, false, false, true);
     }
 
     private variantLikePattern(
@@ -452,8 +504,15 @@ export abstract class SQLSerializer implements Serializer {
                 sourceColumn,
                 Boolean(variantRoot),
             );
-        } else if (propertyType === JSDataType.JSON && supportsTextSearch === false) {
-            return this.NOT_FOUND_QUERY;
+        } else if (propertyType === JSDataType.JSON) {
+            if (this.isBooleanTerm(term)) {
+                return this.jsonBooleanComparison(column, term, isNegatedField);
+            }
+            if (this.isNumericTerm(term)) {
+                const clause = this.jsonNumericComparison(column, '=', term, Boolean(variantRoot));
+                return clause === this.NOT_FOUND_QUERY ? clause : this.wrapNegation(clause, isNegatedField);
+            }
+            return this.jsonTextSearch(column, term, isNegatedField, prefixWildcard, suffixWildcard, isPhrase);
         }
 
         if (term.length === 0) {
@@ -617,6 +676,14 @@ export abstract class SQLSerializer implements Serializer {
             }
             return this.wrapNegation(`(${startClause} AND ${endClause})`, isNegatedField);
         }
+        if (propertyType === JSDataType.JSON) {
+            const startClause = this.jsonNumericComparison(column, '>=', start, Boolean(variantRoot));
+            const endClause = this.jsonNumericComparison(column, '<=', end, Boolean(variantRoot));
+            if (startClause === this.NOT_FOUND_QUERY || endClause === this.NOT_FOUND_QUERY) {
+                return this.NOT_FOUND_QUERY;
+            }
+            return this.wrapNegation(`(${startClause} AND ${endClause})`, isNegatedField);
+        }
         return SqlString.format(`(${column} ${isNegatedField ? 'NOT ' : ''}BETWEEN ? AND ?)`, [
             this.attemptToParseNumber(start),
             this.attemptToParseNumber(end),
@@ -754,17 +821,30 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
         return columnType.toLowerCase().startsWith('variant');
     }
 
+    private isJsonColumnType(columnType: string): boolean {
+        return columnType.toLowerCase().startsWith('json');
+    }
+
+    private getDorisJsonPath(path: string[]): string {
+        // Quote every member so dots in telemetry attribute keys remain literal
+        // keys instead of being interpreted as nested JSON-path separators.
+        return '$' + path.map(part => `."${String(part).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`).join('');
+    }
+
     private async buildColumnExpressionFromField(field: string) {
         const exactMatch = await this.fetchColumnMetadata(field);
 
         if (exactMatch) {
             const isVariantRoot = this.isVariantColumnType(exactMatch.type);
+            const isJsonRoot = this.isJsonColumnType(exactMatch.type);
             return {
                 found: true,
                 columnType: exactMatch.type,
-                columnExpression: isVariantRoot ? SqlString.format(`??`, [exactMatch.name]) : exactMatch.name,
+                columnExpression: isVariantRoot || isJsonRoot ? SqlString.format(`??`, [exactMatch.name]) : exactMatch.name,
                 sourceColumn: exactMatch.name,
-                variantRoot: isVariantRoot,
+                // Both structured root types disallow scalar numeric comparisons
+                // until a JSON/VARIANT child path has been selected.
+                variantRoot: isVariantRoot || isJsonRoot,
             };
         }
 
@@ -783,20 +863,17 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
                     columnType: valueType ?? 'Unknown',
                     sourceColumn: prefixMatch.name,
                 };
-            } else if (prefixMatch.type.startsWith('JSON')) {
+            } else if (this.isJsonColumnType(prefixMatch.type)) {
+                const nestedPaths = fieldPath.slice(1).filter(Boolean);
                 return {
                     found: true,
-                    columnExpression: '',
-                    columnExpressionJSON: {
-                        string: SqlString.format(`toString(??)`, [field]),
-                        number: SqlString.format(`dynamicType(??) in (?) and ??`, [
-                            field,
-                            CLICK_HOUSE_JSON_NUMBER_TYPES,
-                            field,
-                        ]),
-                    },
+                    columnExpression: SqlString.format(`JSON_EXTRACT(??, ?)`, [
+                        prefixMatch.name,
+                        this.getDorisJsonPath(nestedPaths),
+                    ]),
                     columnType: 'JSON',
                     sourceColumn: prefixMatch.name,
+                    variantRoot: nestedPaths.length === 0,
                 };
             } else if (this.isVariantColumnType(prefixMatch.type)) {
                 const nestedPaths = fieldPath.slice(1).filter(Boolean);
@@ -899,7 +976,6 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
                     expressions.length > 1
                         ? `concatWithSeparator(';',${expressions.join(',')})`
                         : this.implicitColumnExpression,
-                columnJSON: undefined,
                 propertyType: JSDataType.String,
                 supportsTextSearch: undefined,
                 sourceColumn: undefined,
@@ -924,7 +1000,6 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
 
         return {
             column: expression.columnExpression,
-            columnJSON: expression?.columnExpressionJSON,
             propertyType,
             supportsTextSearch,
             sourceColumn: expression.sourceColumn,
