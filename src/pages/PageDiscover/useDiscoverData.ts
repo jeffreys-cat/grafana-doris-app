@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Dayjs } from 'dayjs';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
@@ -44,6 +44,7 @@ import { createDiscoverQueryError } from 'utils/query-error';
 import { DiscoverQuerySource, DiscoverSort } from 'types/discover';
 import { resolveQuerySortField } from 'services/sql';
 import { deriveVariantFields, flattenVariantLeaves, mergeVariantFields } from 'utils/variant-fields';
+import { enrichStructuredFilterTypes } from 'utils/sql-filter';
 
 type RefreshOptions = {
     skipPageReset?: boolean;
@@ -81,6 +82,10 @@ export function useDiscoverData() {
     const variantMetadataFieldsRef = useRef(variantMetadataFields);
     const searchType = useAtomValue(searchTypeAtom);
     const dataFilter = useAtomValue(dataFilterAtom);
+    const queryDataFilters = useMemo(
+        () => enrichStructuredFilterTypes(dataFilter, [...tableFields, ...flattenVariantLeaves(variantFields)]),
+        [dataFilter, tableFields, variantFields],
+    );
     const searchValue = useAtomValue(searchValueAtom);
     const setTopData = useSetAtom(topDataAtom);
     const currentTable = useAtomValue(currentTableAtom);
@@ -176,7 +181,7 @@ export function useDiscoverData() {
             if (searchType === 'Search') {
                 payload.indexes_statement = indexesStatement;
             }
-            payload.data_filters = dataFilter.length > 0 ? dataFilter : [];
+            payload.data_filters = queryDataFilters.length > 0 ? queryDataFilters : [];
 
             if (searchType === 'Lucene') {
                 try {
@@ -281,6 +286,7 @@ export function useDiscoverData() {
             currentTable,
             currentTimeField,
             dataFilter,
+            queryDataFilters,
             page,
             pageSize,
             searchType,
@@ -325,7 +331,7 @@ export function useDiscoverData() {
             };
 
             if (dataFilter.length > 0) {
-                payload.data_filters = dataFilter;
+                payload.data_filters = queryDataFilters;
             }
 
             if (searchType === 'Lucene') {
@@ -397,6 +403,7 @@ export function useDiscoverData() {
             currentTable,
             currentTimeField,
             dataFilter,
+            queryDataFilters,
             interval,
             searchType,
             searchValue,
@@ -433,7 +440,7 @@ export function useDiscoverData() {
             if (searchType === 'Search') {
                 payload.indexes_statement = indexesStatement;
             }
-            payload.data_filters = dataFilter.length > 0 ? dataFilter : [];
+            payload.data_filters = queryDataFilters.length > 0 ? queryDataFilters : [];
 
             if (searchValue && searchType !== 'Lucene') {
                 payload.search_value = searchType === 'Search' ? encodeBase64(searchValue) : searchValue;
@@ -495,6 +502,7 @@ export function useDiscoverData() {
             currentTable,
             currentTimeField,
             dataFilter,
+            queryDataFilters,
             searchType,
             searchValue,
             selectdbDS,
@@ -531,7 +539,7 @@ export function useDiscoverData() {
             };
 
             if (dataFilter.length > 0) {
-                payload.data_filters = dataFilter;
+                payload.data_filters = queryDataFilters;
             }
 
             if (searchType === 'Lucene') {
@@ -590,6 +598,7 @@ export function useDiscoverData() {
             currentTable,
             currentTimeField,
             dataFilter,
+            queryDataFilters,
             interval,
             searchType,
             searchValue,
@@ -623,7 +632,7 @@ export function useDiscoverData() {
                 payload.indexes_statement = indexesStatement;
             }
 
-            payload.data_filters = dataFilter.length > 0 ? dataFilter : [];
+            payload.data_filters = queryDataFilters.length > 0 ? queryDataFilters : [];
 
             if (searchValue) {
                 payload.search_value = encodeBase64(searchValue);
@@ -660,6 +669,7 @@ export function useDiscoverData() {
             currentTable,
             currentTimeField,
             dataFilter,
+            queryDataFilters,
             page,
             pageSize,
             searchType,

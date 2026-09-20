@@ -42,8 +42,12 @@ export interface DataFilterType {
     fieldName: string;
     variantKey?: string;
     variantPath?: string[];
+    /** Physical type of the structured root column, used to query JSON paths. */
+    variantRootType?: string;
+    /** Scalar type inferred for the selected JSON/VARIANT leaf. */
+    fieldType?: string;
     operator: Operator;
-    value: Array<string | number>;
+    value: Array<string | number | boolean>;
     label?: string;
     id: string;
 }

@@ -27,6 +27,11 @@ type GetIndexesParams = {
     datasourceType?: string;
 };
 
+type GetDorisVersionParams = {
+    connectionId: string;
+    datasourceType?: string;
+};
+
 export type GetApplicationValuesParams = {
     selectdbDS: any;
     database: string;
@@ -38,6 +43,66 @@ export type GetApplicationValuesParams = {
 };
 
 const escapeSqlLiteral = (value: string) => value.replace(/'/g, "''");
+
+// The version of a datasource cannot change during a Grafana session in normal
+// operation. Cache it so building a Lucene filter does not add a query after
+// the first lookup.
+const dorisMajorVersionCache = new Map<string, Promise<number | null>>();
+
+function parseDorisMajorVersion(version: unknown): number | null {
+    const match = String(version ?? '').match(/(?:^|\s|v)(\d+)\./i);
+    return match ? Number.parseInt(match[1], 10) : null;
+}
+
+export async function getDorisMajorVersion({
+    connectionId,
+    datasourceType = DORIS_DATASOURCE_TYPE,
+}: GetDorisVersionParams): Promise<number | null> {
+    if (!connectionId) {
+        return null;
+    }
+
+    const cacheKey = `${datasourceType}:${connectionId}`;
+    const cached = dorisMajorVersionCache.get(cacheKey);
+    if (cached) {
+        return cached;
+    }
+
+    const versionPromise = (async (): Promise<number | null> => {
+        const response$ = withErrorHandler(getBackendSrv().fetch({
+            url: '/api/ds/query',
+            method: 'POST',
+            data: {
+                queries: [{
+                    refId: 'getDorisVersion',
+                    datasource: { type: datasourceType, uid: connectionId },
+                    rawSql: 'SELECT VERSION() AS Version',
+                    format: 'table',
+                }],
+            },
+        }));
+
+        try {
+            const { data, ok } = await lastValueFrom(response$);
+            if (!ok) {
+                return null;
+            }
+
+            const frame = (data as { results?: Record<string, any> })?.results?.getDorisVersion?.frames?.[0];
+            const versionField = frame && toDataFrame(frame).fields.find(field => field.name === 'Version');
+            return parseDorisMajorVersion(versionField?.values?.get?.(0));
+        } catch {
+            return null;
+        }
+    })();
+
+    dorisMajorVersionCache.set(cacheKey, versionPromise);
+    const version = await versionPromise;
+    if (version == null) {
+        dorisMajorVersionCache.delete(cacheKey);
+    }
+    return version;
+}
 
 const normalizeColumnType = ({ dataType, columnType }: { dataType?: string; columnType?: string }): string => {
     const source = (columnType || dataType || '').trim();

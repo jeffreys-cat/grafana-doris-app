@@ -204,11 +204,18 @@ export function FilterContent({ onHide, dataFilterValue }: { onHide: () => void;
             }
         }
 
+        const selectedField = allFields.find((item: any) => item.Field === field.value);
+        const variantPath = selectedField?.variantPath;
+        const structuredRoot = variantPath?.[0]
+            ? allFields.find((item: any) => item.Field === variantPath[0])
+            : undefined;
         const newItem = {
             id,
             fieldName: field.value,
             variantKey: field.value === dataFilterValue?.fieldName ? dataFilterValue?.variantKey : undefined,
-            variantPath: allFields.find((item: any) => item.Field === field.value)?.variantPath,
+            variantPath,
+            variantRootType: structuredRoot?.Type,
+            fieldType: selectedField?.Type,
             operator: opValue,
             // Only persist label when showLabel is true. Otherwise ensure it's empty.
             label: showLabel ? label : '',

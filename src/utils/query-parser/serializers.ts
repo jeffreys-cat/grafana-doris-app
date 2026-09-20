@@ -138,6 +138,7 @@ export class EnglishSerializer implements Serializer {
 
 export abstract class SQLSerializer implements Serializer {
     private NOT_FOUND_QUERY = '(1 = 0)';
+    protected supportsTryCast = true;
 
     abstract getColumnForField(field: string): Promise<{
         column?: string;
@@ -308,7 +309,7 @@ export abstract class SQLSerializer implements Serializer {
             return this.NOT_FOUND_QUERY;
         }
 
-        return SqlString.format(`(TRY_CAST(? AS DOUBLE) ${operator} CAST(? AS DOUBLE))`, [SqlString.raw(column), term]);
+        return SqlString.format(`(${this.variantCast(column, 'DOUBLE')} ${operator} CAST(? AS DOUBLE))`, [term]);
     }
 
     private variantBooleanComparison(column: string | undefined, term: string, isNegatedField: boolean): string {
@@ -316,11 +317,14 @@ export abstract class SQLSerializer implements Serializer {
             return this.NOT_FOUND_QUERY;
         }
 
-        const clause = SqlString.format(`(TRY_CAST(? AS BOOLEAN) = CAST(? AS BOOLEAN))`, [
-            SqlString.raw(column),
+        const clause = SqlString.format(`(${this.variantCast(column, 'BOOLEAN')} = CAST(? AS BOOLEAN))`, [
             `${term}`.trim().toLowerCase(),
         ]);
         return this.wrapNegation(clause, isNegatedField);
+    }
+
+    protected variantCast(column: string, targetType: 'DOUBLE' | 'BOOLEAN'): string {
+        return `${this.supportsTryCast ? 'TRY_CAST' : 'CAST'}(${column} AS ${targetType})`;
     }
 
     private variantLikePattern(
@@ -626,6 +630,7 @@ export type CustomSchemaConfig = {
     tableName: string;
     connectionId: string;
     datasourceType?: string;
+    supportsTryCast?: boolean;
 };
 
 export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
@@ -646,6 +651,7 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
         connectionId,
         implicitColumnExpression,
         datasourceType,
+        supportsTryCast = true,
     }: { metadata?: LegacyMetadataProvider } & CustomSchemaConfig) {
         super();
         this.legacyMetadataProvider = metadata;
@@ -654,6 +660,7 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
         this.implicitColumnExpression = implicitColumnExpression;
         this.connectionId = connectionId;
         this.datasourceType = datasourceType;
+        this.supportsTryCast = supportsTryCast;
     }
 
     private async fetchColumnMetadata(column: string): Promise<ColumnLookup | null> {

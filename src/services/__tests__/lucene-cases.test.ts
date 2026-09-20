@@ -1,14 +1,16 @@
 import { readdirSync, readFileSync } from 'fs';
 import * as path from 'path';
 import { getWhereSQLViaLucene } from 'services/lucene';
-import { getColumn, getInvertedIndexColumns } from 'services/metaservice';
+import { getColumn, getDorisMajorVersion, getInvertedIndexColumns } from 'services/metaservice';
 
 jest.mock('services/metaservice', () => ({
     getColumn: jest.fn(),
+    getDorisMajorVersion: jest.fn(),
     getInvertedIndexColumns: jest.fn(),
 }));
 
 const mockedGetColumn = getColumn as jest.MockedFunction<typeof getColumn>;
+const mockedGetDorisMajorVersion = getDorisMajorVersion as jest.MockedFunction<typeof getDorisMajorVersion>;
 const mockedGetInvertedIndexColumns = getInvertedIndexColumns as jest.MockedFunction<typeof getInvertedIndexColumns>;
 
 type ColumnFixture = {
@@ -60,6 +62,10 @@ function loadCaseFixtures(): Array<LuceneCase & { fileName: string }> {
 const luceneCases = loadCaseFixtures();
 
 describe('Lucene case fixtures', () => {
+    beforeEach(() => {
+        mockedGetDorisMajorVersion.mockResolvedValue(4);
+    });
+
     if (luceneCases.length === 0) {
         it('has at least one lucene case fixture defined', () => {
             throw new Error('No lucene case fixtures found under src/services/__tests__/cases');
@@ -69,6 +75,7 @@ describe('Lucene case fixtures', () => {
 
     afterEach(() => {
         mockedGetColumn.mockReset();
+        mockedGetDorisMajorVersion.mockReset();
         mockedGetInvertedIndexColumns.mockReset();
     });
 

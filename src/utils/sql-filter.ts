@@ -22,7 +22,25 @@ export function transformFieldPath(fieldPath: string, variantPath?: string[]): s
     );
 }
 
-function getFilterFieldReference({ fieldName, variantKey, variantPath }: DataFilterType): string {
+function getJsonPath(path: string[]): string {
+    // Quote every member: telemetry attribute names commonly contain dots, and
+    // quoted JSON-path members preserve those dots as part of the key.
+    return '$' + path.map(part => `."${String(part).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`).join('');
+}
+
+function getJsonCastType(fieldType?: string): string {
+    const type = String(fieldType || '').toUpperCase();
+    if (type.includes('BOOL')) return 'BOOLEAN';
+    if (/(DOUBLE|FLOAT|DECIMAL|INT|NUMBER)/.test(type)) return 'DOUBLE';
+    return 'STRING';
+}
+
+function getFilterFieldReference({ fieldName, variantKey, variantPath, variantRootType, fieldType }: DataFilterType): string {
+    const path = variantPath?.length ? variantPath : variantKey !== undefined ? [fieldName, variantKey] : undefined;
+    if (path?.length && String(variantRootType || '').toUpperCase().includes('JSON')) {
+        const root = path[0];
+        return `CAST(JSON_EXTRACT(${escapeSqlIdentifier(root)}, ${quoteSqlLiteral(getJsonPath(path.slice(1)))}) AS ${getJsonCastType(fieldType)})`;
+    }
     if (variantPath?.length) {
         return transformFieldPath(fieldName, variantPath);
     }
@@ -33,8 +51,34 @@ function getFilterFieldReference({ fieldName, variantKey, variantPath }: DataFil
     return transformFieldPath(fieldName);
 }
 
-function getFilterValue(value: string | number): string {
+function getFilterValue(value: string | number | boolean): string {
     return typeof value === 'string' ? quoteSqlLiteral(value) : String(value);
+}
+
+/**
+ * Adds schema information to filters restored from local storage or the URL.
+ * Older saved filters predate JSON-specific SQL generation, so they do not
+ * carry the root type created by the current filter editor.
+ */
+export function enrichStructuredFilterTypes(filters: DataFilterType[], fields: Array<{ Field?: string; Type?: string }>): DataFilterType[] {
+    return filters.map(filter => {
+        const path = filter.variantPath;
+        if (!path?.length || filter.variantRootType) {
+            return filter;
+        }
+
+        const root = fields.find(field => field.Field === path[0]);
+        if (!root?.Type) {
+            return filter;
+        }
+
+        const leaf = fields.find(field => field.Field === filter.fieldName);
+        return {
+            ...filter,
+            variantRootType: root.Type,
+            fieldType: filter.fieldType || leaf?.Type,
+        };
+    });
 }
 
 export function getFilterSQL(filter: DataFilterType): string {

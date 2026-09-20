@@ -1,12 +1,14 @@
 import { getWhereSQLViaLucene } from 'services/lucene';
-import { getColumn, getInvertedIndexColumns } from 'services/metaservice';
+import { getColumn, getDorisMajorVersion, getInvertedIndexColumns } from 'services/metaservice';
 
 jest.mock('services/metaservice', () => ({
     getColumn: jest.fn(),
+    getDorisMajorVersion: jest.fn(),
     getInvertedIndexColumns: jest.fn(),
 }));
 
 const mockedGetColumn = getColumn as jest.MockedFunction<typeof getColumn>;
+const mockedGetDorisMajorVersion = getDorisMajorVersion as jest.MockedFunction<typeof getDorisMajorVersion>;
 const mockedGetInvertedIndexColumns = getInvertedIndexColumns as jest.MockedFunction<typeof getInvertedIndexColumns>;
 
 describe('getWhereSQLViaLucene', () => {
@@ -19,7 +21,9 @@ describe('getWhereSQLViaLucene', () => {
 
     beforeEach(() => {
         mockedGetColumn.mockReset();
+        mockedGetDorisMajorVersion.mockReset();
         mockedGetInvertedIndexColumns.mockReset();
+        mockedGetDorisMajorVersion.mockResolvedValue(4);
     });
 
     it('returns empty SQL for blank queries', async () => {
@@ -142,6 +146,18 @@ describe('getWhereSQLViaLucene', () => {
             .resolves.toBe("(TRY_CAST(`attrs`['duration.ms'] AS DOUBLE) > CAST('500' AS DOUBLE))");
         await expect(getWhereSQLViaLucene({ ...baseParams, query: 'attrs["is.ready"]:true' }))
             .resolves.toBe("(TRY_CAST(`attrs`['is.ready'] AS BOOLEAN) = CAST('true' AS BOOLEAN))");
+    });
+
+    it('uses CAST for VARIANT comparisons on Doris versions before 4.0', async () => {
+        mockedGetDorisMajorVersion.mockResolvedValue(3);
+        mockedGetColumn.mockImplementation(async ({ column }) => column === 'attrs'
+            ? { name: 'attrs', normalizedType: 'Variant', dataType: 'variant', columnType: 'variant' }
+            : null);
+        mockedGetInvertedIndexColumns.mockResolvedValue([]);
+
+        await expect(getWhereSQLViaLucene({ ...baseParams, query: 'attrs.duration:>500' }))
+            .resolves.toBe("(CAST(`attrs`['duration'] AS DOUBLE) > CAST('500' AS DOUBLE))");
+        expect(mockedGetDorisMajorVersion).toHaveBeenCalledWith({ connectionId: 'conn-1', datasourceType: 'mysql' });
     });
 
     it('uses phrase LIKE fallback for variant nested phrase searches', async () => {
