@@ -11,8 +11,26 @@ import DiscoverHeader from '../components/discover-header';
 import { testIds } from '../components/testIds';
 import { useDiscoverData } from './PageDiscover/useDiscoverData';
 import DiscoverQueryFeedback from 'components/discover-query-feedback';
-import { useAtomValue } from 'jotai';
-import { currentDatabaseAtom, currentTableAtom, searchTypeAtom } from 'store/discover';
+import { useAtom, useAtomValue } from 'jotai';
+import {
+    currentDatabaseAtom,
+    currentDateAtom,
+    currentTableAtom,
+    currentTimeFieldAtom,
+    dataFilterAtom,
+    discoverShareReadyAtom,
+    discoverSharedColumnOrderAtom,
+    discoverSortAtom,
+    locationAtom,
+    searchTypeAtom,
+    searchValueAtom,
+    selectedDatasourceAtom,
+    selectedFieldsAtom,
+    timeRangeAtom,
+    timeZoneAtom,
+} from 'store/discover';
+import { DISCOVER_SHARE_STATE_PARAM, DISCOVER_SHARE_STATE_VERSION, encodeDiscoverShareState } from 'utils/discover-share-state';
+import { formatTimeInZone } from 'utils/time';
 import {
     DISCOVER_CHART_MIN_HEIGHT,
     DISCOVER_SIDEBAR_MAX_WIDTH,
@@ -28,6 +46,18 @@ export default function PageDiscover() {
     const searchType = useAtomValue(searchTypeAtom);
     const currentDatabase = useAtomValue(currentDatabaseAtom);
     const currentTable = useAtomValue(currentTableAtom);
+    const currentTimeField = useAtomValue(currentTimeFieldAtom);
+    const [, setLoc] = useAtom(locationAtom);
+    const shareReady = useAtomValue(discoverShareReadyAtom);
+    const selectedDatasource = useAtomValue(selectedDatasourceAtom);
+    const searchValue = useAtomValue(searchValueAtom);
+    const dataFilter = useAtomValue(dataFilterAtom);
+    const selectedFields = useAtomValue(selectedFieldsAtom);
+    const columnOrder = useAtomValue(discoverSharedColumnOrderAtom);
+    const timeRange = useAtomValue(timeRangeAtom);
+    const currentDate = useAtomValue(currentDateAtom);
+    const timeZone = useAtomValue(timeZoneAtom);
+    const shareSort = useAtomValue(discoverSortAtom);
     const sectionRef = useRef<HTMLElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const hasSavedLayoutRef = useRef(hasSavedDiscoverLayout());
@@ -35,6 +65,41 @@ export default function PageDiscover() {
     const [contentHeight, setContentHeight] = useState(0);
     const chartMaxHeight = Math.max(DISCOVER_CHART_MIN_HEIGHT, Math.floor((contentHeight || 600) / 2));
     const chartHeight = Math.min(layout.chartHeight, chartMaxHeight);
+
+    useEffect(() => {
+        if (!shareReady) {
+            return;
+        }
+        const rawFrom = typeof timeRange?.raw?.from === 'string' ? timeRange.raw.from : undefined;
+        const rawTo = typeof timeRange?.raw?.to === 'string' ? timeRange.raw.to : undefined;
+        const relative = rawFrom?.startsWith('now') && rawTo?.startsWith('now');
+        const state = encodeDiscoverShareState({
+            version: DISCOVER_SHARE_STATE_VERSION,
+            datasource: selectedDatasource?.uid || selectedDatasource?.name,
+            database: currentDatabase,
+            table: currentTable,
+            timeField: currentTimeField,
+            timeZone,
+            timeRawFrom: relative ? rawFrom : undefined,
+            timeRawTo: relative ? rawTo : undefined,
+            startTime: relative || !currentDate[0] ? undefined : formatTimeInZone(currentDate[0], timeZone),
+            endTime: relative || !currentDate[1] ? undefined : formatTimeInZone(currentDate[1], timeZone),
+            mode: searchType,
+            query: searchValue,
+            filters: dataFilter,
+            selectedFields: selectedFields.map((field: any) => ({ Field: field.Field, Type: field.Type, variantPath: field.variantPath, variantKey: field.variantKey })),
+            columnOrder,
+            sort: shareSort,
+        });
+        setLoc((previous: any) => {
+            const searchParams = new URLSearchParams(previous?.searchParams?.toString() ?? '');
+            if (searchParams.get(DISCOVER_SHARE_STATE_PARAM) === state) {
+                return previous;
+            }
+            searchParams.set(DISCOVER_SHARE_STATE_PARAM, state);
+            return { ...previous, searchParams };
+        });
+    }, [columnOrder, currentDatabase, currentDate, currentTable, currentTimeField, dataFilter, searchType, searchValue, selectedDatasource, selectedFields, setLoc, shareReady, shareSort, timeRange?.raw, timeZone]);
 
     useEffect(() => {
         saveDiscoverLayout(layout);

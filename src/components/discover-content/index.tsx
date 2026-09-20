@@ -21,6 +21,7 @@ import {
     discoverRowsExpandedAtom,
     discoverRowsWrappedAtom,
     discoverColumnLayoutsAtom,
+    discoverSharedColumnOrderAtom,
 } from 'store/discover';
 import { Button as AntButton, Tooltip } from 'antd';
 import SDCollapsibleTable from 'components/selectdb-ui/sd-collapsible-table';
@@ -80,6 +81,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
     const [discoverRowsExpanded, setDiscoverRowsExpanded] = useAtom(discoverRowsExpandedAtom);
     const [discoverRowsWrapped, setDiscoverRowsWrapped] = useAtom(discoverRowsWrappedAtom);
     const [columnLayouts, setColumnLayouts] = useAtom(discoverColumnLayoutsAtom);
+    const [sharedColumnOrder, setSharedColumnOrder] = useAtom(discoverSharedColumnOrderAtom);
     const availableColumnIds = useMemo(
         () => [
             EXPAND_COLUMN_ID,
@@ -127,17 +129,17 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
 
     useEffect(() => {
         const persistedLayout = layoutKey ? columnLayouts[layoutKey] : undefined;
-        setColumnOrder(reconcileColumnOrder(availableColumnIds, persistedLayout?.columnOrder));
+        setColumnOrder(reconcileColumnOrder(availableColumnIds, sharedColumnOrder.length ? sharedColumnOrder : persistedLayout?.columnOrder));
         setColumnSizing({
             ...defaultColumnSizing,
             ...reconcileColumnSizing(availableColumnIds, persistedLayout?.columnSizing),
         });
         // availableColumnIdsKey intentionally represents the primitive column identity list.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [availableColumnIdsKey, columnLayouts, defaultColumnSizing, layoutKey]);
+    }, [availableColumnIdsKey, columnLayouts, defaultColumnSizing, layoutKey, sharedColumnOrder]);
 
     useEffect(() => {
-        if (!layoutKey || columnOrder.length === 0) {
+        if (!layoutKey || columnOrder.length === 0 || sharedColumnOrder.length) {
             return;
         }
         const timeout = window.setTimeout(() => {
@@ -161,7 +163,15 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
             });
         }, 250);
         return () => window.clearTimeout(timeout);
-    }, [columnOrder, columnSizing, layoutKey, setColumnLayouts, validPersistentColumnIds]);
+    }, [columnOrder, columnSizing, layoutKey, setColumnLayouts, sharedColumnOrder.length, validPersistentColumnIds]);
+
+    const handleColumnOrderChange = React.useCallback<OnChangeFn<ColumnOrderState>>((updater) => {
+        setColumnOrder(current => {
+            const next = typeof updater === 'function' ? updater(current) : updater;
+            setSharedColumnOrder(next);
+            return next;
+        });
+    }, [setSharedColumnOrder]);
 
     const resetColumnLayout = React.useCallback(() => {
         setColumnOrder(availableColumnIds);
@@ -766,7 +776,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                 allRowsExpanded={discoverRowsExpanded}
                 onAllRowsExpandedChange={setDiscoverRowsExpanded}
                 columnOrder={columnOrder}
-                onColumnOrderChange={setColumnOrder}
+                onColumnOrderChange={handleColumnOrderChange}
                 columnSizing={columnSizing}
                 onColumnSizingChange={setColumnSizing}
                 sorting={tableSorting}

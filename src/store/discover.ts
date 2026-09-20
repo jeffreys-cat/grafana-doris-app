@@ -44,6 +44,9 @@ export const discoverRowsExpandedAtom = atomWithStorage<boolean>('discover-rows-
 export const discoverRowsWrappedAtom = atomWithStorage<boolean>('discover-rows-wrapped', true);
 export const discoverColumnLayoutsAtom = atomWithStorage<DiscoverColumnLayouts>('discover-column-layouts', {});
 export const discoverSortAtom = atom<DiscoverSort>({ field: '', direction: 'DESC' });
+export const discoverSharedColumnOrderAtom = atom<string[]>([]);
+// URL synchronization starts only after header initialization has applied a shared state.
+export const discoverShareReadyAtom = atom(false);
 export const discoverQueryStateAtom = atom<DiscoverQueryState>({
     status: 'idle',
     rowCount: 0,

@@ -27,6 +27,7 @@ import {
     tableTracesDataAtom,
     timeZoneAtom,
     topDataAtom,
+    discoverShareReadyAtom,
 } from 'store/discover';
 import { getTableDataChartsService, getTableDataCountService, getTableDataService, getTopDataService } from 'services/discover';
 import { getTableDataTraceService } from 'services/traces';
@@ -67,6 +68,7 @@ export function useDiscoverData() {
     const requestGenerationRef = useRef(0);
     const suppressNextPageEffectRef = useRef(false);
     const [page, setPage] = useAtom(pageAtom);
+    const shareReady = useAtomValue(discoverShareReadyAtom);
     const pageSize = useAtomValue(pageSizeAtom);
     const setTableData = useSetAtom(tableDataAtom);
     const setVariantFields = useSetAtom(variantFieldsAtom);
@@ -736,8 +738,11 @@ export function useDiscoverData() {
 
     useEffect(() => {
         sortContextRef.current = sortContextKey;
+        if (shareReady && sort.field) {
+            return;
+        }
         setSort({ field: currentTimeField, direction: 'DESC' });
-    }, [currentTimeField, setSort, sortContextKey]);
+    }, [currentTimeField, setSort, shareReady, sort.field, sortContextKey]);
 
     useEffect(() => {
         if (!didRunPageEffect.current) {
@@ -760,9 +765,12 @@ export function useDiscoverData() {
             didRunAutoRefreshEffect.current = true;
             return;
         }
+        if (!shareReady) {
+            return;
+        }
         refreshData({ skipPageReset: false });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentDate, currentDatabase, currentTable, currentTimeField, dataFilter, interval, selectdbDS]);
+    }, [currentDate, currentDatabase, currentTable, currentTimeField, dataFilter, interval, selectdbDS, shareReady]);
 
     return {
         loading,

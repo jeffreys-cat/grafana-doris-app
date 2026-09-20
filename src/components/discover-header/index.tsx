@@ -33,6 +33,10 @@ import {
     tablesAtom,
     currentTableAtom,
     dataFilterAtom,
+    discoverShareReadyAtom,
+    discoverSharedColumnOrderAtom,
+    discoverSortAtom,
+    selectedFieldsAtom,
 } from 'store/discover';
 import { DISCOVER_SHORTCUTS, getLatestTime, isValidTimeFieldType } from 'utils/data';
 import { Select, Field, Button, Icon, Tooltip, useTheme2, TimeRangeInput } from '@grafana/ui';
@@ -46,6 +50,8 @@ import { useDatasourcePermissions } from 'hooks/useDatasourcePermissions';
 import { buildAbsoluteTimeRange, buildRelativeTimeRange, formatTimeInZone, normalizeTimeZone, parseTimeInZone, toDayjsRange } from 'utils/time';
 import { APPLICATION_FILTER_ID, applyApplicationFilter, getCommittedApplication, getConfiguredApplicationAttributeKey } from './application-filter';
 import { deriveVariantFields, deriveVariantFieldsFromMetadata } from 'utils/variant-fields';
+import { DiscoverShareState, readDiscoverShareState } from 'utils/discover-share-state';
+import { message } from 'antd';
 
 function getStoredValue<T>(key: string): T | undefined {
     if (typeof window === 'undefined') {
@@ -180,6 +186,11 @@ export default function DiscoverHeader(
     const [searchValue, setSearchValue] = useAtom(searchValueAtom);
     const [timeZone, setTimeZone] = useAtom(timeZoneAtom);
     const [dataFilter, setDataFilter] = useAtom(dataFilterAtom);
+    const setSelectedFields = useSetAtom(selectedFieldsAtom);
+    const setSharedColumnOrder = useSetAtom(discoverSharedColumnOrderAtom);
+    const setShareSort = useSetAtom(discoverSortAtom);
+    const [, setDiscoverShareReady] = useAtom(discoverShareReadyAtom);
+    const pendingShareStateRef = React.useRef<DiscoverShareState | undefined>(undefined);
     const [applicationDraft, setApplicationDraft] = React.useState('');
     const [applicationOptions, setApplicationOptions] = React.useState<Array<SelectableValue<string>>>([]);
     const [applicationOptionsLoading, setApplicationOptionsLoading] = React.useState(false);
@@ -281,6 +292,16 @@ export default function DiscoverHeader(
         [setLoc],
     );
 
+    const copyShareLink = React.useCallback(async () => {
+        try {
+            await navigator.clipboard.writeText(window.location.href);
+            message.success('分享链接已复制');
+        } catch (error) {
+            logError(toError(error), { source: 'DiscoverHeader', action: 'copyShareLink' });
+            message.error('无法复制分享链接');
+        }
+    }, []);
+
     const fetchDatabases = React.useCallback(
         (ds: any) => {
             if (!ds) {
@@ -355,10 +376,24 @@ export default function DiscoverHeader(
                     setVariantMetadataFields([]);
                     setResolvedFieldsContext(`${effectiveDatasource.uid || ''}\u0000${effectiveDatabase}\u0000${selectedTable.value}`);
 
+                    const sharedState = pendingShareStateRef.current;
+                    if (sharedState) {
+                        const fieldsByName = new Map(tableFields.map(field => [field.Field, field]));
+                        const restoredFields = sharedState.selectedFields
+                            .map(field => fieldsByName.get(field.Field))
+                            .filter(Boolean);
+                        const restoredFilters = sharedState.filters.filter(filter => fieldsByName.has(filter.fieldName));
+                        setSelectedFields(restoredFields);
+                        setDataFilter(restoredFilters);
+                        setSharedColumnOrder(sharedState.columnOrder);
+                    }
+
                     getVariantFieldsService({ selectdbDS: effectiveDatasource, database: effectiveDatabase, table: selectedTable.value }).subscribe({
                         next: ({ data, ok }: any) => {
                             const metadataFrame = data?.results?.getVariantFields?.frames?.[0];
-                            if (!ok || !metadataFrame) return;
+                            if (!ok || !metadataFrame) {
+                                return;
+                            }
                             const metadata = toDataFrame(metadataFrame);
                             const names = Array.from(metadata.fields[0]?.values || []);
                             const types = Array.from(metadata.fields[1]?.values || []);
@@ -368,6 +403,11 @@ export default function DiscoverHeader(
                             );
                             setVariantMetadataFields(variantMetadata);
                             setVariantFields(variantMetadata);
+                            if (sharedState) {
+                                const fieldsByName = new Map([...tableFields, ...variantMetadata].map(field => [field.Field, field]));
+                                setSelectedFields(sharedState.selectedFields.map(field => fieldsByName.get(field.Field)).filter(Boolean));
+                                setDataFilter(sharedState.filters.filter(filter => fieldsByName.has(filter.fieldName)));
+                            }
                         },
                         error: () => {
                             // Extended DESC is optional. Sampling remains available below.
@@ -396,7 +436,14 @@ export default function DiscoverHeader(
                             timeField: targetTimeField || prev.timeField,
                         }));
                         setTimeFields(options);
+                        if (sharedState) {
+                            setShareSort(sharedState.sort);
+                        }
                         initOptions?.onResolved?.(targetTimeField);
+                        if (sharedState) {
+                            setDiscoverShareReady(true);
+                            pendingShareStateRef.current = undefined;
+                        }
                     }
                 }
             },
@@ -466,21 +513,24 @@ export default function DiscoverHeader(
 
     async function initHeaderData() {
         const urlSearchParams = new URLSearchParams(locSearch);
+        const sharedState = readDiscoverShareState(urlSearchParams);
+        pendingShareStateRef.current = sharedState;
+        setDiscoverShareReady(false);
         const persistedDatasourceStorage = getStoredValue<{ uid?: string }>('discover-selected-datasource');
         const persistedDiscoverCurrentStorage = getStoredValue<{ database?: string; table?: string; timeField?: string }>('discover-current');
         const persistedTableStorage = getStoredValue<string>('discover-current-table');
-        const urlDatasource = resolveDatasourceFromParam(urlSearchParams.get('datasource'), allowedDatasources);
-        const urlDatabase = urlSearchParams.get('database')?.trim() || '';
-        const urlTable = urlSearchParams.get('table')?.trim() || '';
-        const urlMode = normalizeMode(urlSearchParams.get('mode'));
-        const urlSearchValue = urlSearchParams.get('query') ?? urlSearchParams.get('searchValue') ?? '';
-        const urlTimeZone = normalizeTimeZone(urlSearchParams.get('timeZone'));
+        const urlDatasource = resolveDatasourceFromParam(sharedState?.datasource ?? urlSearchParams.get('datasource'), allowedDatasources);
+        const urlDatabase = sharedState?.database?.trim() || urlSearchParams.get('database')?.trim() || '';
+        const urlTable = sharedState?.table?.trim() || urlSearchParams.get('table')?.trim() || '';
+        const urlMode = sharedState?.mode ?? normalizeMode(urlSearchParams.get('mode'));
+        const urlSearchValue = sharedState?.query ?? urlSearchParams.get('query') ?? urlSearchParams.get('searchValue') ?? '';
+        const urlTimeZone = normalizeTimeZone(sharedState?.timeZone ?? urlSearchParams.get('timeZone'));
         const effectiveTimeZone = urlTimeZone || timeZone;
-        const urlTimeField = urlSearchParams.get('timeField')?.trim() || '';
-        const urlStartTime = parseTimeInZone(urlSearchParams.get('startTime'), effectiveTimeZone);
-        const urlEndTime = parseTimeInZone(urlSearchParams.get('endTime'), effectiveTimeZone);
-        const urlTimeRawFrom = urlSearchParams.get('timeRawFrom')?.trim() || '';
-        const urlTimeRawTo = urlSearchParams.get('timeRawTo')?.trim() || '';
+        const urlTimeField = sharedState?.timeField?.trim() || urlSearchParams.get('timeField')?.trim() || '';
+        const urlStartTime = parseTimeInZone(sharedState?.startTime ?? urlSearchParams.get('startTime'), effectiveTimeZone);
+        const urlEndTime = parseTimeInZone(sharedState?.endTime ?? urlSearchParams.get('endTime'), effectiveTimeZone);
+        const urlTimeRawFrom = sharedState?.timeRawFrom?.trim() || urlSearchParams.get('timeRawFrom')?.trim() || '';
+        const urlTimeRawTo = sharedState?.timeRawTo?.trim() || urlSearchParams.get('timeRawTo')?.trim() || '';
         const matchedShortcut = findShortcutByRaw(urlTimeRawFrom, urlTimeRawTo);
 
         const configuredDatasourceUid = resolveDatasourceUid(logsConfig.datasource, allowedDatasources);
@@ -530,6 +580,7 @@ export default function DiscoverHeader(
             }
             setSearchValue(urlSearchValue);
             hasInitializedUrlSyncRef.current = true;
+            setDiscoverShareReady(true);
             return;
         }
 
@@ -545,6 +596,7 @@ export default function DiscoverHeader(
             }
             setSearchValue(urlSearchValue);
             hasInitializedUrlSyncRef.current = true;
+            setDiscoverShareReady(true);
             return;
         }
 
@@ -933,6 +985,9 @@ export default function DiscoverHeader(
                             </span>
                         </Tooltip>
                     ) : null}
+                    <Button variant="secondary" icon="copy" onClick={copyShareLink} aria-label="Copy share link">
+                        分享
+                    </Button>
                     <Button
                         onClick={() => {
                             const latestTime = getLatestTime(activeItem?.key as string);
