@@ -47,6 +47,7 @@ const escapeSqlLiteral = (value: string) => value.replace(/'/g, "''");
 // Capability support is stable for a datasource during a Grafana session. Keep
 // the probe result so Lucene filtering does not make an extra request per query.
 const tryCastSupportCache = new Map<string, Promise<boolean>>();
+const jsonSearchSupportCache = new Map<string, Promise<boolean>>();
 
 export async function supportsTryCast({
     connectionId,
@@ -89,6 +90,47 @@ export async function supportsTryCast({
     })();
 
     tryCastSupportCache.set(cacheKey, supportPromise);
+    return supportPromise;
+}
+
+/** JSON_SEARCH is required to preserve Lucene text semantics for JSON arrays. */
+export async function supportsJsonSearch({
+    connectionId,
+    datasourceType = DORIS_DATASOURCE_TYPE,
+}: TryCastCapabilityParams): Promise<boolean> {
+    if (!connectionId) {
+        return false;
+    }
+
+    const cacheKey = `${datasourceType}:${connectionId}`;
+    const cached = jsonSearchSupportCache.get(cacheKey);
+    if (cached) {
+        return cached;
+    }
+
+    const supportPromise = (async (): Promise<boolean> => {
+        const response$ = withErrorHandler(getBackendSrv().fetch({
+            url: '/api/ds/query',
+            method: 'POST',
+            data: {
+                queries: [{
+                    refId: 'probeJsonSearch',
+                    datasource: { type: datasourceType, uid: connectionId },
+                    rawSql: "SELECT JSON_SEARCH(CAST('[\"x\"]' AS JSON), 'one', 'x') AS json_search_supported",
+                    format: 'table',
+                }],
+            },
+        }));
+
+        try {
+            const { data, ok } = await lastValueFrom(response$);
+            return Boolean(ok && (data as { results?: Record<string, any> })?.results?.probeJsonSearch?.frames?.[0]);
+        } catch {
+            return false;
+        }
+    })();
+
+    jsonSearchSupportCache.set(cacheKey, supportPromise);
     return supportPromise;
 }
 

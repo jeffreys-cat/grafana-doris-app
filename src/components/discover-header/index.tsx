@@ -203,6 +203,14 @@ export default function DiscoverHeader(
     );
     const warningFields = fieldsWithoutInvertedIndex.slice(0, 3).join(', ');
     const remainingWarningFieldCount = fieldsWithoutInvertedIndex.length - 3;
+    const jsonFieldsWithoutInvertedIndex = React.useMemo(() => {
+        const jsonRoots = new Set(
+            tableFields
+                .filter((field: any) => String(field?.Type ?? '').toUpperCase().includes('JSON'))
+                .map((field: any) => String(field?.Field ?? field?.value ?? field?.name ?? '').toLowerCase()),
+        );
+        return fieldsWithoutInvertedIndex.filter(field => jsonRoots.has(field.split('.')[0].toLowerCase()));
+    }, [fieldsWithoutInvertedIndex, tableFields]);
 
     const selectdbDS = useAtomValue(selectedDatasourceAtom);
     const theme = useTheme2();
@@ -976,6 +984,7 @@ export default function DiscoverHeader(
                                 <span>
                                     {warningFields}
                                     {remainingWarningFieldCount > 0 ? ` 等 ${fieldsWithoutInvertedIndex.length} 个字段` : ''} 未配置倒排索引，Lucene 查询可能较慢。
+                                    {jsonFieldsWithoutInvertedIndex.length > 0 ? ' JSON 子路径使用 JSON 函数过滤，通常会扫描数据。' : ''}
                                 </span>
                             }
                             placement="top"

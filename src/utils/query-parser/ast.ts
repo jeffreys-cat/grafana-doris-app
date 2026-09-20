@@ -16,6 +16,21 @@ async function nodeTerm(node: lucene.Node, serializer: Serializer): Promise<stri
 
     if ((node as lucene.NodeTerm).term != null) {
         const nodeTermInstance = node as lucene.NodeTerm;
+        if (nodeTermInstance.regex) {
+            throw new Error('Lucene regular-expression queries are not supported.');
+        }
+        if (nodeTermInstance.similarity != null) {
+            throw new Error('Lucene fuzzy queries are not supported.');
+        }
+        if (nodeTermInstance.proximity != null) {
+            throw new Error('Lucene proximity queries are not supported.');
+        }
+        if (nodeTermInstance.boost != null) {
+            throw new Error('Lucene boost queries are not supported.');
+        }
+        if (nodeTermInstance.term.includes('?')) {
+            throw new Error('Lucene single-character wildcards (?) are not supported.');
+        }
         let term = decodeSpecialTokens(nodeTermInstance.term);
         if (isImplicitField && nodeTermInstance.prefix === '-') {
             isNegatedField = true;

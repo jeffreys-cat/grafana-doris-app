@@ -1,14 +1,16 @@
 import { getWhereSQLViaLucene } from 'services/lucene';
-import { getColumn, getInvertedIndexColumns, supportsTryCast } from 'services/metaservice';
+import { getColumn, getInvertedIndexColumns, supportsJsonSearch, supportsTryCast } from 'services/metaservice';
 
 jest.mock('services/metaservice', () => ({
     getColumn: jest.fn(),
+    supportsJsonSearch: jest.fn(),
     supportsTryCast: jest.fn(),
     getInvertedIndexColumns: jest.fn(),
 }));
 
 const mockedGetColumn = getColumn as jest.MockedFunction<typeof getColumn>;
 const mockedSupportsTryCast = supportsTryCast as jest.MockedFunction<typeof supportsTryCast>;
+const mockedSupportsJsonSearch = supportsJsonSearch as jest.MockedFunction<typeof supportsJsonSearch>;
 const mockedGetInvertedIndexColumns = getInvertedIndexColumns as jest.MockedFunction<typeof getInvertedIndexColumns>;
 
 describe('getWhereSQLViaLucene', () => {
@@ -22,8 +24,10 @@ describe('getWhereSQLViaLucene', () => {
     beforeEach(() => {
         mockedGetColumn.mockReset();
         mockedSupportsTryCast.mockReset();
+        mockedSupportsJsonSearch.mockReset();
         mockedGetInvertedIndexColumns.mockReset();
         mockedSupportsTryCast.mockResolvedValue(true);
+        mockedSupportsJsonSearch.mockResolvedValue(true);
     });
 
     it('returns empty SQL for blank queries', async () => {
@@ -157,15 +161,58 @@ describe('getWhereSQLViaLucene', () => {
         });
         mockedGetInvertedIndexColumns.mockResolvedValue([]);
 
-        await expect(getWhereSQLViaLucene({ ...baseParams, query: 'log_attributes["http.status"]:200' }))
-            .resolves.toBe("(CAST(JSON_EXTRACT(`log_attributes`, '$.\"http.status\"') AS DOUBLE) = CAST('200' AS DOUBLE))");
-        await expect(getWhereSQLViaLucene({ ...baseParams, query: 'log_attributes["is.ready"]:true' }))
-            .resolves.toBe("(CAST(JSON_EXTRACT(`log_attributes`, '$.\"is.ready\"') AS BOOLEAN) = CAST('true' AS BOOLEAN))");
-        await expect(getWhereSQLViaLucene({ ...baseParams, query: 'log_attributes["http.route"]:"/checkout"' }))
-            .resolves.toBe("(lower(CAST(JSON_EXTRACT(`log_attributes`, '$.\"http.route\"') AS STRING)) LIKE lower('%/checkout%'))");
-        await expect(getWhereSQLViaLucene({ ...baseParams, query: 'log_attributes.duration:[100 TO 500]' }))
-            .resolves.toBe("((CAST(JSON_EXTRACT(`log_attributes`, '$.\"duration\"') AS DOUBLE) >= CAST('100' AS DOUBLE)) AND (CAST(JSON_EXTRACT(`log_attributes`, '$.\"duration\"') AS DOUBLE) <= CAST('500' AS DOUBLE)))");
+        const number = await getWhereSQLViaLucene({ ...baseParams, query: 'log_attributes["http.status"]:200' });
+        expect(number).toContain("JSON_TYPE(`log_attributes`, '$.\"http.status\"') IN ('int', 'bigint', 'largeint', 'double')");
+        expect(number).toContain("JSON_CONTAINS(JSON_EXTRACT(`log_attributes`, '$.\"http.status\"'), CAST('200' AS JSON))");
+        const bool = await getWhereSQLViaLucene({ ...baseParams, query: 'log_attributes["is.ready"]:true' });
+        expect(bool).toContain("JSON_TYPE(`log_attributes`, '$.\"is.ready\"') = 'bool'");
+        const text = await getWhereSQLViaLucene({ ...baseParams, query: 'log_attributes["http.route"]:"/checkout"' });
+        expect(text).toContain("JSON_UNQUOTE(JSON_EXTRACT(`log_attributes`, '$.\"http.route\"'))");
+        expect(text).toContain('JSON_SEARCH(JSON_EXTRACT');
+        const escapedText = await getWhereSQLViaLucene({ ...baseParams, query: 'log_attributes["http.route"]:"50%_done"' });
+        expect(escapedText).toContain("'%50\\\\%\\\\_done%'");
+        const escapedKey = await getWhereSQLViaLucene({ ...baseParams, query: 'log_attributes["a\\\"b"]:ok' });
+        expect(escapedKey).toContain("'$.\"a\\\\\"b\"'");
+        const range = await getWhereSQLViaLucene({ ...baseParams, query: 'log_attributes.duration:[100 TO 500]' });
+        expect(range).toContain("CAST(JSON_EXTRACT(`log_attributes`, '$.\"duration\"') AS DOUBLE) >= CAST('100' AS DOUBLE)");
+        expect(range).toContain("CAST(JSON_EXTRACT(`log_attributes`, '$.\"duration\"') AS DOUBLE) <= CAST('500' AS DOUBLE)");
     });
+
+    it('distinguishes JSON existence, null, and missing paths', async () => {
+        mockedGetColumn.mockImplementation(async ({ column }) => column === 'attrs'
+            ? { name: 'attrs', normalizedType: 'JSON', dataType: 'json', columnType: 'json' }
+            : null);
+        mockedGetInvertedIndexColumns.mockResolvedValue([]);
+
+        await expect(getWhereSQLViaLucene({ ...baseParams, query: 'attrs.value:*' }))
+            .resolves.toBe("(JSON_EXISTS_PATH(`attrs`, '$.\"value\"') AND JSON_TYPE(`attrs`, '$.\"value\"') != 'null')");
+        await expect(getWhereSQLViaLucene({ ...baseParams, query: 'attrs.value:null' }))
+            .resolves.toContain("JSON_TYPE(`attrs`, '$.\"value\"') = 'null'");
+        await expect(getWhereSQLViaLucene({ ...baseParams, query: '-attrs.value:*' }))
+            .resolves.toBe("(NOT (JSON_EXISTS_PATH(`attrs`, '$.\"value\"') AND JSON_TYPE(`attrs`, '$.\"value\"') != 'null'))");
+    });
+
+    it('reports when JSON array text search is unavailable', async () => {
+        mockedGetColumn.mockImplementation(async ({ column }) => column === 'attrs'
+            ? { name: 'attrs', normalizedType: 'JSON', dataType: 'json', columnType: 'json' }
+            : null);
+        mockedGetInvertedIndexColumns.mockResolvedValue([]);
+        mockedSupportsJsonSearch.mockResolvedValue(false);
+
+        await expect(getWhereSQLViaLucene({ ...baseParams, query: 'attrs.tags:prod' }))
+            .rejects.toThrow('JSON array text search requires Doris JSON_SEARCH support.');
+    });
+
+    it.each(['attrs.message:/error/', 'attrs.message:err?r', 'attrs.message:error~0.8', 'attrs.message:"error log"~3', 'attrs.message:error^2'])(
+        'rejects unsupported advanced Lucene syntax: %s',
+        async query => {
+            mockedGetColumn.mockImplementation(async ({ column }) => column === 'attrs'
+                ? { name: 'attrs', normalizedType: 'JSON', dataType: 'json', columnType: 'json' }
+                : null);
+            mockedGetInvertedIndexColumns.mockResolvedValue([]);
+            await expect(getWhereSQLViaLucene({ ...baseParams, query })).rejects.toThrow(/not supported/);
+        },
+    );
 
     it('uses CAST for VARIANT comparisons on Doris versions before 4.0', async () => {
         mockedSupportsTryCast.mockResolvedValue(false);
