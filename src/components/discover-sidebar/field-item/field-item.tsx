@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { getFieldIcon } from 'utils/icon';
 import { IconButton, useTheme2, Tooltip } from '@grafana/ui';
 import { css } from '@emotion/css';
@@ -27,9 +27,42 @@ export default function FieldItem({ depth = 0, searchActive = '', showChildren =
     const theme = useTheme2();
     const { field } = props;
     const [expanded, setExpanded] = useState(false);
+    const [topDataVisible, setTopDataVisible] = useState(false);
+    const showTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const hasChildren = showChildren && (Boolean(field.children?.length) || (depth === 0 && isStructuredJsonType(field.Type)));
     const isExpanded = searchActive || expanded;
     const selected = props.isSelected?.(field) || false;
+    const showTopData = !hasChildren && props.type === 'add';
+
+    const clearTimer = (timer: React.MutableRefObject<ReturnType<typeof setTimeout> | undefined>) => {
+        if (timer.current) {
+            clearTimeout(timer.current);
+            timer.current = undefined;
+        }
+    };
+    const scheduleHide = () => {
+        clearTimer(showTimer);
+        clearTimer(hideTimer);
+        hideTimer.current = setTimeout(() => {
+            setTopDataVisible(false);
+            hideTimer.current = undefined;
+        }, 250);
+    };
+    const enterTopDataRegion = () => {
+        clearTimer(hideTimer);
+        if (!topDataVisible && !showTimer.current) {
+            showTimer.current = setTimeout(() => {
+                setTopDataVisible(true);
+                showTimer.current = undefined;
+            }, 200);
+        }
+    };
+
+    useEffect(() => () => {
+        clearTimer(showTimer);
+        clearTimer(hideTimer);
+    }, []);
 
     if (searchActive && !matches(field, searchActive)) {
         return null;
@@ -38,6 +71,9 @@ export default function FieldItem({ depth = 0, searchActive = '', showChildren =
     const item = (
         <div>
             <div
+                data-testid="field-item-row"
+                onPointerEnter={showTopData ? enterTopDataRegion : undefined}
+                onPointerLeave={showTopData ? scheduleHide : undefined}
                 className={css`
                     width: 100%; text-align: left; display: flex; align-items: center;
                     justify-content: space-between; height: 32px;
@@ -64,7 +100,16 @@ export default function FieldItem({ depth = 0, searchActive = '', showChildren =
 
     return (
         <div>
-            {hasChildren || props.type === 'remove' ? item : <Tooltip placement="right" interactive content={<TopData field={field} />}>{item}</Tooltip>}
+            {hasChildren || props.type === 'remove' ? item : (
+                <Tooltip
+                    show={topDataVisible}
+                    placement="right"
+                    interactive
+                    content={<TopData field={field} onPointerEnter={enterTopDataRegion} onPointerLeave={scheduleHide} />}
+                >
+                    {item}
+                </Tooltip>
+            )}
             {hasChildren && isExpanded && (field.children?.length ? field.children.map((child: any) => (
                 <FieldItem
                     key={child.variantPath?.join('\u0000') || child.Field}

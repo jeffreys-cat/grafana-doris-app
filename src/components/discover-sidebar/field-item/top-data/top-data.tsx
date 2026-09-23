@@ -32,7 +32,7 @@ function countValueDistribution(jsonArray: JsonObject[], key: string): { [value:
     return result;
 }
 
-export function TopData({ field }: any) {
+export function TopData({ field, onPointerEnter, onPointerLeave }: any) {
     const topData = useAtomValue(topDataAtom);
     const tableTotalCount = useAtomValue(tableTotalCountAtom);
     const [dataFilter, setDataFilter] = useAtom(dataFilterAtom);
@@ -40,7 +40,12 @@ export function TopData({ field }: any) {
 
     return (
         <div
+            onPointerEnter={onPointerEnter}
+            onPointerLeave={onPointerLeave}
             className={css`
+                width: 300px;
+                max-width: min(300px, calc(100vw - 24px));
+                box-sizing: border-box;
                 max-height: 400px;
                 overflow-y: auto;
                 padding: 8px;
