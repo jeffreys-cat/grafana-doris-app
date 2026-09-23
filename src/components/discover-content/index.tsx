@@ -515,15 +515,16 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                         <LongTextCell
                             copyText={formatRecordDisplayValue(row.original._original)}
                             className={css`
-                                display: block;
+                                display: flex;
+                                align-items: center;
                                 width: 100%;
-                                max-height: ${discoverRowsWrapped ? '12rem' : '1.25rem'};
+                                box-sizing: border-box;
+                                min-height: 48px;
+                                max-height: ${discoverRowsWrapped ? '12rem' : '48px'};
                                 overflow: ${discoverRowsWrapped ? 'auto' : 'hidden'};
                                 word-break: ${discoverRowsWrapped ? 'break-all' : 'normal'};
                                 white-space: ${discoverRowsWrapped ? 'pre-wrap' : 'nowrap'};
                                 text-overflow: ${discoverRowsWrapped ? 'clip' : 'ellipsis'};
-                                padding-top: 0.5rem;
-                                padding-bottom: 0.5rem;
                                 font-size: 0.875rem;
                                 line-height: 1.25rem;
                             `}

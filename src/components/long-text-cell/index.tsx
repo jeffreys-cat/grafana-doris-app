@@ -1,8 +1,7 @@
 import React, { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Tooltip } from 'antd';
 import { css } from '@emotion/css';
-
-type CopyStatus = 'idle' | 'success' | 'error';
+import { ClipboardButton } from '@grafana/ui';
 
 interface LongTextCellProps {
     children: ReactNode;
@@ -13,7 +12,7 @@ interface LongTextCellProps {
 export function LongTextCell({ children, copyText, className }: LongTextCellProps) {
     const contentRef = useRef<HTMLDivElement>(null);
     const [isOverflowing, setIsOverflowing] = useState(false);
-    const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
+    const [copyFailed, setCopyFailed] = useState(false);
 
     const updateOverflow = useCallback(() => {
         const element = contentRef.current;
@@ -37,24 +36,12 @@ export function LongTextCell({ children, copyText, className }: LongTextCellProp
         return () => observer.disconnect();
     }, [updateOverflow, copyText]);
 
-    const copyFullText = useCallback(async (event: React.MouseEvent<HTMLButtonElement>) => {
-        event.preventDefault();
-        event.stopPropagation();
-        try {
-            if (!navigator.clipboard?.writeText) {
-                throw new Error('Clipboard API is unavailable');
-            }
-            await navigator.clipboard.writeText(copyText);
-            setCopyStatus('success');
-        } catch {
-            setCopyStatus('error');
-        }
-    }, [copyText]);
-
     const preview = isOverflowing ? (
         <div
             className={css`
                 max-width: min(560px, calc(100vw - 32px));
+                box-sizing: border-box;
+                padding: 12px;
             `}
         >
             <div
@@ -77,21 +64,18 @@ export function LongTextCell({ children, copyText, className }: LongTextCellProp
                     margin-top: 8px;
                 `}
             >
-                {copyStatus === 'success' ? <span role="status">Copied</span> : null}
-                {copyStatus === 'error' ? <span role="alert">Copy failed</span> : null}
-                <button
+                {copyFailed ? <span role="alert">Copy failed</span> : null}
+                <ClipboardButton
                     type="button"
                     aria-label="Copy full cell content"
-                    onClick={copyFullText}
-                    className={css`
-                        border: 0;
-                        border-radius: 3px;
-                        padding: 4px 8px;
-                        cursor: pointer;
-                    `}
+                    variant="secondary"
+                    size="sm"
+                    getText={() => copyText}
+                    onClipboardCopy={() => setCopyFailed(false)}
+                    onClipboardError={() => setCopyFailed(true)}
                 >
                     Copy
-                </button>
+                </ClipboardButton>
             </div>
         </div>
     ) : null;
