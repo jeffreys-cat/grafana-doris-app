@@ -32,7 +32,15 @@ import SurroundingLogs from 'components/surrounding-logs';
 import TraceDetail from 'components/trace-detail';
 import { usePluginContext } from '@grafana/data';
 import { mergeLogsConfig, type AppPluginSettings } from 'types/plugin-settings';
-import { formatFieldDisplayValue, formatRecordDisplayValue, formatTimestampToDateTime, isComplexType, isStructuredJsonType, isValidTimeFieldType, parseJsonLikeValue } from 'utils/data';
+import {
+    formatFieldDisplayValue,
+    formatRecordDisplayValue,
+    formatTimestampToDateTime,
+    isComplexType,
+    isStructuredJsonType,
+    isValidTimeFieldType,
+    parseJsonLikeValue,
+} from 'utils/data';
 import { DiscoverQueryState, DiscoverSort } from 'types/discover';
 import { reconcileColumnOrder, reconcileColumnSizing } from 'utils/column-layout';
 import { VariantValueViewer } from './variant-value-viewer';
@@ -54,7 +62,6 @@ type DiscoverContentProps = {
     sort: DiscoverSort;
     onSortChange: (sort: DiscoverSort) => void;
 };
-
 
 export default function DiscoverContent({ fetchNextPage, getTraceData, queryState, sort, onSortChange }: DiscoverContentProps) {
     const theme = useTheme2();
@@ -82,39 +89,28 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
     const [columnLayouts, setColumnLayouts] = useAtom(discoverColumnLayoutsAtom);
     const [sharedColumnOrder, setSharedColumnOrder] = useAtom(discoverSharedColumnOrderAtom);
     const availableColumnIds = useMemo(
-        () => [
-            EXPAND_COLUMN_ID,
-            TIME_COLUMN_ID,
-            ...(hasSelectedFields ? selectedFields.map((field: any) => getFieldColumnId(field.Field)) : [SOURCE_COLUMN_ID]),
-        ],
+        () => [EXPAND_COLUMN_ID, TIME_COLUMN_ID, ...(hasSelectedFields ? selectedFields.map((field: any) => getFieldColumnId(field.Field)) : [SOURCE_COLUMN_ID])],
         [hasSelectedFields, selectedFields],
     );
     const availableColumnIdsKey = availableColumnIds.join('\u0000');
     const validPersistentColumnIds = useMemo(
-        () => [
-            EXPAND_COLUMN_ID,
-            TIME_COLUMN_ID,
-            SOURCE_COLUMN_ID,
-            ...tableFields.map((field: any) => getFieldColumnId(String(field?.Field || field?.value || ''))),
-        ],
+        () => [EXPAND_COLUMN_ID, TIME_COLUMN_ID, SOURCE_COLUMN_ID, ...tableFields.map((field: any) => getFieldColumnId(String(field?.Field || field?.value || '')))],
         [tableFields],
     );
-    const defaultColumnSizing = useMemo<ColumnSizingState>(() => ({
-        [TIME_COLUMN_ID]: 240,
-        [SOURCE_COLUMN_ID]: 640,
-        ...Object.fromEntries(selectedFields.map((field: any) => [getFieldColumnId(field.Field), 240])),
-    }), [selectedFields]);
+    const defaultColumnSizing = useMemo<ColumnSizingState>(
+        () => ({
+            [TIME_COLUMN_ID]: 240,
+            [SOURCE_COLUMN_ID]: 640,
+            ...Object.fromEntries(selectedFields.map((field: any) => [getFieldColumnId(field.Field), 240])),
+        }),
+        [selectedFields],
+    );
     const layoutKey = useMemo(() => {
         const datasourceId = currentDatasource?.uid || currentDatasource?.id || currentDatasource?.name;
         if (!datasourceId || !discoverCurrent.database || !discoverCurrent.table) {
             return '';
         }
-        return JSON.stringify([
-            datasourceId,
-            discoverCurrent.catalog || 'internal',
-            discoverCurrent.database,
-            discoverCurrent.table,
-        ]);
+        return JSON.stringify([datasourceId, discoverCurrent.catalog || 'internal', discoverCurrent.database, discoverCurrent.table]);
     }, [currentDatasource?.id, currentDatasource?.name, currentDatasource?.uid, discoverCurrent.catalog, discoverCurrent.database, discoverCurrent.table]);
     const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(() => availableColumnIds);
     const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => defaultColumnSizing);
@@ -145,12 +141,8 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
             setColumnLayouts(previous => {
                 const currentLayout = previous[layoutKey];
                 const validIds = new Set(validPersistentColumnIds);
-                const inactiveColumnOrder = (currentLayout?.columnOrder || []).filter(
-                    id => validIds.has(id) && !columnOrder.includes(id),
-                );
-                const retainedSizing = Object.fromEntries(
-                    Object.entries(currentLayout?.columnSizing || {}).filter(([id]) => validIds.has(id)),
-                );
+                const inactiveColumnOrder = (currentLayout?.columnOrder || []).filter(id => validIds.has(id) && !columnOrder.includes(id));
+                const retainedSizing = Object.fromEntries(Object.entries(currentLayout?.columnSizing || {}).filter(([id]) => validIds.has(id)));
                 const nextLayout = {
                     columnOrder: [...columnOrder, ...inactiveColumnOrder],
                     columnSizing: { ...retainedSizing, ...columnSizing },
@@ -164,13 +156,16 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
         return () => window.clearTimeout(timeout);
     }, [columnOrder, columnSizing, layoutKey, setColumnLayouts, sharedColumnOrder.length, validPersistentColumnIds]);
 
-    const handleColumnOrderChange = React.useCallback<OnChangeFn<ColumnOrderState>>((updater) => {
-        setColumnOrder(current => {
-            const next = typeof updater === 'function' ? updater(current) : updater;
-            setSharedColumnOrder(next);
-            return next;
-        });
-    }, [setSharedColumnOrder]);
+    const handleColumnOrderChange = React.useCallback<OnChangeFn<ColumnOrderState>>(
+        updater => {
+            setColumnOrder(current => {
+                const next = typeof updater === 'function' ? updater(current) : updater;
+                setSharedColumnOrder(next);
+                return next;
+            });
+        },
+        [setSharedColumnOrder],
+    );
 
     const resetColumnLayout = React.useCallback(() => {
         setColumnOrder(availableColumnIds);
@@ -190,19 +185,10 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
         setJumpPage(String(page));
     }, [page]);
 
-    const configuredDatasourceUid =
-        typeof datasource === 'string'
-            ? datasource
-            : datasource?.uid || datasource?.id;
-    const currentDatasourceIdentity = [
-        currentDatasource?.uid,
-        currentDatasource?.id,
-        currentDatasource?.name,
-    ].filter(Boolean);
+    const configuredDatasourceUid = typeof datasource === 'string' ? datasource : datasource?.uid || datasource?.id;
+    const currentDatasourceIdentity = [currentDatasource?.uid, currentDatasource?.id, currentDatasource?.name].filter(Boolean);
     const isTargetLogTable =
-        discoverCurrent.table === logsTable &&
-        discoverCurrent.database === database &&
-        (!configuredDatasourceUid || currentDatasourceIdentity.includes(configuredDatasourceUid));
+        discoverCurrent.table === logsTable && discoverCurrent.database === database && (!configuredDatasourceUid || currentDatasourceIdentity.includes(configuredDatasourceUid));
 
     useEffect(() => {
         if (theme.isDark) {
@@ -354,9 +340,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                             </tbody>
                         </table>
                     )}
-                    {state[1].active && (
-                        <VariantValueViewer value={processedData} rootName="JSON" />
-                    )}
+                    {state[1].active && <VariantValueViewer value={processedData} rootName="JSON" />}
                 </TabContent>
                 <Tooltip title="Surrounding Items will ignore the existing interface's filter conditions and view the context through time.">
                     <a
@@ -365,15 +349,15 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                             setSelectedRow(row.original);
                         }}
                         className={css`
-                        position: absolute;
-                        right: 1rem;
-                        top: 0;
-                        cursor: pointer;
-                        padding-top: 0.5rem;
-                        &:hover {
-                            color: #3D71D9;
-                        }
-                    `}
+                            position: absolute;
+                            right: 1rem;
+                            top: 0;
+                            cursor: pointer;
+                            padding-top: 0.5rem;
+                            &:hover {
+                                color: #3d71d9;
+                            }
+                        `}
                     >
                         Surrounding items
                     </a>
@@ -384,9 +368,9 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
 
     const callback = (status: number) => {
         if (status >= 200 && status <= 299) {
-            setDrawerOpen(true)
+            setDrawerOpen(true);
         }
-    }
+    };
 
     const openTraceDrawer = (traceId: string, table?: string) => {
         // request
@@ -453,20 +437,18 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                         timeField = fieldValue;
                     }
                     return (
-                        <div
-                            className={HoverStyle}
-                        >
+                        <div className={HoverStyle}>
                             <div
                                 className={css`
-                                     display: flex;
-                                     align-items: center;
-                                 `}
+                                    display: flex;
+                                    align-items: center;
+                                `}
                             >
                                 {timeField}
                                 <div
                                     className={`filter-content ${css`
-                                         visibility: hidden;
-                                     `}`}
+                                        visibility: hidden;
+                                    `}`}
                                 >
                                     <ContentItem fieldName={fieldName} fieldValue={fieldValue} fieldType={fieldType} />
                                 </div>
@@ -537,7 +519,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                     & .trace-link {
                                         cursor: pointer;
                                         text-decoration: underline;
-                                        color: #3D71D9;
+                                        color: #3d71d9;
                                     }
                                 `}
                             >
@@ -603,32 +585,40 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                         min-height: 48px;
                                     `}`}
                                 >
-                                    {isStructuredJsonType(fieldType) ? <VariantValueViewer value={rawFieldValue} /> : field.value === 'trace_id' ? <AntButton
-                                                className={css`padding-left: 0px;`}
-                                                onClick={() => {
-                                                    if (isTargetLogTable && targetTraceTable) {
-                                                        openTraceDrawer(fieldValue, targetTraceTable)
-                                                    } else {
-                                                        openTraceDrawer(fieldValue);
-                                                    }
-                                                }}
-                                                type="link">
-                                                {fieldValue}
-                                            </AntButton> : <LongTextCell
-                                                copyText={fieldValue}
+                                    {isStructuredJsonType(fieldType) ? (
+                                        <VariantValueViewer value={rawFieldValue} />
+                                    ) : field.value === 'trace_id' ? (
+                                        <AntButton
+                                            className={css`
+                                                padding-left: 0px;
+                                            `}
+                                            onClick={() => {
+                                                if (isTargetLogTable && targetTraceTable) {
+                                                    openTraceDrawer(fieldValue, targetTraceTable);
+                                                } else {
+                                                    openTraceDrawer(fieldValue);
+                                                }
+                                            }}
+                                            type="link"
+                                        >
+                                            {fieldValue}
+                                        </AntButton>
+                                    ) : (
+                                        <LongTextCell
+                                            copyText={fieldValue}
+                                            className={css`
+                                                max-height: 192px;
+                                                overflow: auto;
+                                            `}
+                                        >
+                                            <div
                                                 className={css`
-                                                    max-height: 192px;
-                                                    overflow: auto;
+                                                    display: flex;
+                                                    align-items: center;
+                                                    padding: 16px 16px 16px 0;
+                                                    word-break: break-all;
                                                 `}
                                             >
-                                                <div
-                                                    className={css`
-                                                        display: flex;
-                                                        align-items: center;
-                                                        padding: 16px 16px 16px 0;
-                                                        word-break: break-all;
-                                                    `}
-                                                >
                                                 <span
                                                     className={css`
                                                         display: block;
@@ -642,8 +632,9 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                                 >
                                                     {fieldValue}
                                                 </span>
-                                                </div>
-                                            </LongTextCell>}
+                                            </div>
+                                        </LongTextCell>
+                                    )}
                                     <div
                                         className={`filter-content ${css`
                                             visibility: hidden;
@@ -663,70 +654,107 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
     }, [currentTimeField, discoverRowsWrapped, handleRemove, hasSelectedFields, selectedFields, theme.isDark]);
 
     const tableSorting = useMemo<SortingState>(() => {
-        const selectedColumnId = sort.field === currentTimeField || !sort.field
-            ? TIME_COLUMN_ID
-            : selectedFields.some((field: any) => field.Field === sort.field)
+        const selectedColumnId =
+            sort.field === currentTimeField || !sort.field
+                ? TIME_COLUMN_ID
+                : selectedFields.some((field: any) => field.Field === sort.field)
                 ? getFieldColumnId(sort.field)
                 : TIME_COLUMN_ID;
         return [{ id: selectedColumnId, desc: sort.direction === 'DESC' }];
     }, [currentTimeField, selectedFields, sort.direction, sort.field]);
 
     useEffect(() => {
-        if (
-            sort.field &&
-            sort.field !== currentTimeField &&
-            !selectedFields.some((field: any) => field.Field === sort.field)
-        ) {
+        if (sort.field && sort.field !== currentTimeField && !selectedFields.some((field: any) => field.Field === sort.field)) {
             onSortChange({ field: currentTimeField, direction: 'DESC' });
         }
     }, [currentTimeField, onSortChange, selectedFields, sort.field]);
 
-    const handleTableSortingChange = React.useCallback<OnChangeFn<SortingState>>((updater) => {
-        const nextSorting = typeof updater === 'function' ? updater(tableSorting) : updater;
-        const nextColumn = nextSorting[0];
-        if (!nextColumn) {
-            onSortChange({ field: currentTimeField, direction: 'DESC' });
-            return;
-        }
-        const field = nextColumn.id === TIME_COLUMN_ID
-            ? currentTimeField
-            : nextColumn.id.startsWith(FIELD_COLUMN_PREFIX)
-                ? nextColumn.id.slice(FIELD_COLUMN_PREFIX.length)
-                : currentTimeField;
-        const selectedField = selectedFields.find((item: any) => item.Field === field);
-        onSortChange({
-            field,
-            direction: nextColumn.desc ? 'DESC' : 'ASC',
-            variantPath: selectedField?.variantPath,
-            variantType: selectedField?.Type,
-        });
-    }, [currentTimeField, onSortChange, selectedFields, tableSorting]);
+    const handleTableSortingChange = React.useCallback<OnChangeFn<SortingState>>(
+        updater => {
+            const nextSorting = typeof updater === 'function' ? updater(tableSorting) : updater;
+            const nextColumn = nextSorting[0];
+            if (!nextColumn) {
+                onSortChange({ field: currentTimeField, direction: 'DESC' });
+                return;
+            }
+            const field =
+                nextColumn.id === TIME_COLUMN_ID
+                    ? currentTimeField
+                    : nextColumn.id.startsWith(FIELD_COLUMN_PREFIX)
+                    ? nextColumn.id.slice(FIELD_COLUMN_PREFIX.length)
+                    : currentTimeField;
+            const selectedField = selectedFields.find((item: any) => item.Field === field);
+            onSortChange({
+                field,
+                direction: nextColumn.desc ? 'DESC' : 'ASC',
+                variantPath: selectedField?.variantPath,
+                variantType: selectedField?.Type,
+            });
+        },
+        [currentTimeField, onSortChange, selectedFields, tableSorting],
+    );
 
-    const emptyContent = queryState.status === 'error' ? (
-        <div role="status" className={css`padding: 32px 16px; text-align: center;`}>
-            <strong>Query failed</strong>
-            <div className={css`margin-top: 4px; color: ${theme.colors.text.secondary};`}>
-                Review the query error above, then update the query and try again.
+    const emptyContent =
+        queryState.status === 'error' ? (
+            <div
+                role="status"
+                className={css`
+                    padding: 32px 16px;
+                    text-align: center;
+                `}
+            >
+                <strong>Query failed</strong>
+                <div
+                    className={css`
+                        margin-top: 4px;
+                        color: ${theme.colors.text.secondary};
+                    `}
+                >
+                    Review the query error above, then update the query and try again.
+                </div>
             </div>
-        </div>
-    ) : queryState.status === 'success' && queryState.rowCount === 0 ? (
-        <div role="status" className={css`padding: 32px 16px; text-align: center;`}>
-            <strong>Query succeeded — no results</strong>
-            <div className={css`margin-top: 4px; color: ${theme.colors.text.secondary};`}>
-                Try expanding the time range or adjusting the filters.
+        ) : queryState.status === 'success' && queryState.rowCount === 0 ? (
+            <div
+                role="status"
+                className={css`
+                    padding: 32px 16px;
+                    text-align: center;
+                `}
+            >
+                <strong>Query succeeded — no results</strong>
+                <div
+                    className={css`
+                        margin-top: 4px;
+                        color: ${theme.colors.text.secondary};
+                    `}
+                >
+                    Try expanding the time range or adjusting the filters.
+                </div>
             </div>
-        </div>
-    ) : queryState.status === 'loading' ? (
-        <div role="status" className={css`padding: 32px 16px; text-align: center;`}>Querying…</div>
-    ) : undefined;
+        ) : queryState.status === 'loading' ? (
+            <div
+                role="status"
+                className={css`
+                    padding: 32px 16px;
+                    text-align: center;
+                `}
+            >
+                Querying…
+            </div>
+        ) : undefined;
 
-    const isLayoutModified = JSON.stringify(columnOrder) !== JSON.stringify(availableColumnIds) ||
-        JSON.stringify(columnSizing) !== JSON.stringify(defaultColumnSizing);
+    const isLayoutModified = JSON.stringify(columnOrder) !== JSON.stringify(availableColumnIds) || JSON.stringify(columnSizing) !== JSON.stringify(defaultColumnSizing);
 
     return (
         <div
             className={css`
-                overflow-x: scroll;
+                display: flex;
+                flex-direction: column;
+                width: 100%;
+                height: 100%;
+                min-width: 0;
+                min-height: 0;
+                overflow: hidden;
             `}
         >
             <div
@@ -736,6 +764,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                     align-items: center;
                     gap: 12px;
                     min-height: 28px;
+                    flex: none;
                     padding: 0 8px 4px;
                 `}
             >
@@ -751,102 +780,139 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                     `}
                 >
                     换行
-                    <Switch
-                        id="discover-wrap-rows"
-                        aria-label="长文本换行"
-                        value={discoverRowsWrapped}
-                        onChange={event => setDiscoverRowsWrapped(event.currentTarget.checked)}
-                    />
+                    <Switch id="discover-wrap-rows" aria-label="长文本换行" value={discoverRowsWrapped} onChange={event => setDiscoverRowsWrapped(event.currentTarget.checked)} />
                 </label>
-                <IconButton
-                    name="history"
-                    tooltip="Reset column layout"
-                    aria-label="Reset column layout"
-                    disabled={!isLayoutModified}
-                    onClick={resetColumnLayout}
-                />
+                <IconButton name="history" tooltip="Reset column layout" aria-label="Reset column layout" disabled={!isLayoutModified} onClick={resetColumnLayout} />
             </div>
-            <SDCollapsibleTable
+            <div
+                data-testid="discover-table-scroll"
                 className={css`
-                    width: 100%;
-                `}
-                data={fields}
-                columns={columns}
-                getRowCanExpand={() => true}
-                renderSubComponent={renderSubComponent}
-                showExpandAllToggle
-                allRowsExpanded={discoverRowsExpanded}
-                onAllRowsExpandedChange={setDiscoverRowsExpanded}
-                columnOrder={columnOrder}
-                onColumnOrderChange={handleColumnOrderChange}
-                columnSizing={columnSizing}
-                onColumnSizingChange={setColumnSizing}
-                sorting={tableSorting}
-                onSortingChange={handleTableSortingChange}
-                enableColumnReordering
-                emptyContent={emptyContent}
-            />
-            {queryState.status !== 'error' ? <div
-                className={css`
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    padding: 0.5rem 1rem;
-                    padding-bottom: 20px;
+                    flex: 1;
+                    min-width: 0;
+                    min-height: 0;
+                    overflow: auto;
+                    overscroll-behavior: contain;
                 `}
             >
-                <div>Total {tableTotalCount} rows</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <label
-                        className={css`
-                            display: flex;
-                            align-items: center;
-                            gap: 8px;
-                        `}
-                    >
-                        Rows per page
-                        <Select
-                            aria-label="Rows per page"
-                            options={[20, 50, 100, 200].map(size => ({ label: String(size), value: size }))}
-                            value={pageSize}
-                            onChange={option => {
-                                const nextPageSize = Number(option.value);
-                                if (![20, 50, 100, 200].includes(nextPageSize)) {
-                                    return;
-                                }
-                                setPageSize(nextPageSize);
-                                setPage(1);
-                                setJumpPage('1');
-                            }}
-                            width={10}
-                        />
-                    </label>
-                    <Pagination
-                        currentPage={page}
-                        numberOfPages={Math.ceil(tableTotalCount / pageSize) || 1}
-                        onNavigate={toPage => {
-                            setPage(toPage);
-                        }}
-                    />
-                    {/* Page jump input */}
+                <SDCollapsibleTable
+                    className={css`
+                        width: 100%;
+                    `}
+                    data={fields}
+                    columns={columns}
+                    getRowCanExpand={() => true}
+                    renderSubComponent={renderSubComponent}
+                    showExpandAllToggle
+                    allRowsExpanded={discoverRowsExpanded}
+                    onAllRowsExpandedChange={setDiscoverRowsExpanded}
+                    columnOrder={columnOrder}
+                    onColumnOrderChange={handleColumnOrderChange}
+                    columnSizing={columnSizing}
+                    onColumnSizingChange={setColumnSizing}
+                    sorting={tableSorting}
+                    onSortingChange={handleTableSortingChange}
+                    enableColumnReordering
+                    emptyContent={emptyContent}
+                />
+            </div>
+            {queryState.status !== 'error' ? (
+                <div
+                    data-testid="discover-pagination"
+                    className={css`
+                        display: flex;
+                        flex: none;
+                        justify-content: space-between;
+                        align-items: center;
+                        flex-wrap: wrap;
+                        gap: 8px 16px;
+                        padding: 0.5rem 1rem;
+                        padding-bottom: 8px;
+                    `}
+                >
+                    <div>Total {tableTotalCount} rows</div>
                     <div
                         className={css`
                             display: flex;
                             align-items: center;
+                            justify-content: flex-end;
+                            flex-wrap: wrap;
                             gap: 8px;
                         `}
                     >
-                        {/* local controlled input for typing page number */}
-                        <input
-                            type="number"
-                            min={1}
-                            step={1}
-                            value={jumpPage}
-                            onChange={e => {
-                                setJumpPage(e.target.value);
+                        <label
+                            className={css`
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                            `}
+                        >
+                            Rows per page
+                            <Select
+                                aria-label="Rows per page"
+                                options={[20, 50, 100, 200].map(size => ({ label: String(size), value: size }))}
+                                value={pageSize}
+                                onChange={option => {
+                                    const nextPageSize = Number(option.value);
+                                    if (![20, 50, 100, 200].includes(nextPageSize)) {
+                                        return;
+                                    }
+                                    setPageSize(nextPageSize);
+                                    setPage(1);
+                                    setJumpPage('1');
+                                }}
+                                width={10}
+                            />
+                        </label>
+                        <Pagination
+                            currentPage={page}
+                            numberOfPages={Math.ceil(tableTotalCount / pageSize) || 1}
+                            onNavigate={toPage => {
+                                setPage(toPage);
                             }}
-                            onKeyDown={e => {
-                                if (e.key === 'Enter') {
+                        />
+                        {/* Page jump input */}
+                        <div
+                            className={css`
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                            `}
+                        >
+                            {/* local controlled input for typing page number */}
+                            <input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={jumpPage}
+                                onChange={e => {
+                                    setJumpPage(e.target.value);
+                                }}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter') {
+                                        const num = Number(jumpPage);
+                                        const total = Math.max(Math.ceil(tableTotalCount / pageSize) || 1, 1);
+                                        if (!Number.isNaN(num)) {
+                                            const target = Math.min(Math.max(1, Math.floor(num)), total);
+                                            setPage(target);
+                                            try {
+                                                fetchNextPage && fetchNextPage(target);
+                                            } catch {}
+                                            setJumpPage(String(target));
+                                        } else {
+                                            // reset to current page if invalid
+                                            setJumpPage(String(page));
+                                        }
+                                    }
+                                }}
+                                className={css`
+                                    width: 72px;
+                                    padding: 6px 8px;
+                                    border-radius: 4px;
+                                    border: 1px solid rgba(0, 0, 0, 0.15);
+                                `}
+                            />
+                            <button
+                                onClick={() => {
                                     const num = Number(jumpPage);
                                     const total = Math.max(Math.ceil(tableTotalCount / pageSize) || 1, 1);
                                     if (!Number.isNaN(num)) {
@@ -854,47 +920,26 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                         setPage(target);
                                         try {
                                             fetchNextPage && fetchNextPage(target);
-                                        } catch { }
+                                        } catch {}
                                         setJumpPage(String(target));
                                     } else {
-                                        // reset to current page if invalid
                                         setJumpPage(String(page));
                                     }
-                                }
-                            }}
-                            className={css`
-                                width: 72px;
-                                padding: 6px 8px;
-                                border-radius: 4px;
-                                border: 1px solid rgba(0,0,0,0.15);
-                            `}
-                        />
-                        <button
-                            onClick={() => {
-                                const num = Number(jumpPage);
-                                const total = Math.max(Math.ceil(tableTotalCount / pageSize) || 1, 1);
-                                if (!Number.isNaN(num)) {
-                                    const target = Math.min(Math.max(1, Math.floor(num)), total);
-                                    setPage(target);
-                                    try {
-                                        fetchNextPage && fetchNextPage(target);
-                                    } catch { }
-                                    setJumpPage(String(target));
-                                } else {
-                                    setJumpPage(String(page));
-                                }
-                            }}
-                            className={css`
-                                padding: 6px 10px;
-                                border-radius: 4px;
-                                border: 1px solid rgba(0,0,0,0.15);
-                                background: transparent;
-                                cursor: pointer;
-                            `}
-                        >Go</button>
+                                }}
+                                className={css`
+                                    padding: 6px 10px;
+                                    border-radius: 4px;
+                                    border: 1px solid rgba(0, 0, 0, 0.15);
+                                    background: transparent;
+                                    cursor: pointer;
+                                `}
+                            >
+                                Go
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div> : null}
+            ) : null}
             <TraceDetail onClose={() => setDrawerOpen(false)} open={drawerOpen} traceId={selectedRow?.trace_id} traceTable="otel_traces" />
 
             {surroundingLogsOpen && (
