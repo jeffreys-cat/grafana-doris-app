@@ -51,7 +51,6 @@ import { buildAbsoluteTimeRange, buildRelativeTimeRange, formatTimeInZone, norma
 import { APPLICATION_FILTER_ID, applyApplicationFilter, getCommittedApplication, getConfiguredApplicationAttributeKey } from './application-filter';
 import { deriveVariantFields, deriveVariantFieldsFromMetadata } from 'utils/variant-fields';
 import { DiscoverShareState, readDiscoverShareState } from 'utils/discover-share-state';
-import { message } from 'antd';
 
 function getStoredValue<T>(key: string): T | undefined {
     if (typeof window === 'undefined') {
@@ -300,16 +299,6 @@ export default function DiscoverHeader(
         [setLoc],
     );
 
-    const copyShareLink = React.useCallback(async () => {
-        try {
-            await navigator.clipboard.writeText(window.location.href);
-            message.success('分享链接已复制');
-        } catch (error) {
-            logError(toError(error), { source: 'DiscoverHeader', action: 'copyShareLink' });
-            message.error('无法复制分享链接');
-        }
-    }, []);
-
     const fetchDatabases = React.useCallback(
         (ds: any) => {
             if (!ds) {
@@ -446,12 +435,12 @@ export default function DiscoverHeader(
                         setTimeFields(options);
                         if (sharedState) {
                             setShareSort(sharedState.sort);
-                        }
-                        initOptions?.onResolved?.(targetTimeField);
-                        if (sharedState) {
-                            setDiscoverShareReady(true);
                             pendingShareStateRef.current = undefined;
                         }
+                        initOptions?.onResolved?.(targetTimeField);
+                        // Enable Discover's initial query after datasource, table, and time field
+                        // have been resolved, including links that use the individual URL params.
+                        setDiscoverShareReady(true);
                     }
                 }
             },
@@ -994,9 +983,6 @@ export default function DiscoverHeader(
                             </span>
                         </Tooltip>
                     ) : null}
-                    <Button variant="secondary" icon="copy" onClick={copyShareLink} aria-label="Copy share link">
-                        分享
-                    </Button>
                     <Button
                         onClick={() => {
                             const latestTime = getLatestTime(activeItem?.key as string);
