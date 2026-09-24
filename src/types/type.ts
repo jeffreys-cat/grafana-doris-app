@@ -25,6 +25,16 @@ export interface QueryTableDataParams {
 }
 
 export type TopNAggregation = 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX';
+export type FieldStatisticsField = {
+    Field: string;
+    Type?: string;
+    variantPath?: string[];
+    variantRootType?: string;
+};
+
+export type FieldStatisticsParams = Pick<QueryTableDataParams, 'catalog' | 'database' | 'table' | 'timeField' | 'startDate' | 'endDate' | 'data_filters' | 'search_type' | 'search_value' | 'indexes_statement' | 'lucene_where'> & {
+    field: FieldStatisticsField;
+};
 export interface TopNQueryParams extends Pick<QueryTableDataParams, 'catalog' | 'database' | 'table' | 'timeField' | 'startDate' | 'endDate' | 'data_filters' | 'search_type' | 'search_value' | 'indexes_statement' | 'lucene_where'> {
     groupField: string;
     metric: TopNAggregation;

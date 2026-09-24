@@ -11,6 +11,7 @@ import DiscoverHeader from '../components/discover-header';
 import { testIds } from '../components/testIds';
 import { useDiscoverData } from './PageDiscover/useDiscoverData';
 import DiscoverQueryFeedback from 'components/discover-query-feedback';
+import FieldStatistics from 'components/field-statistics';
 import { useAtom, useAtomValue } from 'jotai';
 import {
     currentDatabaseAtom,
@@ -380,7 +381,8 @@ export default function PageDiscover() {
                                     overflow: hidden;
                                 `}
                             >
-                                <DiscoverContent getTraceData={getTraceData} fetchNextPage={() => {}} queryState={queryState} sort={sort} onSortChange={onSortChange} />
+                            <DiscoverContent getTraceData={getTraceData} fetchNextPage={() => {}} queryState={queryState} sort={sort} onSortChange={onSortChange} />
+                            <FieldStatistics />
                             </div>
                         </div>
                     </section>

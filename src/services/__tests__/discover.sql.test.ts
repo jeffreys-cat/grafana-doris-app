@@ -1,4 +1,4 @@
-import { getQueryOrderBySQL, getQueryTableResultSQL, getTopNQuerySQL, resolveQuerySortField } from 'services/sql';
+import { getFieldStatisticsSummarySQL, getFieldStatisticsTopValuesSQL, getQueryOrderBySQL, getQueryTableResultSQL, getTopNQuerySQL, resolveQuerySortField } from 'services/sql';
 import { QueryTableDataParams } from 'types/type';
 
 const baseParams: QueryTableDataParams = {
@@ -88,5 +88,33 @@ describe('Discover Top N SQL', () => {
         expect(() => getTopNQuerySQL({ ...topNParams, limit: 0 }, fields)).toThrow('Top N limit');
         expect(() => getTopNQuerySQL({ ...topNParams, groupField: 'missing' }, fields)).toThrow('group field');
         expect(() => getTopNQuerySQL({ ...topNParams, metric: 'SUM', metricField: 'service_name' }, fields)).toThrow('numeric field');
+    });
+});
+
+describe('Discover field statistics SQL', () => {
+    const params = {
+        catalog: 'internal', database: 'observability', table: 'logs', timeField: 'timestamp',
+        startDate: baseParams.startDate, endDate: baseParams.endDate, data_filters: [],
+        search_type: 'SQL', search_value: 'status_code >= 500', field: { Field: 'duration_ms', Type: 'DOUBLE' },
+    };
+
+    it('returns summary values and a bounded histogram for a continuous field', () => {
+        const sql = getFieldStatisticsSummarySQL(params);
+        expect(sql).toContain('COUNT(`duration_ms`) AS `__field_stats_non_null`');
+        expect(sql).toContain('APPROX_COUNT_DISTINCT(`duration_ms`)');
+        expect(sql).toContain('HISTOGRAM(`duration_ms`, 20)');
+        expect(sql).toContain('AND status_code >= 500');
+    });
+
+    it('excludes nulls and ranks top values deterministically', () => {
+        const sql = getFieldStatisticsTopValuesSQL({ ...params, field: { Field: 'service_name', Type: 'VARCHAR' } });
+        expect(sql).toContain('AND `service_name` IS NOT NULL GROUP BY `service_name`');
+        expect(sql).toContain('ORDER BY `__field_stats_count` DESC, `service_name` ASC LIMIT 5');
+    });
+
+    it('uses the existing JSON extraction expression for a JSON leaf', () => {
+        const sql = getFieldStatisticsSummarySQL({ ...params, field: { Field: 'attributes.http.method', Type: 'VARCHAR', variantPath: ['attributes', 'http.method'], variantRootType: 'JSON' } });
+        expect(sql).toContain("CAST(JSON_EXTRACT(`attributes`, '$.\"http.method\"') AS STRING)");
+        expect(sql).not.toContain('HISTOGRAM');
     });
 });

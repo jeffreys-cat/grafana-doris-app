@@ -4,10 +4,10 @@ import { atomWithStorage, selectAtom } from 'jotai/utils';
 import { atomWithLocation } from 'jotai-location';
 import { DataSourceInstanceSettings, DataSourceJsonData, dateTime, TimeZone } from '@grafana/data';
 import { Dayjs } from 'dayjs';
-import { DataFilterType, DiscoverCurrent, IntervalEnum, ShortcutItem, TopNAggregation } from 'types/type';
+import { DataFilterType, DiscoverCurrent, FieldStatisticsField, IntervalEnum, ShortcutItem, TopNAggregation } from 'types/type';
 import { AggregatableEnum, DISCOVER_DEFAULT_STATUS, DISCOVER_SHORTCUTS, FieldTypeEnum, SearchableEnum } from 'utils/data';
 import { getGrafanaUserTimeZone } from 'utils/time';
-import { DiscoverColumnLayouts, DiscoverQueryState, DiscoverSort } from 'types/discover';
+import { DiscoverColumnLayouts, DiscoverQueryState, DiscoverSort, FieldStatisticsResult } from 'types/discover';
 
 export const locationAtom = atomWithLocation();
 export const dataFilterAtom = atom<DataFilterType[]>([]);
@@ -52,6 +52,10 @@ export const topNResultFieldsAtom = atom<Array<{ Field: string; Type: string }>>
 export const topNRowsAtom = atom<Array<Record<string, any>>>([]);
 /** Increments when a field-side Top N action should execute immediately. */
 export const topNRunRequestAtom = atom(0);
+export const fieldStatisticsFieldAtom = atom<FieldStatisticsField | undefined>(undefined);
+export const fieldStatisticsResultAtom = atom<FieldStatisticsResult | undefined>(undefined);
+export const fieldStatisticsLoadingAtom = atom(false);
+export const fieldStatisticsErrorAtom = atom<Error | undefined>(undefined);
 export const discoverSharedColumnOrderAtom = atom<string[]>([]);
 // URL synchronization starts only after header initialization has applied a shared state.
 export const discoverShareReadyAtom = atom(false);

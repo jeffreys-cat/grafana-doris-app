@@ -26,7 +26,6 @@ import {
     tableTotalCountAtom,
     tableTracesDataAtom,
     timeZoneAtom,
-    topDataAtom,
     discoverShareReadyAtom,
     topNEnabledAtom,
     topNConfigAtom,
@@ -34,7 +33,7 @@ import {
     topNRowsAtom,
     topNRunRequestAtom,
 } from 'store/discover';
-import { getTableDataChartsService, getTableDataCountService, getTableDataService, getTopDataService, getTopNDataService } from 'services/discover';
+import { getTableDataChartsService, getTableDataCountService, getTableDataService, getTopNDataService } from 'services/discover';
 import { getTableDataTraceService } from 'services/traces';
 import { encodeBase64, getChartsData, convertColumnToRowViaFieldsType, convertColumnToRow, generateHighlightedResults, formatTracesResData, getIndexesStatement } from 'utils/data';
 import { normalizeCount } from 'utils/count';
@@ -99,7 +98,6 @@ export function useDiscoverData() {
         [dataFilter, tableFields, variantFields],
     );
     const searchValue = useAtomValue(searchValueAtom);
-    const setTopData = useSetAtom(topDataAtom);
     const currentTable = useAtomValue(currentTableAtom);
     const currentCatalog = useAtomValue(currentCatalogAtom);
     const currentDatabase = useAtomValue(currentDatabaseAtom);
@@ -317,7 +315,6 @@ export function useDiscoverData() {
             currentIndexes,
             currentTable,
             currentTimeField,
-            dataFilter,
             queryDataFilters,
             page,
             pageSize,
@@ -447,103 +444,6 @@ export function useDiscoverData() {
             formatCurrentTime,
             setLoading,
             setTableDataCharts,
-            tableFields,
-        ],
-    );
-
-    const getTopData = useCallback(
-        async (requestId: number, nextPage = 1) => {
-            if (!currentTable || !currentDatabase || !selectdbDS) {
-                return;
-            }
-            const requestStartedAt = performance.now();
-            const indexesStatement = getIndexesStatement(currentIndexes, tableFields, searchValue);
-            const payload: any = {
-                catalog: currentCatalog,
-                database: currentDatabase,
-                table: currentTable,
-                timeField: currentTimeField,
-                startDate: formatCurrentTime(currentDate[0]),
-                endDate: formatCurrentTime(currentDate[1] as Dayjs),
-                cluster: '',
-                sort: 'DESC',
-                search_type: searchType,
-                indexes: '',
-                page: nextPage,
-                page_size: 500,
-            };
-
-            if (searchType === 'Search') {
-                payload.indexes_statement = indexesStatement;
-            }
-            payload.data_filters = queryDataFilters.length > 0 ? queryDataFilters : [];
-
-            if (searchValue && searchType !== 'Lucene') {
-                payload.search_value = searchType === 'Search' ? encodeBase64(searchValue) : searchValue;
-            }
-
-            if (searchType === 'Lucene') {
-                try {
-                    const luceneWhere = await buildLuceneWhereClause();
-                    if (luceneWhere) {
-                        payload.lucene_where = luceneWhere;
-                    }
-                } catch (error) {
-                    logError(toError(error), { source: 'useDiscoverData', action: 'buildLuceneWhereClause' });
-                    setTopData([]);
-                    return;
-                }
-            }
-
-            getTopDataService(
-                {
-                    selectdbDS,
-                    ...payload,
-                },
-                { showBackendError: false },
-            ).subscribe({
-                next: ({ data }: any) => {
-                    if (requestGenerationRef.current !== requestId) {
-                        return;
-                    }
-                    const processingStartedAt = performance.now();
-                    measureDiscoverPhase(requestId, 'top-data', 'request', requestStartedAt);
-                    const frames = data?.results?.getTableTopData?.frames;
-                    if (!frames || !frames[0]) {
-                        setTopData([]);
-                        measureDiscoverPhase(requestId, 'top-data', 'processing', processingStartedAt);
-                        return;
-                    }
-                    const rowsData = convertColumnToRowViaFieldsType(frames[0], tableFields);
-                    setTopData(rowsData);
-                    measureDiscoverPhase(requestId, 'top-data', 'processing', processingStartedAt);
-                },
-                error: (err: any) => {
-                    if (requestGenerationRef.current !== requestId) {
-                        return;
-                    }
-                    logError(toError(err), { source: 'useDiscoverData', action: 'getTopData' });
-                    setTopData([]);
-                    addAuxiliaryError(requestId, 'topData', err);
-                },
-            });
-        },
-        [
-            buildLuceneWhereClause,
-            addAuxiliaryError,
-            currentCatalog,
-            currentDate,
-            currentDatabase,
-            currentIndexes,
-            currentTable,
-            currentTimeField,
-            dataFilter,
-            queryDataFilters,
-            searchType,
-            searchValue,
-            selectdbDS,
-            formatCurrentTime,
-            setTopData,
             tableFields,
         ],
     );
@@ -704,7 +604,6 @@ export function useDiscoverData() {
             currentIndexes,
             currentTable,
             currentTimeField,
-            dataFilter,
             queryDataFilters,
             page,
             pageSize,
@@ -724,9 +623,8 @@ export function useDiscoverData() {
         setTableData([]);
         setTopNRows([]);
         setTopNFields([]);
-        setTopData([]);
         setQueryState({ status: 'idle', rowCount: 0, auxiliaryErrors: [] });
-    }, [setQueryState, setTableData, setTableDataCharts, setTableTotalCount, setTopData, setTopNFields, setTopNRows]);
+    }, [setQueryState, setTableData, setTableDataCharts, setTableTotalCount, setTopNFields, setTopNRows]);
 
     const refreshData = useCallback(
         ({ skipPageReset = false }: RefreshOptions = {}) => {
@@ -743,11 +641,10 @@ export function useDiscoverData() {
             void getTableDataCharts(requestId);
             void getTableData({ requestId, nextPage });
             void getTableDataCount(requestId);
-            if (!topNEnabled) {
-                void getTopData(requestId, nextPage);
-            }
+            // Field statistics are now fetched only when their drawer is opened.
+            // Do not fetch a 500-row sample during every Discover refresh.
         },
-        [beginQuery, clearData, currentDatabase, currentTable, currentTimeField, getTableData, getTableDataCharts, getTableDataCount, getTopData, page, selectdbDS, setPage, topNEnabled],
+        [beginQuery, clearData, currentDatabase, currentTable, currentTimeField, getTableData, getTableDataCharts, getTableDataCount, page, selectdbDS, setPage],
     );
 
     const handleQuerying = useCallback(() => {

@@ -1,5 +1,5 @@
 import { getBackendSrv } from '@grafana/runtime';
-import { getQueryTableChartsSQL, getQueryTableResultCountSQL, getQueryTableResultSQL, getSurroundingSQL, getTopNQuerySQL } from './sql';
+import { getFieldStatisticsSummarySQL, getFieldStatisticsTopValuesSQL, getQueryTableChartsSQL, getQueryTableResultCountSQL, getQueryTableResultSQL, getSurroundingSQL, getTopNQuerySQL } from './sql';
 import { withErrorHandler } from 'components/with-error-handler/withErrorHandler';
 
 type DiscoverServiceOptions = {
@@ -39,6 +39,20 @@ export function getTopNDataService(payload: any, fields: Array<{ Field: string; 
         data: { queries: [{ refId: 'getTopNData', datasource: { type: selectdbDS.type, uid: selectdbDS.uid }, rawSql: sql, format: 'table' }] },
         credentials: 'include',
     }), { ...options, generatedSql: sql });
+}
+
+export function getFieldStatisticsService(payload: any, options?: DiscoverServiceOptions) {
+    const { selectdbDS, ...params } = payload;
+    const summarySql = getFieldStatisticsSummarySQL(params);
+    const topValuesSql = getFieldStatisticsTopValuesSQL(params);
+    return withErrorHandler(getBackendSrv().fetch({
+        url: '/api/ds/query', method: 'POST',
+        data: { queries: [
+            { refId: 'getFieldStatisticsSummary', datasource: { type: selectdbDS.type, uid: selectdbDS.uid }, rawSql: summarySql, format: 'table' },
+            { refId: 'getFieldStatisticsTopValues', datasource: { type: selectdbDS.type, uid: selectdbDS.uid }, rawSql: topValuesSql, format: 'table' },
+        ] },
+        credentials: 'include',
+    }), { ...options, generatedSql: summarySql });
 }
 
 export function getTableDataChartsService(payload: any, options?: DiscoverServiceOptions) {

@@ -1,5 +1,5 @@
-import { QueryTableDataParams, SurroundingParams, TopNQueryParams } from 'types/type';
-import { addSqlFilter, transformFieldPath } from 'utils/sql-filter';
+import { FieldStatisticsParams, QueryTableDataParams, SurroundingParams, TopNQueryParams } from 'types/type';
+import { addSqlFilter, getFilterFieldReference, transformFieldPath } from 'utils/sql-filter';
 
 export { addSqlFilter, getFilterSQL, transformFieldPath } from 'utils/sql-filter';
 
@@ -86,10 +86,57 @@ export function getTopNQuerySQL(params: TopNQueryParams, availableFields: Array<
     }
     statement += ` (${transformFieldPath(params.timeField)} BETWEEN '${params.startDate}' AND '${params.endDate}')`;
     statement = (params.data_filters || []).reduce((sql, filter) => addSqlFilter(sql, filter), statement);
-    if (params.search_type === 'SQL' && params.search_value) statement += ` AND ${params.search_value}`;
-    if (params.search_type === 'Lucene' && params.lucene_where) statement += ` AND (${params.lucene_where})`;
+    if (params.search_type === 'SQL' && params.search_value) {
+        statement += ` AND ${params.search_value}`;
+    }
+    if (params.search_type === 'Lucene' && params.lucene_where) {
+        statement += ` AND (${params.lucene_where})`;
+    }
     statement += ` GROUP BY ${groupExpression} ORDER BY ${transformFieldPath(metricAlias)} ${params.direction === 'ASC' ? 'ASC' : 'DESC'}, ${groupExpression} ASC LIMIT ${limit}`;
     return statement;
+}
+
+function getFieldStatisticsWhere(params: FieldStatisticsParams) {
+    let statement = `FROM \`${params.database}\`.\`${params.table}\` WHERE`;
+    if (params.indexes_statement && params.search_type === 'Search') {
+        statement += ` (${params.indexes_statement}) AND`;
+    }
+    statement += ` (${transformFieldPath(params.timeField)} BETWEEN '${params.startDate}' AND '${params.endDate}')`;
+    statement = (params.data_filters || []).reduce((sql, filter) => addSqlFilter(sql, filter), statement);
+    if (params.search_type === 'SQL' && params.search_value) {
+        statement += ` AND ${params.search_value}`;
+    }
+    if (params.search_type === 'Lucene' && params.lucene_where) {
+        statement += ` AND (${params.lucene_where})`;
+    }
+    return statement;
+}
+
+function getFieldStatisticsExpression(params: FieldStatisticsParams) {
+    return getFilterFieldReference({
+        fieldName: params.field.Field,
+        variantPath: params.field.variantPath,
+        variantRootType: params.field.variantRootType,
+        fieldType: params.field.Type,
+        operator: 'is not null',
+        value: [],
+        id: 'field-statistics',
+    });
+}
+
+function supportsFieldStatisticsHistogram(type?: string) {
+    return /(TINYINT|SMALLINT|MEDIUMINT|INT|BIGINT|LARGEINT|FLOAT|DOUBLE|DECIMAL|DATE|TIME|TIMESTAMP)/i.test(type || '');
+}
+
+export function getFieldStatisticsSummarySQL(params: FieldStatisticsParams) {
+    const expression = getFieldStatisticsExpression(params);
+    const histogram = supportsFieldStatisticsHistogram(params.field.Type) ? `, HISTOGRAM(${expression}, 20) AS \`__field_stats_histogram\`` : '';
+    return `SELECT COUNT(*) AS \`__field_stats_total\`, COUNT(${expression}) AS \`__field_stats_non_null\`, APPROX_COUNT_DISTINCT(${expression}) AS \`__field_stats_distinct\`, MIN(${expression}) AS \`__field_stats_min\`, MAX(${expression}) AS \`__field_stats_max\`${histogram} ${getFieldStatisticsWhere(params)}`;
+}
+
+export function getFieldStatisticsTopValuesSQL(params: FieldStatisticsParams) {
+    const expression = getFieldStatisticsExpression(params);
+    return `SELECT ${expression} AS \`__field_stats_value\`, COUNT(*) AS \`__field_stats_count\` ${getFieldStatisticsWhere(params)} AND ${expression} IS NOT NULL GROUP BY ${expression} ORDER BY \`__field_stats_count\` DESC, ${expression} ASC LIMIT 5`;
 }
 
 export function getQueryTableChartsSQL(params: QueryTableDataParams) {

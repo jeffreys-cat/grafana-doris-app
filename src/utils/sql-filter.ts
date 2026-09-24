@@ -35,7 +35,7 @@ function getJsonCastType(fieldType?: string): string {
     return 'STRING';
 }
 
-function getFilterFieldReference({ fieldName, variantKey, variantPath, variantRootType, fieldType }: DataFilterType): string {
+export function getFilterFieldReference({ fieldName, variantKey, variantPath, variantRootType, fieldType }: DataFilterType): string {
     const path = variantPath?.length ? variantPath : variantKey !== undefined ? [fieldName, variantKey] : undefined;
     if (path?.length && String(variantRootType || '').toUpperCase().includes('JSON')) {
         const root = path[0];

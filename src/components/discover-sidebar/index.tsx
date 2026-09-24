@@ -2,7 +2,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import React, { useMemo, useState } from 'react';
 import FieldItem from './field-item/field-item';
 import { FilterContent } from './filter-content/filter-content';
-import { selectedFieldsAtom, tableFieldsAtom, variantFieldsAtom, searchableAtom, aggregatableAtom, fieldTypeAtom, indexesAtom, topNConfigAtom, topNEnabledAtom, topNRunRequestAtom } from 'store/discover';
+import { selectedFieldsAtom, tableFieldsAtom, variantFieldsAtom, searchableAtom, aggregatableAtom, fieldTypeAtom, indexesAtom, fieldStatisticsFieldAtom } from 'store/discover';
 import { AggregatableEnum, getFieldType, SearchableEnum, FieldTypeEnum, isStructuredJsonType } from 'utils/data';
 import { Button, CollapsableSection, Icon, Input, useTheme2, Toggletip } from '@grafana/ui';
 import { css } from '@emotion/css';
@@ -17,9 +17,7 @@ export default function DiscoverSidebar() {
     const [searchValue, setSearchValue] = useState('');
     const indexes = useAtomValue(indexesAtom);
     const theme = useTheme2();
-    const [, setTopNConfig] = useAtom(topNConfigAtom);
-    const [, setTopNEnabled] = useAtom(topNEnabledAtom);
-    const [, requestTopNRun] = useAtom(topNRunRequestAtom);
+    const [, setFieldStatisticsField] = useAtom(fieldStatisticsFieldAtom);
     const filteredFields = tableFields
         .filter(field => {
             if (aggregatable === AggregatableEnum.ANY) {
@@ -73,10 +71,9 @@ export default function DiscoverSidebar() {
         setSelectedFields(current => current.filter((item: any) => item.Field !== field.Field));
     }
 
-    function handleTopN(field: any) {
-        setTopNConfig(current => ({ ...current, groupField: field.Field, metric: 'COUNT', metricField: '', direction: 'DESC', limit: 5 }));
-        setTopNEnabled(true);
-        requestTopNRun(current => current + 1);
+    function handleFieldStatistics(field: any) {
+        const rootType = field.variantPath?.length ? tableFields.find((item: any) => item.Field === field.variantPath[0])?.Type : undefined;
+        setFieldStatisticsField({ Field: field.Field, Type: field.Type, variantPath: field.variantPath, variantRootType: rootType });
     }
 
     return (
@@ -174,7 +171,7 @@ export default function DiscoverSidebar() {
                     >
                         {availableFields
                             .map((field: any, index) => (
-                                <FieldItem type="add" field={field} key={field.Field || index} onAdd={field => handleAdd(field)} onTopN={handleTopN} isSelected={field => selectedFieldNames.has(field.Field)} searchActive={searchValue} />
+                                <FieldItem type="add" field={field} key={field.Field || index} onAdd={field => handleAdd(field)} onFieldStatistics={handleFieldStatistics} isSelected={field => selectedFieldNames.has(field.Field)} searchActive={searchValue} />
                             ))}
                     </div>
                 </CollapsableSection>
