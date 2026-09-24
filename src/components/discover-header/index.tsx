@@ -883,12 +883,12 @@ export default function DiscoverHeader(
                     <SearchType />
                 </Field>
                 {searchType === 'Lucene' ? (
-                    <Field label="Lucene" style={{ width: '100%' }}>
+                    <Field label="Lucene" style={{ flex: '1 1 auto', minWidth: 0 }}>
                         <Lucene onQuerying={commitApplicationAndQuery} />
                     </Field>
                 ) : (
-                    <Field label={searchMode ? 'Search' : 'SQL'} style={{ width: '100%' }}>
-                        <SQLSearch style={{ flex: '1' }} onQuerying={commitApplicationAndQuery} />
+                    <Field label={searchMode ? 'Search' : 'SQL'} style={{ flex: '1 1 auto', minWidth: 0 }}>
+                        <SQLSearch style={{ minWidth: 0, width: '100%' }} onQuerying={commitApplicationAndQuery} />
                     </Field>
                 )}
             </DiscoverHeaderSearch>

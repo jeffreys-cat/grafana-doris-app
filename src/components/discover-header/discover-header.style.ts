@@ -3,6 +3,7 @@ import styled from '@emotion/styled';
 
 export const DiscoverHeaderSearch = styled.div`
     flex: 2;
+    min-width: 0;
     display: flex;
     border-radius: 6px;
     align-items: center;

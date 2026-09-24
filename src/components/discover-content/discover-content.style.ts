@@ -10,9 +10,20 @@ export const HoverStyle = css`
 `;
 
 export const ColumnStyleWrapper = styled.div`
+    .field-pair {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 4px;
+        margin: 1px 6px 1px 0;
+        max-width: 100%;
+    }
+
     .field-key {
         padding: 0px 4px 2px;
-        margin-right: 4px;
         border-radius: 4px;
+    }
+
+    .field-value {
+        min-width: 0;
     }
 `;

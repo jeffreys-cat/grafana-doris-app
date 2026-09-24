@@ -44,6 +44,8 @@ interface SDCollapsibleTableProps<TData> {
     onSortingChange?: OnChangeFn<SortingState>;
     enableColumnReordering?: boolean;
     emptyContent?: React.ReactNode;
+    /** Extra top/bottom padding for each data row. */
+    rowVerticalPadding?: number;
 }
 
 type SortableHeaderProps<TData> = {
@@ -256,6 +258,7 @@ export default function SDCollapsibleTable<T>(props: SDCollapsibleTableProps<T>)
         onSortingChange,
         enableColumnReordering = false,
         emptyContent,
+        rowVerticalPadding = 0,
     } = props;
     const theme = useTheme2();
     const [expanded, setExpanded] = useState<ExpandedState>(allRowsExpanded ? true : {});
@@ -380,7 +383,7 @@ export default function SDCollapsibleTable<T>(props: SDCollapsibleTableProps<T>)
                                             style={{ width: cell.column.getSize() }}
                                             className={css`
                                                 height: 48px;
-                                                padding: 0 16px;
+                                                padding: ${rowVerticalPadding}px 16px;
                                                 overflow: hidden;
                                                 font-size: 14px;
                                             `}

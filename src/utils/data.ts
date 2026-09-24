@@ -912,7 +912,7 @@ export function generateHighlightedResults(data: { search_value: string; indexes
             } else {
                 highlightValue = escapeHtml(highlightValue);
             }
-            itemSource += `<span class="field-key">${escapeHtml(key)}:</span>${highlightValue} `;
+            itemSource += `<span class="field-pair"><span class="field-key">${escapeHtml(key)}:</span><span class="field-value">${highlightValue}</span></span>`;
         }
 
         return {

@@ -813,6 +813,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                     onSortingChange={handleTableSortingChange}
                     enableColumnReordering
                     emptyContent={emptyContent}
+                    rowVerticalPadding={3}
                 />
             </div>
             {queryState.status !== 'error' ? (
