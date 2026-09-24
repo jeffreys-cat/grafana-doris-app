@@ -48,6 +48,7 @@ const escapeSqlLiteral = (value: string) => value.replace(/'/g, "''");
 // the probe result so Lucene filtering does not make an extra request per query.
 const tryCastSupportCache = new Map<string, Promise<boolean>>();
 const jsonSearchSupportCache = new Map<string, Promise<boolean>>();
+const searchSupportCache = new Map<string, Promise<boolean>>();
 
 export async function supportsTryCast({
     connectionId,
@@ -131,6 +132,48 @@ export async function supportsJsonSearch({
     })();
 
     jsonSearchSupportCache.set(cacheKey, supportPromise);
+    return supportPromise;
+}
+
+/** SEARCH is available starting with Doris 4.0. Probe the function directly
+ * because VERSION() reports the MySQL compatibility version on Doris. */
+export async function supportsSearch({
+    connectionId,
+    datasourceType = DORIS_DATASOURCE_TYPE,
+}: TryCastCapabilityParams): Promise<boolean> {
+    if (!connectionId) {
+        return false;
+    }
+
+    const cacheKey = `${datasourceType}:${connectionId}`;
+    const cached = searchSupportCache.get(cacheKey);
+    if (cached) {
+        return cached;
+    }
+
+    const supportPromise = (async (): Promise<boolean> => {
+        const response$ = withErrorHandler(getBackendSrv().fetch({
+            url: '/api/ds/query',
+            method: 'POST',
+            data: {
+                queries: [{
+                    refId: 'probeSearch',
+                    datasource: { type: datasourceType, uid: connectionId },
+                    rawSql: "SELECT SEARCH('probe:probe') AS search_supported",
+                    format: 'table',
+                }],
+            },
+        }));
+
+        try {
+            const { data, ok } = await lastValueFrom(response$);
+            return Boolean(ok && (data as { results?: Record<string, any> })?.results?.probeSearch?.frames?.[0]);
+        } catch {
+            return false;
+        }
+    })();
+
+    searchSupportCache.set(cacheKey, supportPromise);
     return supportPromise;
 }
 

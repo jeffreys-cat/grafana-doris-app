@@ -24,6 +24,15 @@ export interface QueryTableDataParams {
     lucene_where?: string;
 }
 
+export type TopNAggregation = 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX';
+export interface TopNQueryParams extends Pick<QueryTableDataParams, 'catalog' | 'database' | 'table' | 'timeField' | 'startDate' | 'endDate' | 'data_filters' | 'search_type' | 'search_value' | 'indexes_statement' | 'lucene_where'> {
+    groupField: string;
+    metric: TopNAggregation;
+    metricField?: string;
+    direction: 'DESC' | 'ASC';
+    limit: number;
+}
+
 
 export interface SurroundingParams {
     catalog: string;

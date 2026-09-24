@@ -1,5 +1,6 @@
 import { CustomSchemaSQLSerializerV2, genWhereSQL, parse } from 'utils/query-parser/query-parser';
-import { supportsJsonSearch, supportsTryCast } from './metaservice';
+import { canUseDorisSearch } from 'utils/query-parser/ast';
+import { supportsJsonSearch, supportsSearch, supportsTryCast } from './metaservice';
 import { logError } from '@grafana/runtime';
 import { toError } from 'utils/errors';
 
@@ -33,6 +34,19 @@ export async function getWhereSQLViaLucene({ query, databaseName, tableName, con
         supportsTryCast({ connectionId, datasourceType }),
         supportsJsonSearch({ connectionId, datasourceType }),
     ]);
+
+    let ast: ReturnType<typeof parse>;
+    try {
+        ast = parse(trimmedQuery);
+    } catch (error) {
+        logError(toError(error), { source: 'lucene', action: 'getWhereSQLViaLucene' });
+        throw error;
+    }
+    if (canUseDorisSearch(ast) && await supportsSearch({ connectionId, datasourceType })) {
+        const escapedQuery = trimmedQuery.replace(/\\/g, '\\\\').replace(/'/g, "''");
+        return `SEARCH('${escapedQuery}', '{"mode":"lucene"}')`;
+    }
+
     const serializer = new CustomSchemaSQLSerializerV2({
         databaseName,
         tableName,
@@ -44,7 +58,6 @@ export async function getWhereSQLViaLucene({ query, databaseName, tableName, con
     });
 
     try {
-        const ast = parse(trimmedQuery);
         const whereSQL =  await genWhereSQL(ast, serializer);
         return whereSQL;
     } catch (error) {

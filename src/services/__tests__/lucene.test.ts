@@ -1,9 +1,10 @@
 import { getWhereSQLViaLucene } from 'services/lucene';
-import { getColumn, getInvertedIndexColumns, supportsJsonSearch, supportsTryCast } from 'services/metaservice';
+import { getColumn, getInvertedIndexColumns, supportsJsonSearch, supportsSearch, supportsTryCast } from 'services/metaservice';
 
 jest.mock('services/metaservice', () => ({
     getColumn: jest.fn(),
     supportsJsonSearch: jest.fn(),
+    supportsSearch: jest.fn(),
     supportsTryCast: jest.fn(),
     getInvertedIndexColumns: jest.fn(),
 }));
@@ -11,6 +12,7 @@ jest.mock('services/metaservice', () => ({
 const mockedGetColumn = getColumn as jest.MockedFunction<typeof getColumn>;
 const mockedSupportsTryCast = supportsTryCast as jest.MockedFunction<typeof supportsTryCast>;
 const mockedSupportsJsonSearch = supportsJsonSearch as jest.MockedFunction<typeof supportsJsonSearch>;
+const mockedSupportsSearch = supportsSearch as jest.MockedFunction<typeof supportsSearch>;
 const mockedGetInvertedIndexColumns = getInvertedIndexColumns as jest.MockedFunction<typeof getInvertedIndexColumns>;
 
 describe('getWhereSQLViaLucene', () => {
@@ -25,10 +27,41 @@ describe('getWhereSQLViaLucene', () => {
         mockedGetColumn.mockReset();
         mockedSupportsTryCast.mockReset();
         mockedSupportsJsonSearch.mockReset();
+        mockedSupportsSearch.mockReset();
         mockedGetInvertedIndexColumns.mockReset();
         mockedSupportsTryCast.mockResolvedValue(true);
         mockedSupportsJsonSearch.mockResolvedValue(true);
+        mockedSupportsSearch.mockResolvedValue(false);
     });
+
+    it('uses Doris SEARCH for eligible explicit text queries when supported', async () => {
+        mockedSupportsSearch.mockResolvedValue(true);
+
+        const result = await getWhereSQLViaLucene({ ...baseParams, query: 'message:"hello world"' });
+
+        expect(result).toBe(`SEARCH('message:"hello world"', '{"mode":"lucene"}')`);
+    });
+
+    it('uses Doris SEARCH for explicit text boolean combinations', async () => {
+        mockedSupportsSearch.mockResolvedValue(true);
+
+        const result = await getWhereSQLViaLucene({ ...baseParams, query: 'message:error AND service:api' });
+
+        expect(result).toBe(`SEARCH('message:error AND service:api', '{"mode":"lucene"}')`);
+    });
+
+    it.each(['status:>=200', 'message:*', 'timestamp:[1 TO 2]', 'attrs["http.status"]:200'])(
+        'keeps unsupported SEARCH query shapes on the SQL serializer: %s',
+        async (query) => {
+            mockedSupportsSearch.mockResolvedValue(true);
+            mockedGetColumn.mockResolvedValue(null);
+            mockedGetInvertedIndexColumns.mockResolvedValue([]);
+
+            await getWhereSQLViaLucene({ ...baseParams, query });
+
+            expect(mockedSupportsSearch).not.toHaveBeenCalled();
+        },
+    );
 
     it('returns empty SQL for blank queries', async () => {
         const result = await getWhereSQLViaLucene({

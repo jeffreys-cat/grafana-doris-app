@@ -1,4 +1,4 @@
-import { QueryTableDataParams, SurroundingParams } from 'types/type';
+import { QueryTableDataParams, SurroundingParams, TopNQueryParams } from 'types/type';
 import { addSqlFilter, transformFieldPath } from 'utils/sql-filter';
 
 export { addSqlFilter, getFilterSQL, transformFieldPath } from 'utils/sql-filter';
@@ -55,6 +55,40 @@ export function getQueryTableResultSQL(params: QueryTableDataParams) {
     // ORDER BY 的 timeField 也加反引号
     statement = statement + ` ORDER BY ${getQueryOrderBySQL(params)} LIMIT ${+params.page_size} OFFSET ${(+params?.page - 1) * params.page_size} `;
 
+    return statement;
+}
+
+const NUMERIC_DORIS_TYPE = /(TINYINT|SMALLINT|MEDIUMINT|INT|BIGINT|LARGEINT|FLOAT|DOUBLE|DECIMAL)/i;
+
+export function getTopNQuerySQL(params: TopNQueryParams, availableFields: Array<{ Field: string; Type?: string }>) {
+    const limit = Number(params.limit);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 10000) {
+        throw new Error('Top N limit must be an integer between 1 and 10000');
+    }
+    const group = availableFields.find(field => field.Field === params.groupField);
+    if (!group) {
+        throw new Error('Top N group field is unavailable');
+    }
+    const metric = params.metric || 'COUNT';
+    if (!['COUNT', 'SUM', 'AVG', 'MIN', 'MAX'].includes(metric)) {
+        throw new Error('Top N aggregation is unsupported');
+    }
+    const metricField = metric === 'COUNT' ? undefined : availableFields.find(field => field.Field === params.metricField);
+    if (metric !== 'COUNT' && (!metricField || !NUMERIC_DORIS_TYPE.test(metricField.Type || ''))) {
+        throw new Error('Top N metric requires an available numeric field');
+    }
+    const groupExpression = transformFieldPath(group.Field);
+    const metricExpression = metric === 'COUNT' ? 'COUNT(*)' : `${metric}(${transformFieldPath(metricField!.Field)})`;
+    const metricAlias = '__top_n_value';
+    let statement = `SELECT ${groupExpression} AS ${transformFieldPath(params.groupField)}, ${metricExpression} AS ${transformFieldPath(metricAlias)} FROM \`${params.database}\`.\`${params.table}\` WHERE`;
+    if (params.indexes_statement && params.search_type === 'Search') {
+        statement += ` (${params.indexes_statement}) AND`;
+    }
+    statement += ` (${transformFieldPath(params.timeField)} BETWEEN '${params.startDate}' AND '${params.endDate}')`;
+    statement = (params.data_filters || []).reduce((sql, filter) => addSqlFilter(sql, filter), statement);
+    if (params.search_type === 'SQL' && params.search_value) statement += ` AND ${params.search_value}`;
+    if (params.search_type === 'Lucene' && params.lucene_where) statement += ` AND (${params.lucene_where})`;
+    statement += ` GROUP BY ${groupExpression} ORDER BY ${transformFieldPath(metricAlias)} ${params.direction === 'ASC' ? 'ASC' : 'DESC'}, ${groupExpression} ASC LIMIT ${limit}`;
     return statement;
 }
 

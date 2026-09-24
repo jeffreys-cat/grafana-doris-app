@@ -15,6 +15,7 @@ interface FieldItemProps {
     searchActive?: string;
     isSelected?: (field: any) => boolean;
     showChildren?: boolean;
+    onTopN?: (field: any) => void;
 }
 
 function matches(field: any, query: string): boolean {
@@ -34,6 +35,9 @@ export default function FieldItem({ depth = 0, searchActive = '', showChildren =
     const isExpanded = searchActive || expanded;
     const selected = props.isSelected?.(field) || false;
     const showTopData = !hasChildren && props.type === 'add';
+    // Doris cannot aggregate a VARIANT value directly. Its derived fields can
+    // still show the existing distribution card, but cannot run a Top N query.
+    const canRunTopN = showTopData && !isStructuredJsonType(field.Type) && !field.variantPath?.length;
 
     const clearTimer = (timer: React.MutableRefObject<ReturnType<typeof setTimeout> | undefined>) => {
         if (timer.current) {
@@ -78,7 +82,6 @@ export default function FieldItem({ depth = 0, searchActive = '', showChildren =
                     width: 100%; text-align: left; display: flex; align-items: center;
                     justify-content: space-between; height: 32px;
                     padding: 0 8px 0 ${8 + depth * 16}px;
-                    &:hover .icon-wrapper { opacity: 1; }
                     &:hover { background-color: ${theme.colors.background.secondary}; }
                 `}
             >
@@ -90,8 +93,10 @@ export default function FieldItem({ depth = 0, searchActive = '', showChildren =
                     </div>
                 </div>
                 {hasChildren ? <span className={css`margin-left:8px; color:${theme.colors.text.secondary}; font-size:12px;`}>{field.leafCount || 0}</span> : null}
-                {!selected && <div className={cn('icon-wrapper', css`opacity:0; transition:opacity .2s; margin-left:auto; display:flex; align-items:center; color:${theme.colors.text.secondary}; &:hover { color:${theme.colors.text.primary}; }`)}>
-                    {props.type === 'add' ? <IconButton name="plus" tooltip="Add to table" onClick={e => { props.onAdd?.(field); e.stopPropagation(); }} /> : <IconButton name="minus" tooltip="Delete from table" onClick={e => { props.onRemove?.(field); e.stopPropagation(); }} />}
+                {!selected && <div className={cn('icon-wrapper', css`margin-left:auto; display:flex; align-items:center; color:${theme.colors.text.secondary}; &:hover { color:${theme.colors.text.primary}; }`)}>
+                    {props.type === 'add' ? <>
+                        <IconButton name="plus" tooltip="Add to table" onClick={e => { props.onAdd?.(field); e.stopPropagation(); }} />
+                    </> : <IconButton name="minus" tooltip="Delete from table" onClick={e => { props.onRemove?.(field); e.stopPropagation(); }} />}
                 </div>
                 }
             </div>
@@ -100,12 +105,12 @@ export default function FieldItem({ depth = 0, searchActive = '', showChildren =
 
     return (
         <div>
-            {hasChildren || props.type === 'remove' ? item : (
+            {!showTopData ? item : (
                 <Tooltip
                     show={topDataVisible}
                     placement="right"
                     interactive
-                    content={<TopData field={field} onPointerEnter={enterTopDataRegion} onPointerLeave={scheduleHide} />}
+                    content={<TopData field={field} onTopN={props.onTopN} canRunTopN={canRunTopN} onPointerEnter={enterTopDataRegion} onPointerLeave={scheduleHide} />}
                 >
                     {item}
                 </Tooltip>

@@ -1,11 +1,11 @@
 import { css } from '@emotion/css';
-import { IconButton } from '@grafana/ui';
+import { Button, IconButton } from '@grafana/ui';
 import { Progress } from 'antd';
 import { useAtom, useAtomValue } from 'jotai';
 import { get } from 'lodash-es';
 import { nanoid } from 'nanoid';
 import React from 'react';
-import { topDataAtom, tableTotalCountAtom, dataFilterAtom } from 'store/discover';
+import { topDataAtom, tableTotalCountAtom, dataFilterAtom, topNConfigAtom, topNEnabledAtom, topNResultFieldsAtom, topNRowsAtom } from 'store/discover';
 import { formatFieldDisplayValue, isComplexType } from 'utils/data';
 interface JsonObject {
     [key: string]: any;
@@ -32,11 +32,26 @@ function countValueDistribution(jsonArray: JsonObject[], key: string): { [value:
     return result;
 }
 
-export function TopData({ field, onPointerEnter, onPointerLeave }: any) {
+export function TopData({ field, onTopN, canRunTopN = true, onPointerEnter, onPointerLeave }: any) {
     const topData = useAtomValue(topDataAtom);
     const tableTotalCount = useAtomValue(tableTotalCountAtom);
+    const topNEnabled = useAtomValue(topNEnabledAtom);
+    const topNConfig = useAtomValue(topNConfigAtom);
+    const topNFields = useAtomValue(topNResultFieldsAtom);
+    const topNRows = useAtomValue(topNRowsAtom);
     const [dataFilter, setDataFilter] = useAtom(dataFilterAtom);
-    const res = Object.entries(countValueDistribution(topData, field.Field)).sort((a: any, b: any) => b[1] - a[1]);
+    const topNValueField = topNFields.find(item => item.Field === '__top_n_value')?.Field;
+    const hasTopNResult = topNEnabled && topNConfig.groupField === field.Field && Boolean(topNValueField);
+    const res: Array<[string, number]> = hasTopNResult
+        ? topNRows.map(row => [normalizeTopDataValue(row[field.Field]), Number(row[topNValueField!] || 0)])
+        : (Object.entries(countValueDistribution(topData, field.Field)).sort(
+            (a: any, b: any) => b[1] - a[1]
+          ) as Array<[string, number]>);
+    // COUNT results are percentages of every matching record, rather than only
+    // the returned Top N groups. Other aggregation metrics display their value.
+    const showRecordPercentage = !hasTopNResult || topNConfig.metric === 'COUNT';
+    const resultTotal = showRecordPercentage ? tableTotalCount : topData.length;
+    const itemCount = hasTopNResult ? `${topNRows.length} groups from all matches` : `${Math.min(500, tableTotalCount)} Items`;
 
     return (
         <div
@@ -62,20 +77,17 @@ export function TopData({ field, onPointerEnter, onPointerLeave }: any) {
                     justify-content: space-between;
                 `}
             >
-                <div
-                    className={css`
-                        font-size: 16px;
-                        margin: 8px 0;
-                    `}
-                >
-                    TOP5
-                </div>
-                <small className="text-n2">{tableTotalCount >= 500 ? 500 : tableTotalCount} Items</small>
+                {canRunTopN && (
+                    <Button size="sm" variant="secondary" onClick={() => onTopN?.(field)}>
+                        Top {hasTopNResult ? topNConfig.limit : 5}
+                    </Button>
+                )}
+                <small className="text-n2">{itemCount}</small>
             </div>
             <div className="mt-3 space-y-3 text-n5">
                 {res.map(
                     ([value, count], index) =>
-                        index < 5 && (
+                        index < (hasTopNResult ? topNConfig.limit : 5) && (
                             <div key={index} className="flex items-center justify-between">
                                 <div
                                     className={css`
@@ -108,7 +120,9 @@ export function TopData({ field, onPointerEnter, onPointerLeave }: any) {
                                                 flex-shrink: 0;
                                             `}
                                         >
-                                            {+((count * 100) / topData.length).toFixed(1)}%
+                                            {showRecordPercentage
+                                                ? `${resultTotal ? +((count * 100) / resultTotal).toFixed(1) : 0}%`
+                                                : count}
                                         </div>
                                     </div>
                                     <Progress
@@ -122,7 +136,7 @@ export function TopData({ field, onPointerEnter, onPointerLeave }: any) {
                                             }
                                         `}
                                         style={{ width: '100%', height: '0px' }}
-                                        percent={+((count * 100) / topData.length).toFixed(1)}
+                                        percent={showRecordPercentage && resultTotal ? +((count * 100) / resultTotal).toFixed(1) : 0}
                                         status="normal"
                                         showInfo={false}
                                     />

@@ -9,6 +9,38 @@ export function parse(query: string): lucene.AST {
     return lucene.parse(encodeSpecialTokens(encodeVariantLiteralFieldPaths(query)));
 }
 
+/**
+ * SEARCH's Lucene mode can preserve explicit text field queries, but it does
+ * not replace this parser's typed comparisons, ranges, existence checks, or
+ * implicit-field expansion. Keep those on the SQL serializer path.
+ */
+export function canUseDorisSearch(ast: lucene.AST | lucene.Node): boolean {
+    const candidate = ast as any;
+    if (candidate.term != null) {
+        const field = String(candidate.field ?? '');
+        const term = String(candidate.term ?? '');
+        return Boolean(field && field !== IMPLICIT_FIELD && !field.startsWith('-') &&
+            !field.includes('[') && !field.includes(']') &&
+            !candidate.regex && candidate.similarity == null && candidate.proximity == null && candidate.boost == null &&
+            !term.includes('?') && term !== '*' &&
+            (candidate.quoted || !/^(?:[<>]=?|\d|true\b|false\b)/iu.test(term)));
+    }
+
+    if (candidate.inclusive != null || candidate.term_min != null) {
+        return false;
+    }
+    if (candidate.right != null) {
+        return (candidate.operator === 'AND' || candidate.operator === 'OR' || candidate.operator === '&&' || candidate.operator === '||') &&
+            canUseDorisSearch(candidate.left) && canUseDorisSearch(candidate.right);
+    }
+    if (candidate.left != null) {
+        // Unary negation and leading modifiers have different semantics in
+        // Doris Lucene mode, so only accept a plain single child.
+        return candidate.start === undefined && canUseDorisSearch(candidate.left);
+    }
+    return false;
+}
+
 async function nodeTerm(node: lucene.Node, serializer: Serializer): Promise<string> {
     const field = node.field[0] === '-' ? node.field.slice(1) : node.field;
     let isNegatedField = node.field[0] === '-';

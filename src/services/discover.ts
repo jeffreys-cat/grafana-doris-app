@@ -1,5 +1,5 @@
 import { getBackendSrv } from '@grafana/runtime';
-import { getQueryTableChartsSQL, getQueryTableResultCountSQL, getQueryTableResultSQL, getSurroundingSQL } from './sql';
+import { getQueryTableChartsSQL, getQueryTableResultCountSQL, getQueryTableResultSQL, getSurroundingSQL, getTopNQuerySQL } from './sql';
 import { withErrorHandler } from 'components/with-error-handler/withErrorHandler';
 
 type DiscoverServiceOptions = {
@@ -29,6 +29,16 @@ export function getTableDataService(payload: any, options?: DiscoverServiceOptio
         credentials: 'include',
     }), { ...options, generatedSql: QueryTableResultSQL });
     return response;
+}
+
+export function getTopNDataService(payload: any, fields: Array<{ Field: string; Type?: string }>, options?: DiscoverServiceOptions) {
+    const { selectdbDS, ...rest } = payload;
+    const sql = getTopNQuerySQL(rest, fields);
+    return withErrorHandler(getBackendSrv().fetch({
+        url: '/api/ds/query', method: 'POST',
+        data: { queries: [{ refId: 'getTopNData', datasource: { type: selectdbDS.type, uid: selectdbDS.uid }, rawSql: sql, format: 'table' }] },
+        credentials: 'include',
+    }), { ...options, generatedSql: sql });
 }
 
 export function getTableDataChartsService(payload: any, options?: DiscoverServiceOptions) {

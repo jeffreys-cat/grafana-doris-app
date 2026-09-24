@@ -28,10 +28,15 @@ import {
     timeZoneAtom,
     topDataAtom,
     discoverShareReadyAtom,
+    topNEnabledAtom,
+    topNConfigAtom,
+    topNResultFieldsAtom,
+    topNRowsAtom,
+    topNRunRequestAtom,
 } from 'store/discover';
-import { getTableDataChartsService, getTableDataCountService, getTableDataService, getTopDataService } from 'services/discover';
+import { getTableDataChartsService, getTableDataCountService, getTableDataService, getTopDataService, getTopNDataService } from 'services/discover';
 import { getTableDataTraceService } from 'services/traces';
-import { encodeBase64, getChartsData, convertColumnToRowViaFieldsType, generateHighlightedResults, formatTracesResData, getIndexesStatement } from 'utils/data';
+import { encodeBase64, getChartsData, convertColumnToRowViaFieldsType, convertColumnToRow, generateHighlightedResults, formatTracesResData, getIndexesStatement } from 'utils/data';
 import { normalizeCount } from 'utils/count';
 import { generateTableDataUID } from 'utils/utils';
 import { message } from 'antd';
@@ -69,6 +74,11 @@ export function useDiscoverData() {
     const suppressNextPageEffectRef = useRef(false);
     const [page, setPage] = useAtom(pageAtom);
     const shareReady = useAtomValue(discoverShareReadyAtom);
+    const topNEnabled = useAtomValue(topNEnabledAtom);
+    const topNConfig = useAtomValue(topNConfigAtom);
+    const topNRunRequest = useAtomValue(topNRunRequestAtom);
+    const setTopNFields = useSetAtom(topNResultFieldsAtom);
+    const setTopNRows = useSetAtom(topNRowsAtom);
     const pageSize = useAtomValue(pageSizeAtom);
     const setTableData = useSetAtom(tableDataAtom);
     const setVariantFields = useSetAtom(variantFieldsAtom);
@@ -211,13 +221,19 @@ export function useDiscoverData() {
                 payload.search_value = searchType === 'Search' ? encodeBase64(searchValue) : searchValue;
             }
 
-            getTableDataService(
-                {
-                    selectdbDS,
-                    ...payload,
-                },
-                { showBackendError: false },
-            ).subscribe({
+            let resultRequest;
+            try {
+                resultRequest = topNEnabled
+                    ? getTopNDataService({ selectdbDS, ...payload, ...topNConfig }, [...tableFields, ...flattenVariantLeaves(variantFieldsRef.current)], { showBackendError: false })
+                    : getTableDataService({ selectdbDS, ...payload }, { showBackendError: false });
+            } catch (error) {
+                setLoading(prev => ({ ...prev, getTableData: false }));
+                setTableData([]);
+                setTopNRows([]);
+                setQueryState({ status: 'error', rowCount: 0, error: createDiscoverQueryError(error, { source: 'results', searchType, searchValue }), auxiliaryErrors: [] });
+                return;
+            }
+            resultRequest.subscribe({
                 next: async ({ data }: any) => {
                     if (requestGenerationRef.current !== requestId) {
                         return;
@@ -225,9 +241,11 @@ export function useDiscoverData() {
                     const processingStartedAt = performance.now();
                     measureDiscoverPhase(requestId, 'results', 'request', requestStartedAt);
                     setLoading(prev => ({ ...prev, getTableData: false }));
-                    const frames = data?.results?.getTableData?.frames;
+                    const frames = data?.results?.[topNEnabled ? 'getTopNData' : 'getTableData']?.frames;
                     if (!frames || !frames[0]) {
                         setTableData([]);
+                        setTopNRows([]);
+                        setTopNFields([]);
                         setVariantFields(mergeVariantFields(variantMetadataFieldsRef.current, deriveVariantFields(tableFields, [])));
                         setQueryState(previous => ({
                             ...previous,
@@ -238,6 +256,18 @@ export function useDiscoverData() {
                         measureDiscoverPhase(requestId, 'results', 'processing', processingStartedAt);
                         return;
                     }
+                    if (topNEnabled) {
+                        const frame = frames[0];
+                        const resultFields = frame.schema.fields.map((field: any) => ({ Field: field.name, Type: field.type || 'STRING' }));
+                        const rows = convertColumnToRow(frame);
+                        setTopNFields(resultFields);
+                        setTopNRows(rows);
+                        setQueryState(previous => ({ ...previous, status: 'success', rowCount: rows.length, error: undefined }));
+                        measureDiscoverPhase(requestId, 'results', 'processing', processingStartedAt);
+                        return;
+                    }
+                    setTopNFields([]);
+                    setTopNRows([]);
                     const rowsData = convertColumnToRowViaFieldsType(frames[0], tableFields);
                     setVariantFields(mergeVariantFields(variantMetadataFieldsRef.current, deriveVariantFields(tableFields, rowsData)));
                     const resData = generateHighlightedResults(
@@ -293,6 +323,10 @@ export function useDiscoverData() {
             pageSize,
             searchType,
             searchValue,
+            topNEnabled,
+            topNConfig,
+            setTopNFields,
+            setTopNRows,
             selectdbDS,
             formatCurrentTime,
             setLoading,
@@ -688,9 +722,11 @@ export function useDiscoverData() {
         setTableDataCharts([]);
         setTableTotalCount(0);
         setTableData([]);
+        setTopNRows([]);
+        setTopNFields([]);
         setTopData([]);
         setQueryState({ status: 'idle', rowCount: 0, auxiliaryErrors: [] });
-    }, [setQueryState, setTableData, setTableDataCharts, setTableTotalCount, setTopData]);
+    }, [setQueryState, setTableData, setTableDataCharts, setTableTotalCount, setTopData, setTopNFields, setTopNRows]);
 
     const refreshData = useCallback(
         ({ skipPageReset = false }: RefreshOptions = {}) => {
@@ -705,11 +741,13 @@ export function useDiscoverData() {
             }
             const requestId = beginQuery();
             void getTableDataCharts(requestId);
-            void getTableDataCount(requestId);
             void getTableData({ requestId, nextPage });
-            void getTopData(requestId, nextPage);
+            void getTableDataCount(requestId);
+            if (!topNEnabled) {
+                void getTopData(requestId, nextPage);
+            }
         },
-        [beginQuery, clearData, currentDatabase, currentTable, currentTimeField, getTableData, getTableDataCharts, getTableDataCount, getTopData, page, selectdbDS, setPage],
+        [beginQuery, clearData, currentDatabase, currentTable, currentTimeField, getTableData, getTableDataCharts, getTableDataCount, getTopData, page, selectdbDS, setPage, topNEnabled],
     );
 
     const handleQuerying = useCallback(() => {
@@ -719,6 +757,19 @@ export function useDiscoverData() {
         }
         refreshData();
     }, [clearData, currentTimeField, refreshData]);
+
+    const lastTopNRunRequest = useRef(0);
+    useEffect(() => {
+        if (!topNRunRequest || topNRunRequest === lastTopNRunRequest.current) {
+            return;
+        }
+        lastTopNRunRequest.current = topNRunRequest;
+        if (!currentTimeField) {
+            clearData();
+            return;
+        }
+        refreshData();
+    }, [clearData, currentTimeField, refreshData, topNRunRequest]);
 
     const handleSortChange = useCallback(
         (nextSort: DiscoverSort) => {

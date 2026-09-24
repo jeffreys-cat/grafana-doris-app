@@ -10,7 +10,7 @@ jest.mock('components/with-error-handler/withErrorHandler', () => ({
 }));
 
 import { getBackendSrv } from '@grafana/runtime';
-import { supportsJsonSearch, supportsTryCast } from '../metaservice';
+import { supportsJsonSearch, supportsSearch, supportsTryCast } from '../metaservice';
 
 describe('supportsTryCast', () => {
     const fetch = getBackendSrv().fetch as jest.Mock;
@@ -60,5 +60,28 @@ describe('supportsTryCast', () => {
                 queries: [expect.objectContaining({ refId: 'probeJsonSearch', rawSql: expect.stringContaining('JSON_SEARCH') })],
             }),
         }));
+    });
+
+    it('detects SEARCH support once per datasource', async () => {
+        fetch.mockReturnValue(of({
+            ok: true,
+            data: { results: { probeSearch: { frames: [{}] } } },
+        }));
+
+        await expect(supportsSearch({ connectionId: 'doris-search-4', datasourceType: 'velodb-doris-datasource' })).resolves.toBe(true);
+        await expect(supportsSearch({ connectionId: 'doris-search-4', datasourceType: 'velodb-doris-datasource' })).resolves.toBe(true);
+
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(fetch).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({
+                queries: [expect.objectContaining({ refId: 'probeSearch', rawSql: "SELECT SEARCH('probe:probe') AS search_supported" })],
+            }),
+        }));
+    });
+
+    it('falls back when SEARCH is unavailable', async () => {
+        fetch.mockReturnValue(throwError(() => new Error('SEARCH is not supported')));
+
+        await expect(supportsSearch({ connectionId: 'doris-search-3', datasourceType: 'velodb-doris-datasource' })).resolves.toBe(false);
     });
 });
