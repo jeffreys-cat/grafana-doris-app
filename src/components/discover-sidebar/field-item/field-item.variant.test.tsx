@@ -1,10 +1,15 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import FieldItem from './field-item';
 
 jest.mock('@grafana/ui', () => ({
     IconButton: ({ name, tooltip, ...props }: any) => <button aria-label={tooltip} data-icon={name} {...props} />,
+    Tooltip: ({ children, content, show }: any) => <>{children}{show ? content : null}</>,
     useTheme2: () => ({ colors: { background: { secondary: '#222' }, text: { primary: '#fff', secondary: '#aaa' } } }),
+}));
+
+jest.mock('./top-data/top-data', () => ({
+    TopData: ({ field }: any) => <div data-testid="field-top-data">{field.Field}</div>,
 }));
 
 jest.mock('utils/icon', () => ({
@@ -61,5 +66,14 @@ describe('Discover field statistics entry point', () => {
         render(<FieldItem type="add" field={leafField} onFieldStatistics={onFieldStatistics} />);
         fireEvent.click(screen.getByRole('button', { name: 'Field statistics' }));
         expect(onFieldStatistics).toHaveBeenCalledWith(leafField);
+    });
+
+    it('shows the field distribution popover after a short hover', () => {
+        jest.useFakeTimers();
+        render(<FieldItem type="add" field={leafField} />);
+        fireEvent.pointerEnter(screen.getByTestId('field-item-row'));
+        act(() => { jest.advanceTimersByTime(200); });
+        expect(screen.getByTestId('field-top-data')).toHaveTextContent('service_name');
+        jest.useRealTimers();
     });
 });
