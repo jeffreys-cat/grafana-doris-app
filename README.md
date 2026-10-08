@@ -58,13 +58,6 @@ This plugin is frontend-only and does not include a Go backend.
     npm run lint:fix
     ```
 
-## User guides
-
--   [使用 Doris 数据源配置 Grafana Alert](./docs/grafana-alerting-configuration-zh.md)
--   [Doris SSO Datasource 使用指南](./docs/doris-sso-user-guide-zh.md)
--   [OIDC 用户验收与测试说明](./docs/oidc-user-test-zh.md)
--   [VARIANT 功能与测试说明](./docs/variant-feature-test-zh.md)
-
 # Distributing your plugin
 
 When distributing a Grafana plugin either within the community or privately the plugin must be signed so the Grafana application can verify its authenticity. This can be done with the `@grafana/sign-plugin` package.
