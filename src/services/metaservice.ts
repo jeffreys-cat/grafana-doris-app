@@ -50,6 +50,13 @@ const tryCastSupportCache = new Map<string, Promise<boolean>>();
 const jsonSearchSupportCache = new Map<string, Promise<boolean>>();
 const searchSupportCache = new Map<string, Promise<boolean>>();
 
+function querySucceeded(data: unknown, refId: string): boolean {
+    const result = (data as { results?: Record<string, { error?: unknown; frames?: unknown[] }> })?.results?.[refId];
+    // Grafana can return an HTTP-success response containing a per-query error.
+    // Treat that as an unsupported capability instead of trusting frames alone.
+    return Boolean(result && !result.error && result.frames?.length);
+}
+
 export async function supportsTryCast({
     connectionId,
     datasourceType = DORIS_DATASOURCE_TYPE,
@@ -80,11 +87,7 @@ export async function supportsTryCast({
 
         try {
             const { data, ok } = await lastValueFrom(response$);
-            const frame = (data as { results?: Record<string, any> })?.results?.probeTryCast?.frames?.[0];
-            if (!ok || !frame) {
-                return false;
-            }
-            return true;
+            return Boolean(ok && querySucceeded(data, 'probeTryCast'));
         } catch {
             return false;
         }
@@ -125,7 +128,7 @@ export async function supportsJsonSearch({
 
         try {
             const { data, ok } = await lastValueFrom(response$);
-            return Boolean(ok && (data as { results?: Record<string, any> })?.results?.probeJsonSearch?.frames?.[0]);
+            return Boolean(ok && querySucceeded(data, 'probeJsonSearch'));
         } catch {
             return false;
         }
@@ -167,7 +170,7 @@ export async function supportsSearch({
 
         try {
             const { data, ok } = await lastValueFrom(response$);
-            return Boolean(ok && (data as { results?: Record<string, any> })?.results?.probeSearch?.frames?.[0]);
+            return Boolean(ok && querySucceeded(data, 'probeSearch'));
         } catch {
             return false;
         }
