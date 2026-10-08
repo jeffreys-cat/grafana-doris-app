@@ -1,7 +1,5 @@
-import { parse } from 'utils/query-parser/query-parser';
 import {
     getLuceneFieldInsertText,
-    getLuceneSyntaxDiagnostic,
     getQuerySuggestions,
     getSqlFieldInsertText,
     QueryField,
@@ -38,11 +36,5 @@ describe('Discover query completion', () => {
         expect(getQuerySuggestions({ mode: 'lucene', query: '', fields, rows }).map(item => item.label)).toContain('service_name');
         expect(getQuerySuggestions({ mode: 'lucene', query: 'service_name:', fields, rows }).map(item => item.insertText)).toEqual(expect.arrayContaining(['"checkout"', '>', '[ TO ]']));
         expect(getQuerySuggestions({ mode: 'lucene', query: 'service_name:checkout ', fields, rows }).map(item => item.label)).toEqual(expect.arrayContaining(['AND', 'OR', 'NOT']));
-    });
-
-    it('returns parser locations for invalid Lucene and nothing for valid or blank input', () => {
-        expect(getLuceneSyntaxDiagnostic('', parse)).toBeUndefined();
-        expect(getLuceneSyntaxDiagnostic('service_name:checkout', parse)).toBeUndefined();
-        expect(getLuceneSyntaxDiagnostic('service_name:', parse)).toMatchObject({ startLineNumber: 1, startColumn: expect.any(Number) });
     });
 });

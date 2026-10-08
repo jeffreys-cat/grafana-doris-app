@@ -751,10 +751,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                 display: flex;
                 flex-direction: column;
                 width: 100%;
-                height: 100%;
                 min-width: 0;
-                min-height: 0;
-                overflow: hidden;
             `}
         >
             <div
@@ -787,11 +784,8 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
             <div
                 data-testid="discover-table-scroll"
                 className={css`
-                    flex: 1;
                     min-width: 0;
-                    min-height: 0;
-                    overflow: auto;
-                    overscroll-behavior: contain;
+                    overflow-x: auto;
                 `}
             >
                 <SDCollapsibleTable
@@ -814,6 +808,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                     enableColumnReordering
                     emptyContent={emptyContent}
                     rowVerticalPadding={3}
+                    stickyHeader={false}
                 />
             </div>
             {queryState.status !== 'error' ? (

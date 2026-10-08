@@ -189,25 +189,3 @@ export function getQuerySuggestions({ mode, query, fields, rows }: { mode: Disco
     }
     return [...fieldSuggestions(fields, mode), ...LOGICAL_OPERATORS.map(label => ({ label, insertText: ` ${label} `, detail: 'Logical operator', kind: 'keyword' as const }))];
 }
-
-export type LuceneSyntaxDiagnostic = { message: string; startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number };
-
-export function getLuceneSyntaxDiagnostic(query: string, parse: (value: string) => unknown): LuceneSyntaxDiagnostic | undefined {
-    if (!query.trim()) {
-        return undefined;
-    }
-    try {
-        parse(query);
-        return undefined;
-    } catch (error: any) {
-        const start = error?.location?.start;
-        const end = error?.location?.end;
-        return {
-            message: error?.message || 'Invalid Lucene query.',
-            startLineNumber: start?.line || 1,
-            startColumn: start?.column || 1,
-            endLineNumber: end?.line || start?.line || 1,
-            endColumn: Math.max((end?.column || start?.column || 1), (start?.column || 1) + 1),
-        };
-    }
-}

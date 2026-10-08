@@ -192,9 +192,6 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
   };
 
   const submitLogConfig = () => {
-    if (!applicationAttributeKey) {
-      return;
-    }
     updatePluginAndReload(plugin.meta.id, {
       enabled,
       pinned,
@@ -345,9 +342,7 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
           </Field>
           <Field
             label="Application resource attribute key"
-            description="Resource attribute used by the Discover Application filter, for example app or k8s.pod.label.app."
-            invalid={!applicationAttributeKey}
-            error={!applicationAttributeKey ? 'Application resource attribute key is required' : undefined}
+            description="Optional. Resource attribute used by the Discover Application filter, for example app or k8s.pod.label.app. Leave empty to disable the filter."
           >
             <Input
               width={60}
@@ -408,7 +403,7 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
             </div>
           </Field>
           <div className={s.marginTop}>
-            <Button type='submit' disabled={!applicationAttributeKey}>
+            <Button type='submit'>
               Save plugin settings
             </Button>
           </div>

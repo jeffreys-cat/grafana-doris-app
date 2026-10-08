@@ -56,15 +56,15 @@ describe('Components/AppConfig', () => {
     expect(screen.queryByRole('button', { name: /save api settings/i })).toBeInTheDocument();
   });
 
-  test('renders and validates the application resource attribute key', () => {
+  test('allows clearing the application resource attribute key', () => {
     render(<AppConfig plugin={props.plugin} query={props.query} />);
 
     const input = screen.getByTestId(testIds.appConfig.applicationAttributeKey);
     expect(input).toHaveValue('app');
 
     fireEvent.change(input, { target: { value: '   ' } });
-    expect(screen.getByRole('button', { name: /save plugin settings/i })).toBeDisabled();
-    expect(screen.getByText(/application resource attribute key is required/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save plugin settings/i })).toBeEnabled();
+    expect(screen.queryByText(/application resource attribute key is required/i)).not.toBeInTheDocument();
   });
 
   test('normalizes a configured application resource attribute key', () => {

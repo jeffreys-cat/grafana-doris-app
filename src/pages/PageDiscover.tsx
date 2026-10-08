@@ -249,6 +249,10 @@ export default function PageDiscover() {
                                     align-items: center;
                                     flex-direction: column;
                                     padding-top: 8px;
+                                    position: sticky;
+                                    top: 0;
+                                    align-self: start;
+                                    height: calc(100vh - 64px);
                                 `}
                             >
                                 <IconButton
@@ -271,8 +275,10 @@ export default function PageDiscover() {
                             <div
                                 className={css`
                                     min-width: 0;
-                                    height: 100%;
-                                    position: relative;
+                                    position: sticky;
+                                    top: 0;
+                                    align-self: start;
+                                    height: calc(100vh - 64px);
                                 `}
                             >
                                 <div
@@ -335,54 +341,60 @@ export default function PageDiscover() {
                                 background-color: ${theme.isDark ? 'rgb(24, 27, 31)' : '#FFF'};
                                 position: relative;
                                 padding: 16px 0;
+                                overflow-y: auto;
+                                overflow-x: hidden;
                             `}
                         >
                             <div style={{ position: 'absolute', top: 0, width: '100%' }}>{loading.getTableDataCharts && <LoadingBar width={100} />}</div>
-                            <DiscoverHistogram
-                                height={chartHeight}
-                                collapsed={layout.chartCollapsed}
-                                onToggleCollapsed={() => updateLayout(current => ({ ...current, chartCollapsed: !current.chartCollapsed }))}
-                            />
-                            {!layout.chartCollapsed && (
-                                <div
-                                    role="separator"
-                                    tabIndex={0}
-                                    aria-label="Resize chart"
-                                    aria-orientation="horizontal"
-                                    aria-valuemin={DISCOVER_CHART_MIN_HEIGHT}
-                                    aria-valuemax={chartMaxHeight}
-                                    aria-valuenow={chartHeight}
-                                    onPointerDown={event => beginResize('chart', event)}
-                                    onKeyDown={event => handleResizeKeyDown('chart', event)}
-                                    className={css`
-                                        height: 8px;
-                                        cursor: row-resize;
-                                        flex: none;
-                                        outline: none;
-                                        position: relative;
-                                        &:hover::after,
-                                        &:focus::after {
-                                            background: ${theme.colors.primary.main};
-                                        }
-                                        &::after {
-                                            content: '';
-                                            position: absolute;
-                                            inset: 3px 16px;
-                                            background: transparent;
-                                        }
-                                    `}
+                            <div
+                                className={css`
+                                    flex: none;
+                                `}
+                            >
+                                <DiscoverHistogram
+                                    height={chartHeight}
+                                    collapsed={layout.chartCollapsed}
+                                    onToggleCollapsed={() => updateLayout(current => ({ ...current, chartCollapsed: !current.chartCollapsed }))}
                                 />
-                            )}
+                                {!layout.chartCollapsed && (
+                                    <div
+                                        role="separator"
+                                        tabIndex={0}
+                                        aria-label="Resize chart"
+                                        aria-orientation="horizontal"
+                                        aria-valuemin={DISCOVER_CHART_MIN_HEIGHT}
+                                        aria-valuemax={chartMaxHeight}
+                                        aria-valuenow={chartHeight}
+                                        onPointerDown={event => beginResize('chart', event)}
+                                        onKeyDown={event => handleResizeKeyDown('chart', event)}
+                                        className={css`
+                                            height: 8px;
+                                            cursor: row-resize;
+                                            flex: none;
+                                            outline: none;
+                                            position: relative;
+                                            &:hover::after,
+                                            &:focus::after {
+                                                background: ${theme.colors.primary.main};
+                                            }
+                                            &::after {
+                                                content: '';
+                                                position: absolute;
+                                                inset: 3px 16px;
+                                                background: transparent;
+                                            }
+                                        `}
+                                    />
+                                )}
+                            </div>
                             <div
                                 className={css`
                                     margin-top: 16px;
-                                    min-height: 0;
-                                    flex: 1;
-                                    overflow: hidden;
+                                    flex: none;
                                 `}
                             >
-                            <DiscoverContent getTraceData={getTraceData} fetchNextPage={() => {}} queryState={queryState} sort={sort} onSortChange={onSortChange} />
-                            <FieldStatistics />
+                                <DiscoverContent getTraceData={getTraceData} fetchNextPage={() => {}} queryState={queryState} sort={sort} onSortChange={onSortChange} />
+                                <FieldStatistics />
                             </div>
                         </div>
                     </section>

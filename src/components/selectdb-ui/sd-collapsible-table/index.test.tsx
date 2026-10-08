@@ -32,7 +32,7 @@ const columns: Array<ColumnDef<RowData>> = [
     },
 ];
 
-function TableHarness({ data = [{ time: '2026-08-03', message: 'hello' }], emptyContent }: { data?: RowData[]; emptyContent?: React.ReactNode }) {
+function TableHarness({ data = [{ time: '2026-08-03', message: 'hello' }], emptyContent, stickyHeader }: { data?: RowData[]; emptyContent?: React.ReactNode; stickyHeader?: boolean }) {
     const [sorting, setSorting] = React.useState<SortingState>([{ id: 'time', desc: true }]);
     const [columnSizing, setColumnSizing] = React.useState<ColumnSizingState>({ time: 240, message: 240 });
     return (
@@ -49,6 +49,7 @@ function TableHarness({ data = [{ time: '2026-08-03', message: 'hello' }], empty
             onSortingChange={setSorting}
             enableColumnReordering
             emptyContent={emptyContent}
+            stickyHeader={stickyHeader}
         />
     );
 }
@@ -80,5 +81,10 @@ describe('SDCollapsibleTable column interactions', () => {
         render(<TableHarness data={[]} emptyContent={<div>Query succeeded — no results</div>} />);
         expect(screen.getByText('Query succeeded — no results')).toBeInTheDocument();
         expect(screen.queryByText('No Data')).not.toBeInTheDocument();
+    });
+
+    it('can render the header in the normal document flow', () => {
+        render(<TableHarness stickyHeader={false} />);
+        expect(window.getComputedStyle(screen.getByText('Time').closest('th') as HTMLElement).position).toBe('static');
     });
 });

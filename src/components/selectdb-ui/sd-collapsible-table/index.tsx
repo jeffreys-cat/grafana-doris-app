@@ -46,6 +46,7 @@ interface SDCollapsibleTableProps<TData> {
     emptyContent?: React.ReactNode;
     /** Extra top/bottom padding for each data row. */
     rowVerticalPadding?: number;
+    stickyHeader?: boolean;
 }
 
 type SortableHeaderProps<TData> = {
@@ -54,6 +55,7 @@ type SortableHeaderProps<TData> = {
     renderExpandAllToggle: boolean;
     isAllRowsExpanded: boolean;
     onToggleAll: () => void;
+    stickyHeader: boolean;
 };
 
 function SortableHeader<TData>({
@@ -62,6 +64,7 @@ function SortableHeader<TData>({
     renderExpandAllToggle,
     isAllRowsExpanded,
     onToggleAll,
+    stickyHeader,
 }: SortableHeaderProps<TData>) {
     const theme = useTheme2();
     const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({
@@ -85,8 +88,8 @@ function SortableHeader<TData>({
                 opacity: isDragging ? 0.7 : 1,
             }}
             className={css`
-                position: sticky;
-                top: 0;
+                position: ${stickyHeader ? 'sticky' : 'static'};
+                ${stickyHeader ? 'top: 0;' : ''}
                 z-index: ${isDragging ? 4 : 2};
                 height: 48px;
                 white-space: nowrap;
@@ -259,6 +262,7 @@ export default function SDCollapsibleTable<T>(props: SDCollapsibleTableProps<T>)
         enableColumnReordering = false,
         emptyContent,
         rowVerticalPadding = 0,
+        stickyHeader = true,
     } = props;
     const theme = useTheme2();
     const [expanded, setExpanded] = useState<ExpandedState>(allRowsExpanded ? true : {});
@@ -346,6 +350,7 @@ export default function SDCollapsibleTable<T>(props: SDCollapsibleTableProps<T>)
                                             canReorder={enableColumnReordering && header.column.id !== '__expand'}
                                             renderExpandAllToggle={renderExpandAllToggle}
                                             isAllRowsExpanded={isAllRowsExpanded}
+                                            stickyHeader={stickyHeader}
                                             onToggleAll={() => {
                                                 const nextExpanded = !isAllRowsExpanded;
                                                 table.toggleAllRowsExpanded(nextExpanded);

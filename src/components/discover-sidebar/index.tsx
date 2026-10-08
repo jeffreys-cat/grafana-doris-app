@@ -122,7 +122,7 @@ export default function DiscoverSidebar() {
                     flex: 1;
                     padding: 0.5rem 1rem 0.5rem 1rem;
                     background-color: ${theme.isDark ? 'rgb(24, 27, 31)' : '#FFF'};
-                    height: 100%;
+                    min-height: 0;
                     overflow: auto;
                 `}
             >

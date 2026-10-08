@@ -4,8 +4,7 @@ import { css } from '@emotion/css';
 import { CodeEditor, CodeEditorSuggestionItemKind } from '@grafana/ui';
 import { searchValueAtom, tableDataAtom, tableFieldsAtom, variantFieldsAtom } from 'store/discover';
 import { flattenVariantLeaves } from 'utils/variant-fields';
-import { parse } from 'utils/query-parser/query-parser';
-import { DiscoverQueryMode, getLuceneSyntaxDiagnostic, getQuerySuggestions, QuerySuggestion } from './query-completion';
+import { DiscoverQueryMode, getQuerySuggestions, QuerySuggestion } from './query-completion';
 
 type Props = {
     mode: DiscoverQueryMode;
@@ -69,8 +68,6 @@ export default function DiscoverQueryEditor({ mode, onQuerying }: Props) {
     const tableData = useAtomValue(tableDataAtom);
     const providerRef = useRef<any>(undefined);
     const keyListenerRef = useRef<any>(undefined);
-    const editorRef = useRef<any>(undefined);
-    const monacoRef = useRef<any>(undefined);
     const latestRef = useRef({ mode, fields: [] as any[], rows: [] as Array<Record<string, unknown>> });
 
     const fields = useMemo(() => {
@@ -92,33 +89,15 @@ export default function DiscoverQueryEditor({ mode, onQuerying }: Props) {
 
     latestRef.current = { mode, fields, rows: tableData as Array<Record<string, unknown>> };
 
-    const applyLuceneMarkers = useCallback((value: string) => {
-        const model = editorRef.current?.getModel();
-        if (!model || !monacoRef.current) {
-            return;
-        }
-        const diagnostic = getLuceneSyntaxDiagnostic(value, parse);
-        monacoRef.current.editor.setModelMarkers(model, 'discover-lucene', diagnostic ? [{
-            ...diagnostic,
-            severity: monacoRef.current.MarkerSeverity.Error,
-        }] : []);
-    }, []);
-
     const disposeEditorResources = useCallback(() => {
         providerRef.current?.dispose();
         keyListenerRef.current?.dispose();
-        const model = editorRef.current?.getModel();
-        if (model && monacoRef.current) {
-            monacoRef.current.editor.setModelMarkers(model, 'discover-lucene', []);
-        }
         providerRef.current = undefined;
         keyListenerRef.current = undefined;
     }, []);
 
     const onEditorDidMount = useCallback((editor: any, monaco: any) => {
         disposeEditorResources();
-        editorRef.current = editor;
-        monacoRef.current = monaco;
         const language = mode === 'sql' ? 'sql' : 'plaintext';
         const modelId = editor.getModel()?.id;
         providerRef.current = monaco.languages.registerCompletionItemProvider(language, {
@@ -151,22 +130,9 @@ export default function DiscoverQueryEditor({ mode, onQuerying }: Props) {
                 onQuerying();
             }
         });
-        if (mode === 'lucene') {
-            applyLuceneMarkers(editor.getValue());
-        }
-    }, [applyLuceneMarkers, disposeEditorResources, mode, onQuerying]);
+    }, [disposeEditorResources, mode, onQuerying]);
 
     useEffect(() => disposeEditorResources, [disposeEditorResources]);
-
-    useEffect(() => {
-        if (mode !== 'lucene' || !editorRef.current || !monacoRef.current) {
-            return;
-        }
-        const timeout = window.setTimeout(() => {
-            applyLuceneMarkers(searchValue);
-        }, 250);
-        return () => window.clearTimeout(timeout);
-    }, [applyLuceneMarkers, mode, searchValue]);
 
     return (
         <div style={{ minWidth: 0, width: '100%' }}>
@@ -180,6 +146,7 @@ export default function DiscoverQueryEditor({ mode, onQuerying }: Props) {
                 containerStyles={singleLineEditorStyle}
                 monacoOptions={{
                     lineNumbers: 'off',
+                    renderValidationDecorations: 'off',
                     minimap: { enabled: false },
                     wordWrap: 'on',
                     scrollBeyondLastLine: false,
