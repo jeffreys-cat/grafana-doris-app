@@ -34,27 +34,22 @@ describe('getWhereSQLViaLucene', () => {
         mockedSupportsSearch.mockResolvedValue(false);
     });
 
-    it('uses Doris SEARCH for eligible explicit text queries when supported', async () => {
+    it('uses the SQL serializer for explicit text queries while Doris SEARCH is disabled', async () => {
         mockedSupportsSearch.mockResolvedValue(true);
 
         const result = await getWhereSQLViaLucene({ ...baseParams, query: 'message:"hello world"' });
 
-        expect(result).toBe(`SEARCH('message:"hello world"', '{"mode":"lucene"}')`);
-        expect(mockedSupportsSearch).toHaveBeenCalledWith({
-            connectionId: 'conn-1',
-            datasourceType: 'mysql',
-            databaseName: 'logs',
-            tableName: 'events',
-            query: 'message:"hello world"',
-        });
+        expect(result).toBe("(message = 'hello world')");
+        expect(mockedSupportsSearch).not.toHaveBeenCalled();
     });
 
-    it('uses Doris SEARCH for explicit text boolean combinations', async () => {
+    it('uses the SQL serializer for explicit text boolean combinations while Doris SEARCH is disabled', async () => {
         mockedSupportsSearch.mockResolvedValue(true);
 
         const result = await getWhereSQLViaLucene({ ...baseParams, query: 'message:error AND service:api' });
 
-        expect(result).toBe(`SEARCH('message:error AND service:api', '{"mode":"lucene"}')`);
+        expect(result).toBe("(message MATCH_ANY 'error') AND (service MATCH_ANY 'api')");
+        expect(mockedSupportsSearch).not.toHaveBeenCalled();
     });
 
     it.each(['status:>=200', 'message:*', 'timestamp:[1 TO 2]', 'attrs["http.status"]:200'])(

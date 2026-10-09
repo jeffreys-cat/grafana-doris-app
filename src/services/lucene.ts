@@ -4,6 +4,9 @@ import { supportsJsonSearch, supportsSearch, supportsTryCast } from './metaservi
 import { logError } from '@grafana/runtime';
 import { toError } from 'utils/errors';
 
+// Temporarily keep Lucene queries on the SQL serializer path.
+const ENABLE_DORIS_SEARCH = false;
+
 type GetWhereSQLParams = {
     query: string;
     databaseName: string;
@@ -42,7 +45,7 @@ export async function getWhereSQLViaLucene({ query, databaseName, tableName, con
         logError(toError(error), { source: 'lucene', action: 'getWhereSQLViaLucene' });
         throw error;
     }
-    if (canUseDorisSearch(ast) && await supportsSearch({ connectionId, datasourceType, databaseName, tableName, query: trimmedQuery })) {
+    if (ENABLE_DORIS_SEARCH && canUseDorisSearch(ast) && await supportsSearch({ connectionId, datasourceType, databaseName, tableName, query: trimmedQuery })) {
         const escapedQuery = trimmedQuery.replace(/\\/g, '\\\\').replace(/'/g, "''");
         return `SEARCH('${escapedQuery}', '{"mode":"lucene"}')`;
     }
