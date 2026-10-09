@@ -21,6 +21,8 @@ export const ColumnStyleWrapper = styled.div`
     .field-key {
         padding: 0px 4px 2px;
         border-radius: 4px;
+        flex-shrink: 0;
+        white-space: nowrap;
     }
 
     .field-value {

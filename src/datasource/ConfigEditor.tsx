@@ -15,17 +15,25 @@ export interface SSOProfileStatus {
 }
 
 const sectionHeadingStyle = { fontSize: '20px', lineHeight: '28px' };
-function normalizedJsonData(data: DorisSSOJsonData): DorisSSOJsonData {
+function normalizedJsonData(data?: DorisSSOJsonData): DorisSSOJsonData {
+    const source = data ?? {};
     return {
-        ...data,
+        ...source,
         providerMode: 'oidcDiscovery',
-        groupRoleMappings: data.groupRoleMappings?.map(mapping => ({ oidcGroup: mapping.oidcGroup ?? mapping.keycloakGroup ?? '', dorisRole: mapping.dorisRole })),
+        groupRoleMappings: Array.isArray(source.groupRoleMappings)
+            ? source.groupRoleMappings
+                  .filter((mapping): mapping is GroupRoleMapping => Boolean(mapping) && typeof mapping === 'object')
+                  .map(mapping => ({
+                      oidcGroup: mapping.oidcGroup ?? mapping.keycloakGroup ?? '',
+                      dorisRole: typeof mapping.dorisRole === 'string' ? mapping.dorisRole : '',
+                  }))
+            : [],
     };
 }
 
-export function isSSOEnabled(data: DorisSSOJsonData) {
+export function isSSOEnabled(data?: DorisSSOJsonData) {
     // Existing datasource configurations predate the toggle and were SSO-only.
-    return data.enableSso ?? Boolean(data.oidcIssuer || data.keyrockIssuer || data.oauthPassThru);
+    return data?.enableSso ?? Boolean(data?.oidcIssuer || data?.keyrockIssuer || data?.oauthPassThru);
 }
 const update = (props: Props, key: keyof DorisSSOJsonData, value: unknown) =>
     props.onOptionsChange({ ...props.options, jsonData: { ...normalizedJsonData(props.options.jsonData), [key]: value } });
@@ -50,10 +58,11 @@ function bootstrapIdentifier(profile?: SSOProfileStatus) {
 }
 
 export function buildDorisBootstrapSQL(data: DorisSSOJsonData, profile?: SSOProfileStatus) {
-    const mappings = (data.groupRoleMappings ?? [])
+    const mappings = (Array.isArray(data?.groupRoleMappings) ? data.groupRoleMappings : [])
+        .filter((mapping): mapping is GroupRoleMapping => Boolean(mapping) && typeof mapping === 'object')
         .map(mapping => ({
-            oidcGroup: (mapping.oidcGroup ?? mapping.keycloakGroup ?? '').trim(),
-            dorisRole: mapping.dorisRole.trim(),
+            oidcGroup: typeof (mapping.oidcGroup ?? mapping.keycloakGroup) === 'string' ? (mapping.oidcGroup ?? mapping.keycloakGroup)!.trim() : '',
+            dorisRole: typeof mapping.dorisRole === 'string' ? mapping.dorisRole.trim() : '',
         }))
         .filter(mapping => mapping.oidcGroup && mapping.dorisRole);
     const roles = Array.from(new Set(mappings.map(mapping => mapping.dorisRole))).sort();
@@ -80,7 +89,7 @@ ${mappingSQL};`
 }
 
 export function ConfigEditor(props: Props) {
-    const data = props.options.jsonData;
+    const data = normalizedJsonData(props.options.jsonData);
     const ssoEnabled = isSSOEnabled(data);
     const tlsEnabled = ssoEnabled || data.tlsEnabled || Boolean(data.tlsServerName);
     const mappings = data.groupRoleMappings ?? [];

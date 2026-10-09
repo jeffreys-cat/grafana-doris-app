@@ -37,12 +37,16 @@ function getJsonCastType(fieldType?: string): string {
 
 export function getFilterFieldReference({ fieldName, variantKey, variantPath, variantRootType, fieldType }: DataFilterType): string {
     const path = variantPath?.length ? variantPath : variantKey !== undefined ? [fieldName, variantKey] : undefined;
-    if (path?.length && String(variantRootType || '').toUpperCase().includes('JSON')) {
+    const rootType = String(variantRootType || '').toUpperCase();
+    if (path?.length && rootType.includes('JSON')) {
         const root = path[0];
         return `CAST(JSON_EXTRACT(${escapeSqlIdentifier(root)}, ${quoteSqlLiteral(getJsonPath(path.slice(1)))}) AS ${getJsonCastType(fieldType)})`;
     }
     if (variantPath?.length) {
-        return transformFieldPath(fieldName, variantPath);
+        const expression = transformFieldPath(fieldName, variantPath);
+        // Doris VARIANT values cannot be used directly in filters or aggregates.
+        // Cast the extracted scalar to its discovered leaf type first.
+        return rootType.includes('VARIANT') ? `CAST(${expression} AS ${getJsonCastType(fieldType)})` : expression;
     }
     if (variantKey !== undefined) {
         return `${escapeSqlIdentifier(fieldName)}[${quoteSqlLiteral(variantKey)}]`;

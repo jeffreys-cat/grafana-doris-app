@@ -7,6 +7,7 @@ import { nanoid } from 'nanoid';
 import React from 'react';
 import { topDataAtom, tableTotalCountAtom, dataFilterAtom, topNConfigAtom, topNEnabledAtom, topNResultFieldsAtom, topNRowsAtom } from 'store/discover';
 import { formatFieldDisplayValue, isComplexType } from 'utils/data';
+import { getVariantFieldValue } from 'utils/variant-fields';
 interface JsonObject {
     [key: string]: any;
 }
@@ -15,21 +16,26 @@ function normalizeTopDataValue(value: any): string {
     return formatFieldDisplayValue(value, 'compact');
 }
 
-function countValueDistribution(jsonArray: JsonObject[], key: string): { [value: string]: number } {
-    const valueCountMap = new Map<string, number>();
+function countValueDistribution(jsonArray: JsonObject[], field: any): Array<[any, number]> {
+    const valueCountMap = new Map<string, { value: any; count: number }>();
 
     jsonArray.forEach(obj => {
-        const value = normalizeTopDataValue(get(obj, key));
-        valueCountMap.set(value, (valueCountMap.get(value) || 0) + 1);
+        const value = field.variantPath?.length ? getVariantFieldValue(obj, field) : get(obj, field.Field);
+        // A missing nested key is not a real "-" value and must not be offered
+        // as a filter value.
+        if (value === undefined || value === null) {
+            return;
+        }
+        const key = JSON.stringify([typeof value, value]);
+        const entry = valueCountMap.get(key);
+        if (entry) {
+            entry.count += 1;
+        } else {
+            valueCountMap.set(key, { value, count: 1 });
+        }
     });
 
-    const result: { [value: string]: number } = {};
-    valueCountMap.forEach((times, valueStr) => {
-        const value = valueStr;
-        result[value] = times;
-    });
-
-    return result;
+    return Array.from(valueCountMap.values()).map(({ value, count }) => [value, count]);
 }
 
 export function TopData({ field, onTopN, canRunTopN = true, onPointerEnter, onPointerLeave }: any) {
@@ -42,11 +48,9 @@ export function TopData({ field, onTopN, canRunTopN = true, onPointerEnter, onPo
     const [dataFilter, setDataFilter] = useAtom(dataFilterAtom);
     const topNValueField = topNFields.find(item => item.Field === '__top_n_value')?.Field;
     const hasTopNResult = topNEnabled && topNConfig.groupField === field.Field && Boolean(topNValueField);
-    const res: Array<[string, number]> = hasTopNResult
-        ? topNRows.map(row => [normalizeTopDataValue(row[field.Field]), Number(row[topNValueField!] || 0)])
-        : (Object.entries(countValueDistribution(topData, field.Field)).sort(
-            (a: any, b: any) => b[1] - a[1]
-          ) as Array<[string, number]>);
+    const res: Array<[any, number]> = hasTopNResult
+        ? topNRows.map(row => [field.variantPath?.length ? getVariantFieldValue(row, field) : row[field.Field], Number(row[topNValueField!] || 0)])
+        : countValueDistribution(topData, field).sort((a, b) => b[1] - a[1]);
     // COUNT results are percentages of every matching record, rather than only
     // the returned Top N groups. Other aggregation metrics display their value.
     const showRecordPercentage = !hasTopNResult || topNConfig.metric === 'COUNT';
@@ -86,9 +90,12 @@ export function TopData({ field, onTopN, canRunTopN = true, onPointerEnter, onPo
             </div>
             <div className="mt-3 space-y-3 text-n5">
                 {res.map(
-                    ([value, count], index) =>
-                        index < (hasTopNResult ? topNConfig.limit : 5) && (
-                            <div key={index} className="flex items-center justify-between">
+                    ([rawValue, count], index) => {
+                        const value = normalizeTopDataValue(rawValue);
+                        const canFilterValue = rawValue !== undefined && rawValue !== null && value !== '-';
+                        return (
+                            index < (hasTopNResult ? topNConfig.limit : 5) && (
+                                <div key={index} className="flex items-center justify-between">
                                 <div
                                     className={css`
                                         overflow: hidden;
@@ -141,7 +148,7 @@ export function TopData({ field, onTopN, canRunTopN = true, onPointerEnter, onPo
                                         showInfo={false}
                                     />
                                 </div>
-                                {!isComplexType(field.Type) && (
+                                {!isComplexType(field.Type) && canFilterValue && (
                                     <div
                                         className={css`
                                             margin-left: 30px;
@@ -154,8 +161,11 @@ export function TopData({ field, onTopN, canRunTopN = true, onPointerEnter, onPo
                                                     ...dataFilter,
                                                     {
                                                         fieldName: field.Field,
+                                                        variantPath: field.variantPath,
+                                                        variantRootType: field.variantRootType,
+                                                        fieldType: field.Type,
                                                         operator: '=',
-                                                        value: [typeof value === 'string' ? value : +value],
+                                                        value: [rawValue],
                                                         id: nanoid(),
                                                     },
                                                 ]);
@@ -172,8 +182,11 @@ export function TopData({ field, onTopN, canRunTopN = true, onPointerEnter, onPo
                                                     ...dataFilter,
                                                     {
                                                         fieldName: field.Field,
+                                                        variantPath: field.variantPath,
+                                                        variantRootType: field.variantRootType,
+                                                        fieldType: field.Type,
                                                         operator: '!=',
-                                                        value: [typeof value ? value : +value],
+                                                        value: [rawValue],
                                                         id: nanoid(),
                                                     },
                                                 ]);
@@ -182,8 +195,10 @@ export function TopData({ field, onTopN, canRunTopN = true, onPointerEnter, onPo
                                         />
                                     </div>
                                 )}
-                            </div>
-                        ),
+                                </div>
+                            )
+                        );
+                    },
                 )}
             </div>
         </div>

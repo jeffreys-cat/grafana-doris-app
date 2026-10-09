@@ -251,8 +251,8 @@ export default function PageDiscover() {
                                     padding-top: 8px;
                                     position: sticky;
                                     top: 0;
-                                    align-self: start;
-                                    height: calc(100vh - 64px);
+                                    align-self: stretch;
+                                    min-height: 0;
                                 `}
                             >
                                 <IconButton
@@ -277,8 +277,8 @@ export default function PageDiscover() {
                                     min-width: 0;
                                     position: sticky;
                                     top: 0;
-                                    align-self: start;
-                                    height: calc(100vh - 64px);
+                                    align-self: stretch;
+                                    min-height: 0;
                                 `}
                             >
                                 <div
@@ -343,6 +343,7 @@ export default function PageDiscover() {
                                 padding: 16px 0;
                                 overflow-y: auto;
                                 overflow-x: hidden;
+                                overscroll-behavior: contain;
                             `}
                         >
                             <div style={{ position: 'absolute', top: 0, width: '100%' }}>{loading.getTableDataCharts && <LoadingBar width={100} />}</div>

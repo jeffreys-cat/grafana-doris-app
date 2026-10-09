@@ -119,11 +119,14 @@ export default function DiscoverSidebar() {
             <div
                 className={css`
                     margin-top: 1px;
-                    flex: 1;
+                    flex: 1 1 0;
                     padding: 0.5rem 1rem 0.5rem 1rem;
                     background-color: ${theme.isDark ? 'rgb(24, 27, 31)' : '#FFF'};
                     min-height: 0;
-                    overflow: auto;
+                    height: 0;
+                    overflow-x: hidden;
+                    overflow-y: auto;
+                    overscroll-behavior: contain;
                 `}
             >
                 <CollapsableSection label={<span className={css`
