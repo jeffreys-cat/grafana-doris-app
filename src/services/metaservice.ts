@@ -162,11 +162,12 @@ export async function supportsSearch({
                 queries: [{
                     refId: 'probeSearch',
                     datasource: { type: datasourceType, uid: connectionId },
-                    rawSql: "SELECT SEARCH('probe:probe') AS search_supported",
+                    // Probe the same overload and options used by real Lucene queries.
+                    rawSql: `SELECT SEARCH('probe:probe', '{"mode":"lucene"}') AS search_supported`,
                     format: 'table',
                 }],
             },
-        }));
+        }), { showBackendError: false });
 
         try {
             const { data, ok } = await lastValueFrom(response$);
