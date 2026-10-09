@@ -931,7 +931,11 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
                     },
                 };
             } else if (this.isVariantColumnType(prefixMatch.type)) {
-                const nestedPaths = fieldPath.slice(1).filter(Boolean);
+                // Bracketed Lucene paths are encoded before parsing. Expand a
+                // dotted bracket value here so Doris receives one accessor per
+                // VARIANT path segment, e.g. attrs["k8s.pod.name"] becomes
+                // attrs['k8s']['pod']['name'].
+                const nestedPaths = splitVariantFieldPath(field, true).slice(1).filter(Boolean);
                 return {
                     found: true,
                     columnExpression: SqlString.format(

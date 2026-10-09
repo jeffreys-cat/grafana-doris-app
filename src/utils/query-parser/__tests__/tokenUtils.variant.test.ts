@@ -1,17 +1,19 @@
-import { encodeVariantLiteralFieldPaths, splitVariantFieldPath } from '../tokenUtils';
+import { encodeVariantLiteralFieldPaths, normalizeLuceneSingleQuotedValues, splitVariantFieldPath } from '../tokenUtils';
 
 describe('VARIANT literal Lucene field paths', () => {
-    it('encodes dotted literal keys without leaving dots in the parser field segment', () => {
+    it('can expand dotted bracket paths into VARIANT accessors', () => {
         const encoded = encodeVariantLiteralFieldPaths('attrs["k8s.pod.name"]:checkout');
 
         expect(encoded).toMatch(/^attrs\.__HDX_VARIANT_KEY_[0-9a-f]+:checkout$/);
         expect(splitVariantFieldPath(encoded.split(':')[0])).toEqual(['attrs', 'k8s.pod.name']);
+        expect(splitVariantFieldPath(encoded.split(':')[0], true)).toEqual(['attrs', 'k8s', 'pod', 'name']);
     });
 
     it('supports literal and ordinary nested path segments together', () => {
         const encoded = encodeVariantLiteralFieldPaths('attrs["service.name"].status.code:200');
 
         expect(splitVariantFieldPath(encoded.split(':')[0])).toEqual(['attrs', 'service.name', 'status', 'code']);
+        expect(splitVariantFieldPath(encoded.split(':')[0], true)).toEqual(['attrs', 'service', 'name', 'status', 'code']);
     });
 
     it('handles escaped characters in literal keys and leaves malformed syntax unchanged', () => {
@@ -19,5 +21,9 @@ describe('VARIANT literal Lucene field paths', () => {
 
         expect(splitVariantFieldPath(encoded.split(':')[0])).toEqual(['attrs', 'team"name']);
         expect(encodeVariantLiteralFieldPaths('attrs["unterminated:value')).toBe('attrs["unterminated:value');
+    });
+
+    it('normalizes SQL-style single-quoted field values into Lucene phrases', () => {
+        expect(normalizeLuceneSingleQuotedValues("attrs.name:'catalog-1'")).toBe('attrs.name:"catalog-1"');
     });
 });

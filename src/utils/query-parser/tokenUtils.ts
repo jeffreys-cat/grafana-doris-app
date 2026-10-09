@@ -47,8 +47,24 @@ export function encodeVariantLiteralFieldPaths(query: string): string {
     return normalized;
 }
 
-export function splitVariantFieldPath(field: string): string[] {
-    return field.split('.').map(segment => decodeVariantKey(segment) ?? segment);
+/**
+ * Accept SQL-style single-quoted Lucene values in the query editor and turn
+ * them into Lucene phrase values before handing the query to the parser.
+ */
+export function normalizeLuceneSingleQuotedValues(query: string): string {
+    return query.replace(/(:\s*)'((?:\\.|[^'\\])*)'/g, (_match, prefix: string, value: string) => {
+        return `${prefix}${JSON.stringify(value.replace(/\\'/g, "'"))}`;
+    });
+}
+
+export function splitVariantFieldPath(field: string, expandBracketedDots = false): string[] {
+    return field.split('.').flatMap(segment => {
+        const literalKey = decodeVariantKey(segment);
+        // In Lucene, bracket notation is used to make a dotted field path
+        // parser-safe. Doris VARIANT then needs each path component as its
+        // own bracket accessor: attrs["a.b"] -> attrs['a']['b'].
+        return literalKey != null && expandBracketedDots ? literalKey.split('.') : [literalKey ?? segment];
+    });
 }
 
 export function encodeSpecialTokens(query: string): string {
