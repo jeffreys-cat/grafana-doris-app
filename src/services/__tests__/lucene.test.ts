@@ -40,6 +40,13 @@ describe('getWhereSQLViaLucene', () => {
         const result = await getWhereSQLViaLucene({ ...baseParams, query: 'message:"hello world"' });
 
         expect(result).toBe(`SEARCH('message:"hello world"', '{"mode":"lucene"}')`);
+        expect(mockedSupportsSearch).toHaveBeenCalledWith({
+            connectionId: 'conn-1',
+            datasourceType: 'mysql',
+            databaseName: 'logs',
+            tableName: 'events',
+            query: 'message:"hello world"',
+        });
     });
 
     it('uses Doris SEARCH for explicit text boolean combinations', async () => {

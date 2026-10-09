@@ -44,8 +44,8 @@ export type GetApplicationValuesParams = {
 
 const escapeSqlLiteral = (value: string) => value.replace(/'/g, "''");
 
-// Capability support is stable for a datasource during a Grafana session. Keep
-// the probe result so Lucene filtering does not make an extra request per query.
+// Cache capability probes during a Grafana session. SEARCH results are scoped
+// to the table and expression because its referenced fields need indexes.
 const tryCastSupportCache = new Map<string, Promise<boolean>>();
 const jsonSearchSupportCache = new Map<string, Promise<boolean>>();
 const searchSupportCache = new Map<string, Promise<boolean>>();
@@ -138,17 +138,20 @@ export async function supportsJsonSearch({
     return supportPromise;
 }
 
-/** SEARCH is available starting with Doris 4.0. Probe the function directly
- * because VERSION() reports the MySQL compatibility version on Doris. */
+/** Probe SEARCH against the current table and query because the function is a
+ * WHERE predicate and each referenced field must have an inverted index. */
 export async function supportsSearch({
     connectionId,
     datasourceType = DORIS_DATASOURCE_TYPE,
-}: TryCastCapabilityParams): Promise<boolean> {
-    if (!connectionId) {
+    databaseName,
+    tableName,
+    query,
+}: TryCastCapabilityParams & { databaseName: string; tableName: string; query: string }): Promise<boolean> {
+    if (!connectionId || !databaseName || !tableName || !query) {
         return false;
     }
 
-    const cacheKey = `${datasourceType}:${connectionId}`;
+    const cacheKey = JSON.stringify([datasourceType, connectionId, databaseName, tableName, query]);
     const cached = searchSupportCache.get(cacheKey);
     if (cached) {
         return cached;
@@ -162,8 +165,9 @@ export async function supportsSearch({
                 queries: [{
                     refId: 'probeSearch',
                     datasource: { type: datasourceType, uid: connectionId },
-                    // Probe the same overload and options used by real Lucene queries.
-                    rawSql: `SELECT SEARCH('probe:probe', '{"mode":"lucene"}') AS search_supported`,
+                    // SEARCH is a WHERE predicate and requires indexed fields in the scanned table.
+                    // EXPLAIN validates the actual query without reading rows.
+                    rawSql: `EXPLAIN SELECT 1 FROM ${escapeSqlIdentifier(databaseName)}.${escapeSqlIdentifier(tableName)} WHERE SEARCH(${quoteSqlLiteral(query)}, '{"mode":"lucene"}')`,
                     format: 'table',
                 }],
             },

@@ -68,13 +68,14 @@ describe('supportsTryCast', () => {
             data: { results: { probeSearch: { frames: [{}] } } },
         }));
 
-        await expect(supportsSearch({ connectionId: 'doris-search-4', datasourceType: 'velodb-doris-datasource' })).resolves.toBe(true);
-        await expect(supportsSearch({ connectionId: 'doris-search-4', datasourceType: 'velodb-doris-datasource' })).resolves.toBe(true);
+        const params = { connectionId: 'doris-search-4', datasourceType: 'velodb-doris-datasource', databaseName: 'otel', tableName: 'logs', query: 'service_name:checkout' };
+        await expect(supportsSearch(params)).resolves.toBe(true);
+        await expect(supportsSearch(params)).resolves.toBe(true);
 
         expect(fetch).toHaveBeenCalledTimes(1);
         expect(fetch).toHaveBeenCalledWith(expect.objectContaining({
             data: expect.objectContaining({
-                queries: [expect.objectContaining({ refId: 'probeSearch', rawSql: "SELECT SEARCH('probe:probe') AS search_supported" })],
+                queries: [expect.objectContaining({ refId: 'probeSearch', rawSql: 'EXPLAIN SELECT 1 FROM `otel`.`logs` WHERE SEARCH(\'service_name:checkout\', \'{"mode":"lucene"}\')' })],
             }),
         }));
     });
@@ -82,6 +83,6 @@ describe('supportsTryCast', () => {
     it('falls back when SEARCH is unavailable', async () => {
         fetch.mockReturnValue(throwError(() => new Error('SEARCH is not supported')));
 
-        await expect(supportsSearch({ connectionId: 'doris-search-3', datasourceType: 'velodb-doris-datasource' })).resolves.toBe(false);
+        await expect(supportsSearch({ connectionId: 'doris-search-3', datasourceType: 'velodb-doris-datasource', databaseName: 'otel', tableName: 'logs', query: 'service_name:checkout' })).resolves.toBe(false);
     });
 });

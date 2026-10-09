@@ -42,7 +42,7 @@ export async function getWhereSQLViaLucene({ query, databaseName, tableName, con
         logError(toError(error), { source: 'lucene', action: 'getWhereSQLViaLucene' });
         throw error;
     }
-    if (canUseDorisSearch(ast) && await supportsSearch({ connectionId, datasourceType })) {
+    if (canUseDorisSearch(ast) && await supportsSearch({ connectionId, datasourceType, databaseName, tableName, query: trimmedQuery })) {
         const escapedQuery = trimmedQuery.replace(/\\/g, '\\\\').replace(/'/g, "''");
         return `SEARCH('${escapedQuery}', '{"mode":"lucene"}')`;
     }
