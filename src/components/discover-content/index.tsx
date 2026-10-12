@@ -170,6 +170,10 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
     const resetColumnLayout = React.useCallback(() => {
         setColumnOrder(availableColumnIds);
         setColumnSizing(defaultColumnSizing);
+        // Shared state (restored from a Discover link) takes precedence over
+        // the persisted layout. Clear it as well so the reset is not
+        // immediately overwritten by the layout synchronization effect.
+        setSharedColumnOrder([]);
         if (layoutKey) {
             setColumnLayouts(previous => {
                 if (!previous[layoutKey]) {
@@ -179,7 +183,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                 return remaining;
             });
         }
-    }, [availableColumnIds, defaultColumnSizing, layoutKey, setColumnLayouts]);
+    }, [availableColumnIds, defaultColumnSizing, layoutKey, setColumnLayouts, setSharedColumnOrder]);
 
     useEffect(() => {
         setJumpPage(String(page));

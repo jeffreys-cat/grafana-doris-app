@@ -56,7 +56,9 @@ describe('getWhereSQLViaLucene', () => {
         'keeps unsupported SEARCH query shapes on the SQL serializer: %s',
         async (query) => {
             mockedSupportsSearch.mockResolvedValue(true);
-            mockedGetColumn.mockResolvedValue(null);
+            mockedGetColumn.mockImplementation(async ({ column }) => column === 'attrs'
+                ? { name: 'attrs', normalizedType: 'Variant', dataType: 'variant', columnType: 'variant' }
+                : null);
             mockedGetInvertedIndexColumns.mockResolvedValue([]);
 
             await getWhereSQLViaLucene({ ...baseParams, query });
@@ -185,6 +187,13 @@ describe('getWhereSQLViaLucene', () => {
             .resolves.toBe("(TRY_CAST(`attrs`['duration']['ms'] AS DOUBLE) > CAST('500' AS DOUBLE))");
         await expect(getWhereSQLViaLucene({ ...baseParams, query: 'attrs["is.ready"]:true' }))
             .resolves.toBe("(TRY_CAST(`attrs`['is']['ready'] AS BOOLEAN) = CAST('true' AS BOOLEAN))");
+    });
+
+    it('reports a misspelled root column in a bracketed Lucene path', async () => {
+        mockedGetColumn.mockResolvedValue(null);
+
+        await expect(getWhereSQLViaLucene({ ...baseParams, query: 'logs_attributes["latency_ms"]:>250' }))
+            .rejects.toThrow('Unknown column "logs_attributes" in Lucene field "logs_attributes.latency_ms"');
     });
 
     it('uses JSON_EXTRACT for Lucene queries on JSON child paths', async () => {

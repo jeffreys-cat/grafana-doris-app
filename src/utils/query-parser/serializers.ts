@@ -901,6 +901,10 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
         const fieldPrefix = fieldPath[0];
         const prefixMatch = await this.fetchColumnMetadata(fieldPrefix);
 
+        if (!prefixMatch && field.includes('__HDX_VARIANT_KEY_')) {
+            throw new Error(`Unknown column "${fieldPrefix}" in Lucene field "${fieldPath.join('.')}". Check the field name.`);
+        }
+
         if (prefixMatch) {
             const fieldPostfix = fieldPath.slice(1).join('.');
 
