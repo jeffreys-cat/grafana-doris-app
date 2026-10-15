@@ -244,14 +244,6 @@ export function buildTraceAggSQLFromParams(params: QueryTracesParams): string {
 
   const tagsFilter = tagsToDorisSQLConditions(params.tags);
 
-  let rootSpansFilter = '1=1';
-  if (params.service_name && params.service_name !== 'all') {
-    rootSpansFilter = `service_name = '${params.service_name}'`;
-  }
-  if (params.operation && params.operation !== 'all') {
-    rootSpansFilter += ` AND span_name = '${params.operation}'`;
-  }
-
   const limit = params.page_size ?? 1000;
   const offset = Math.max(((params.page ?? 1) - 1) * limit, 0);
 
@@ -308,13 +300,16 @@ WITH
     GROUP BY t.trace_id, d.trace_duration_ms
   ),
   root_spans AS (
-    SELECT trace_id, span_name AS operation, service_name AS root_service
-    FROM ${params.table}
-    WHERE (parent_span_id IS NULL
-    OR parent_span_id = '')
-    AND ${timeFilter}
-    AND ${rootSpansFilter}
-    group by trace_id,operation,root_service
+    SELECT trace_id, operation, root_service
+    FROM (
+      SELECT trace_id, span_name AS operation, service_name AS root_service,
+        ROW_NUMBER() OVER (PARTITION BY trace_id ORDER BY ${params.timeField} ASC, span_id ASC) AS root_rank
+      FROM ${params.table}
+      WHERE (parent_span_id IS NULL OR parent_span_id = '')
+        AND ${timeFilter}
+        AND trace_id IN (SELECT trace_id FROM all_trace_ids)
+    ) roots
+    WHERE root_rank = 1
   ),
   aggregated AS (
     SELECT

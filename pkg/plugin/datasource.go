@@ -17,6 +17,7 @@ const idTokenHeader = "X-ID-Token"
 
 type Datasource struct {
 	exchanger    tokenExchanger
+	idpClients   idpClientCache
 	profile      *SSOProfile
 	profileErr   error
 	listenerOnce sync.Once
@@ -59,7 +60,11 @@ func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataReques
 		if err := d.ensureJWKS(profile); err != nil {
 			return nil, err
 		}
-		identity, err := d.exchanger.verifyKeyrockIDToken(ctx, idTokenFromHeader(req.GetHTTPHeader(idTokenHeader)), settings)
+		exchanger, err := d.idpExchanger(req.PluginContext, settings, secrets)
+		if err != nil {
+			return nil, err
+		}
+		identity, err := exchanger.verifyKeyrockIDToken(ctx, idTokenFromHeader(req.GetHTTPHeader(idTokenHeader)), settings)
 		if err != nil {
 			return nil, err
 		}
@@ -115,18 +120,40 @@ func (d *Datasource) CheckHealth(ctx context.Context, req *backend.CheckHealthRe
 		}
 		return &backend.CheckHealthResult{Status: backend.HealthStatusOk, Message: "Doris username/password connection succeeded"}, nil
 	}
-	profile, _, err := d.profileForRequest(req.PluginContext.DataSourceInstanceSettings.UID)
+	profile, audience, err := d.profileForRequest(req.PluginContext.DataSourceInstanceSettings.UID)
 	if err != nil {
 		return &backend.CheckHealthResult{Status: backend.HealthStatusError, Message: err.Error()}, nil
 	}
 	if err := d.ensureJWKS(profile); err != nil {
 		return &backend.CheckHealthResult{Status: backend.HealthStatusError, Message: err.Error()}, nil
 	}
-	provider, err := d.exchanger.providers.resolve(ctx, settings)
+	exchanger, err := d.idpExchanger(req.PluginContext, settings, secrets)
 	if err != nil {
 		return &backend.CheckHealthResult{Status: backend.HealthStatusError, Message: err.Error()}, nil
 	}
-	return &backend.CheckHealthResult{Status: backend.HealthStatusOk, Message: "OIDC " + provider.Mode + " provider resolved; token exchange and Doris JWKS are configured"}, nil
+	provider, err := exchanger.providers.resolve(ctx, settings)
+	if err != nil {
+		return &backend.CheckHealthResult{Status: backend.HealthStatusError, Message: err.Error()}, nil
+	}
+	if _, err := exchanger.jwks.get(ctx, exchanger.httpClient, provider.JWKSURL, true); err != nil {
+		return &backend.CheckHealthResult{Status: backend.HealthStatusError, Message: err.Error()}, nil
+	}
+	rawToken := idTokenFromHeader(req.GetHTTPHeader(idTokenHeader))
+	if rawToken == "" {
+		return &backend.CheckHealthResult{Status: backend.HealthStatusError, Message: "OIDC " + provider.Mode + " provider resolved; Doris connection and TLS certificate have not been verified: OIDC ID token is required; enable Forward OAuth Identity and sign in to Grafana with SSO before testing"}, nil
+	}
+	identity, err := exchanger.verifyKeyrockIDToken(ctx, rawToken, settings)
+	if err != nil {
+		return &backend.CheckHealthResult{Status: backend.HealthStatusError, Message: err.Error()}, nil
+	}
+	dorisToken, err := d.exchanger.issueDorisToken(identity.Subject, identity.Groups, profile.Issuer, audience, profile.SigningKeyID, profile.SigningKey)
+	if err != nil {
+		return &backend.CheckHealthResult{Status: backend.HealthStatusError, Message: err.Error()}, nil
+	}
+	if _, err := queryDorisOIDC(ctx, settings, secrets, identity.Subject, dorisToken, "SELECT 1", false); err != nil {
+		return &backend.CheckHealthResult{Status: backend.HealthStatusError, Message: err.Error()}, nil
+	}
+	return &backend.CheckHealthResult{Status: backend.HealthStatusOk, Message: "OIDC " + provider.Mode + " provider resolved; Doris SSO connection and SELECT 1 succeeded"}, nil
 }
 
 func (d *Datasource) CallResource(_ context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {

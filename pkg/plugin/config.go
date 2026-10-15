@@ -20,6 +20,7 @@ type Settings struct {
 	OIDCBackchannelURL string `json:"oidcBackchannelUrl"`
 	KeyrockBaseURL     string `json:"keyrockBaseUrl"`
 	KeyrockClientID    string `json:"keyrockClientId"`
+	IDPTLSSkipVerify   bool   `json:"idpTlsSkipVerify"`
 	AllowInsecureIDP   bool   `json:"allowInsecureIdp"`
 	// Legacy fields remain readable so existing provisioned datasources keep
 	// working until their next save migrates them to the Keyrock preset.
@@ -33,8 +34,9 @@ type Settings struct {
 }
 
 type Secrets struct {
-	TLSCACert string
-	Password  string
+	IDPTLSCACert string
+	TLSCACert    string
+	Password     string
 }
 
 func parseSettings(raw json.RawMessage, secure map[string]string) (Settings, Secrets, error) {
@@ -62,7 +64,7 @@ func parseSettings(raw json.RawMessage, secure map[string]string) (Settings, Sec
 		settings.EnableSSO = *mode.EnableSSO
 	}
 	settings.OAuthPassThru = settings.EnableSSO
-	return settings, Secrets{TLSCACert: secure["tlsCACert"], Password: secure["password"]}, nil
+	return settings, Secrets{IDPTLSCACert: secure["idpTlsCACert"], TLSCACert: secure["tlsCACert"], Password: secure["password"]}, nil
 }
 
 func parsePrivateKey(value string) (*rsa.PrivateKey, error) {

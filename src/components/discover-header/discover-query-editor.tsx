@@ -135,7 +135,10 @@ export default function DiscoverQueryEditor({ mode, onQuerying }: Props) {
     useEffect(() => disposeEditorResources, [disposeEditorResources]);
 
     return (
-        <div style={{ minWidth: 0, width: '100%' }}>
+        <div
+            style={{ minWidth: 0, width: '100%' }}
+            title={mode === 'lucene' ? 'VARIANT properties use exact value matching; searchable paths come from sampled data.' : undefined}
+        >
             <CodeEditor
                 language={mode === 'sql' ? 'sql' : 'plaintext'}
                 value={searchValue}

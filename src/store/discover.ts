@@ -40,6 +40,7 @@ export const variantMetadataFieldsAtom = atom<any[]>([]);
 // Sample-derived children of physical VARIANT columns. Kept separate so result
 // decoding always uses the physical Doris schema only.
 export const variantFieldsAtom = atom<any[]>([]);
+export const variantImplicitPathsAtom = atomWithStorage<Record<string, Record<string, string[][]>>>('discover-variant-implicit-paths', {});
 export const discoverRowsExpandedAtom = atomWithStorage<boolean>('discover-rows-expanded', false);
 export const discoverRowsWrappedAtom = atomWithStorage<boolean>('discover-rows-wrapped', true);
 export const discoverColumnLayoutsAtom = atomWithStorage<DiscoverColumnLayouts>('discover-column-layouts', {});

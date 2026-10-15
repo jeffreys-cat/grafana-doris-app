@@ -157,3 +157,20 @@ export function flattenVariantLeaves(fields: VariantField[]): VariantField[] {
     fields.forEach(field => field.children?.forEach(visit));
     return leaves;
 }
+
+export function collectStringVariantPaths(value: unknown, path: string[] = [], output: string[][] = []): string[][] {
+    if (typeof value === 'string') {
+        if (path.length) output.push(path);
+        return output;
+    }
+    if (Array.isArray(value)) {
+        value.forEach((child, index) => collectStringVariantPaths(child, [...path, String(index)], output));
+        return output;
+    }
+    if (value && typeof value === 'object') {
+        Object.entries(value as Record<string, unknown>).forEach(([key, child]) =>
+            collectStringVariantPaths(child, [...path, key], output),
+        );
+    }
+    return output;
+}

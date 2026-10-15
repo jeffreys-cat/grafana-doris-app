@@ -523,6 +523,33 @@ export function getVariantFieldsService({ selectdbDS, database, table }: { selec
     }));
 }
 
+export function getVariantPathSampleService(params: {
+    selectdbDS: any;
+    database: string;
+    table: string;
+    timeField: string;
+    startDate: string;
+    endDate: string;
+    columns: string[];
+}) {
+    const { selectdbDS, database, table, timeField, startDate, endDate, columns } = params;
+    const projections = columns.map((column, index) =>
+        `CAST(${escapeSqlIdentifier(column)} AS STRING) AS c${index + 1}`,
+    );
+    return withErrorHandler(getBackendSrv().fetch({
+        url: '/api/ds/query',
+        method: 'POST',
+        data: {
+            queries: [{
+                refId: 'sampleVariantPaths',
+                datasource: { type: selectdbDS.type || DORIS_DATASOURCE_TYPE, uid: selectdbDS.uid },
+                rawSql: `SELECT ${projections.join(', ')} FROM ${escapeSqlIdentifier(database)}.${escapeSqlIdentifier(table)} WHERE ${escapeSqlIdentifier(timeField)} BETWEEN ${quoteSqlLiteral(startDate)} AND ${quoteSqlLiteral(endDate)} ORDER BY rand() LIMIT 5000`,
+                format: 'table',
+            }],
+        },
+    }));
+}
+
 export function getApplicationValuesSQL({
     database,
     table,

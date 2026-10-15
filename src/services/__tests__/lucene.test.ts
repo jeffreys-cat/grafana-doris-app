@@ -154,7 +154,7 @@ describe('getWhereSQLViaLucene', () => {
             query: 'attrs.message:error',
         });
 
-        expect(result).toBe("(lower(CAST(`attrs`['message'] AS STRING)) LIKE lower('%error%'))");
+        expect(result).toBe("(`attrs`['message'] = 'error')");
     });
 
     it('expands a bracketed dotted VARIANT path into nested accessors', async () => {
@@ -171,7 +171,7 @@ describe('getWhereSQLViaLucene', () => {
             query: 'resource_attributes["k8s.pod.name"]:\'catalog-1\'',
         });
 
-        expect(result).toBe("(lower(CAST(`resource_attributes`['k8s']['pod']['name'] AS STRING)) LIKE lower('%catalog-1%'))");
+        expect(result).toBe("(`resource_attributes`['k8s']['pod']['name'] = 'catalog-1')");
     });
 
     it('expands bracketed dotted paths for numeric and boolean VARIANT comparisons', async () => {
@@ -184,7 +184,7 @@ describe('getWhereSQLViaLucene', () => {
         mockedGetInvertedIndexColumns.mockResolvedValue([]);
 
         await expect(getWhereSQLViaLucene({ ...baseParams, query: 'attrs["duration.ms"]:>500' }))
-            .resolves.toBe("(TRY_CAST(`attrs`['duration']['ms'] AS DOUBLE) > CAST('500' AS DOUBLE))");
+            .resolves.toBe("(TRY_CAST(`attrs`['duration']['ms'] AS BIGINT) > CAST('500' AS BIGINT))");
         await expect(getWhereSQLViaLucene({ ...baseParams, query: 'attrs["is.ready"]:true' }))
             .resolves.toBe("(TRY_CAST(`attrs`['is']['ready'] AS BOOLEAN) = CAST('true' AS BOOLEAN))");
     });
@@ -266,7 +266,7 @@ describe('getWhereSQLViaLucene', () => {
         mockedGetInvertedIndexColumns.mockResolvedValue([]);
 
         await expect(getWhereSQLViaLucene({ ...baseParams, query: 'attrs.duration:>500' }))
-            .resolves.toBe("(CAST(`attrs`['duration'] AS DOUBLE) > CAST('500' AS DOUBLE))");
+            .resolves.toBe("(CAST(`attrs`['duration'] AS BIGINT) > CAST('500' AS BIGINT))");
         expect(mockedSupportsTryCast).toHaveBeenCalledWith({ connectionId: 'conn-1', datasourceType: 'mysql' });
     });
 
@@ -289,7 +289,7 @@ describe('getWhereSQLViaLucene', () => {
             query: 'attrs.message:"hello world"',
         });
 
-        expect(result).toBe("(lower(CAST(`attrs`['message'] AS STRING)) LIKE lower('%hello world%'))");
+        expect(result).toBe("(`attrs`['message'] = 'hello world')");
     });
 
     it('builds numeric comparisons for variant nested paths', async () => {
@@ -310,14 +310,14 @@ describe('getWhereSQLViaLucene', () => {
             ...baseParams,
             query: 'attrs.status:500',
         });
-        expect(equalityResult).toBe("(TRY_CAST(`attrs`['status'] AS DOUBLE) = CAST('500' AS DOUBLE))");
+        expect(equalityResult).toBe("(TRY_CAST(`attrs`['status'] AS BIGINT) = CAST('500' AS BIGINT))");
 
         const result = await getWhereSQLViaLucene({
             ...baseParams,
             query: 'attrs.status:>500',
         });
 
-        expect(result).toBe("(TRY_CAST(`attrs`['status'] AS DOUBLE) > CAST('500' AS DOUBLE))");
+        expect(result).toBe("(TRY_CAST(`attrs`['status'] AS BIGINT) > CAST('500' AS BIGINT))");
     });
 
     it('builds numeric ranges for variant nested paths', async () => {
@@ -339,8 +339,8 @@ describe('getWhereSQLViaLucene', () => {
             query: 'attrs.status:[100 TO 500]',
         });
 
-        expect(result).toContain("TRY_CAST(`attrs`['status'] AS DOUBLE) >= CAST('100' AS DOUBLE)");
-        expect(result).toContain("TRY_CAST(`attrs`['status'] AS DOUBLE) <= CAST('500' AS DOUBLE)");
+        expect(result).toContain("TRY_CAST(`attrs`['status'] AS BIGINT) >= CAST('100' AS BIGINT)");
+        expect(result).toContain("TRY_CAST(`attrs`['status'] AS BIGINT) <= CAST('500' AS BIGINT)");
     });
 
     it('builds boolean comparisons for variant nested paths', async () => {
@@ -384,7 +384,7 @@ describe('getWhereSQLViaLucene', () => {
             query: 'attrs.user.name:*',
         });
 
-        expect(result).toBe("CAST(`attrs`['user']['name'] AS STRING) IS NOT NULL");
+        expect(result).toBe("`attrs`['user']['name'] IS NOT NULL");
     });
 
     it('uses inverted indexes for variant root text searches', async () => {
@@ -428,7 +428,7 @@ describe('getWhereSQLViaLucene', () => {
             query: 'attrs.message:error',
         });
 
-        expect(result).toBe("(CAST(`attrs`['message'] AS STRING) MATCH_ANY 'error')");
+        expect(result).toBe("(`attrs`['message'] = 'error')");
     });
 
     it('falls back to LIKE for variant root text searches without inverted indexes', async () => {

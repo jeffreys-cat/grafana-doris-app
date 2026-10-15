@@ -92,6 +92,22 @@ describe('buildTraceAggSQLFromParams', () => {
         expect(sql).toContain(`ROW_NUMBER() OVER(ORDER BY ${orderBy}) AS rn`);
         expect(sql).not.toContain('page_root_spans AS (');
     });
+
+    it('filters traces by any matching span and selects one earliest root for non-recent sorts', () => {
+        const sql = buildTraceAggSQLFromParams({
+            ...baseParams,
+            sortBy: 'longest-duration',
+            service_name: 'checkout',
+            operation: 'POST /checkout',
+        });
+
+        expect(sql).toContain("AND service_name = 'checkout'");
+        expect(sql).toContain("AND span_name = 'POST /checkout'");
+        expect(sql).toContain('AND trace_id IN (SELECT trace_id FROM all_trace_ids)');
+        expect(sql).toContain('ROW_NUMBER() OVER (PARTITION BY trace_id ORDER BY timestamp ASC, span_id ASC) AS root_rank');
+        expect(sql).toContain('WHERE root_rank = 1');
+        expect(sql).not.toContain('AND service_name = \'checkout\'\n    group by trace_id');
+    });
 });
 
 describe('getQueryTableTraceSQL', () => {

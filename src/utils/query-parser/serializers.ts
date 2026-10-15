@@ -27,6 +27,7 @@ type ImplicitTextSearchTarget = {
     sourceColumn: string;
     propertyType?: JSDataType;
     supportsTextSearch?: boolean;
+    exactVariantValue?: boolean;
 };
 
 type JsonField = {
@@ -210,7 +211,7 @@ export abstract class SQLSerializer implements Serializer {
     }
 
     async isNotNull(field: string, isNegatedField: boolean) {
-        const { column, found, propertyType, json } = await this.getColumnForField(field);
+        const { column, found, propertyType, json, variantRoot } = await this.getColumnForField(field);
         if (!found) {
             return this.NOT_FOUND_QUERY;
         }
@@ -223,6 +224,9 @@ export abstract class SQLSerializer implements Serializer {
             return isNegatedField ? `(NOT (${exists} AND ${nonNull}))` : `(${exists} AND ${nonNull})`;
         }
         if (propertyType === JSDataType.Variant) {
+            if (!variantRoot && column) {
+                return `${column} IS ${isNegatedField ? '' : 'NOT '}NULL`;
+            }
             return `CAST(${column} AS STRING) IS ${isNegatedField ? '' : 'NOT '}NULL`;
         }
         return `notEmpty(${column}) ${isNegatedField ? '!' : ''}= 1`;
@@ -322,7 +326,8 @@ export abstract class SQLSerializer implements Serializer {
             return this.NOT_FOUND_QUERY;
         }
 
-        return SqlString.format(`(${this.variantCast(column, 'DOUBLE')} ${operator} CAST(? AS DOUBLE))`, [term]);
+        const targetType = /^[-+]?\d+$/.test(`${term}`.trim()) ? 'BIGINT' : 'DOUBLE';
+        return SqlString.format(`(${this.variantCast(column, targetType)} ${operator} CAST(? AS ${targetType}))`, [term]);
     }
 
     private variantBooleanComparison(column: string | undefined, term: string, isNegatedField: boolean): string {
@@ -336,7 +341,7 @@ export abstract class SQLSerializer implements Serializer {
         return this.wrapNegation(clause, isNegatedField);
     }
 
-    protected variantCast(column: string, targetType: 'DOUBLE' | 'BOOLEAN'): string {
+    protected variantCast(column: string, targetType: 'DOUBLE' | 'BIGINT' | 'BOOLEAN'): string {
         return `${this.supportsTryCast ? 'TRY_CAST' : 'CAST'}(${column} AS ${targetType})`;
     }
 
@@ -445,6 +450,25 @@ export abstract class SQLSerializer implements Serializer {
     ): string {
         if (!column) {
             return this.NOT_FOUND_QUERY;
+        }
+
+        // Doris VARIANT child values are indexed as whole values. Exact terms
+        // and phrases should therefore use equality; only an explicit prefix
+        // wildcard can use the inverted index's phrase-prefix operator.
+        if (!variantRoot) {
+            const usePrefix = !isPhrase && suffixWildcard && !prefixWildcard;
+            if (usePrefix) {
+                return SqlString.format(`(? ${isNegatedField ? 'NOT ' : ''}MATCH_PHRASE_PREFIX ?)`, [
+                    SqlString.raw(column), term,
+                ]);
+            }
+            if (usePrefix || prefixWildcard) {
+                return SqlString.format(`(lower(CAST(? AS STRING)) ${isNegatedField ? 'NOT ' : ''}LIKE lower(?))`, [
+                    SqlString.raw(column),
+                    `${prefixWildcard ? '%' : ''}${this.escapeLikePattern(term)}${suffixWildcard ? '%' : ''}`,
+                ]);
+            }
+            return SqlString.format(`(? ${isNegatedField ? '!=' : '='} ?)`, [SqlString.raw(column), term]);
         }
 
         if (supportsTextSearch && sourceColumn) {
@@ -606,6 +630,15 @@ export abstract class SQLSerializer implements Serializer {
                             if (!identifier) {
                                 return null;
                             }
+                            if (target.exactVariantValue) {
+                                const usePrefix = !isPhrase && suffixWildcard && !prefixWildcard;
+                                if (usePrefix) {
+                                    return SqlString.format(`(? ${isNegatedField ? 'NOT ' : ''}MATCH_PHRASE_PREFIX ?)`, [
+                                        SqlString.raw(identifier), term,
+                                    ]);
+                                }
+                                return SqlString.format(`(? ${isNegatedField ? '!=' : '='} ?)`, [SqlString.raw(identifier), term]);
+                            }
                             return SqlString.format(`(lower(CAST(? AS STRING)) LIKE lower(?))`, [
                                 SqlString.raw(identifier),
                                 this.variantLikePattern(term, prefixWildcard, suffixWildcard, isPhrase),
@@ -742,6 +775,8 @@ export type CustomSchemaConfig = {
     datasourceType?: string;
     supportsTryCast?: boolean;
     supportsJsonSearch?: boolean;
+    columnMeta?: { columns: Array<{ name: string; type: string }>; invertedIndexColumns: string[] };
+    variantImplicitPaths?: Record<string, string[][]>;
 };
 
 export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
@@ -754,6 +789,9 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
     private columnMetadataCache = new Map<string, ColumnLookup | null>();
     private invertedIndexColumns?: Set<string>;
     private invertedIndexColumnsPromise?: Promise<Set<string>>;
+    private providedColumnMetadata = new Map<string, ColumnLookup>();
+    private variantImplicitPaths: Record<string, string[][]> = {};
+    private hasProvidedColumnMetadata = false;
 
     constructor({
         metadata,
@@ -764,6 +802,8 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
         datasourceType,
         supportsTryCast = true,
         supportsJsonSearch = true,
+        columnMeta,
+        variantImplicitPaths,
     }: { metadata?: LegacyMetadataProvider } & CustomSchemaConfig) {
         super();
         this.legacyMetadataProvider = metadata;
@@ -774,6 +814,14 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
         this.datasourceType = datasourceType;
         this.supportsTryCast = supportsTryCast;
         this.supportsJsonSearch = supportsJsonSearch;
+        this.variantImplicitPaths = variantImplicitPaths ?? {};
+        this.hasProvidedColumnMetadata = Boolean(columnMeta);
+        for (const column of columnMeta?.columns ?? []) {
+            this.providedColumnMetadata.set(column.name.toLowerCase(), { name: column.name, type: column.type || 'Unknown' });
+        }
+        if (columnMeta) {
+            this.invertedIndexColumns = new Set(columnMeta.invertedIndexColumns.map(name => name.toLowerCase()));
+        }
     }
 
     private async fetchColumnMetadata(column: string): Promise<ColumnLookup | null> {
@@ -783,7 +831,17 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
 
         let resolved: ColumnLookup | null = null;
 
+        resolved = this.providedColumnMetadata.get(column.toLowerCase()) ?? null;
+
         try {
+            if (resolved) {
+                this.columnMetadataCache.set(column, resolved);
+                return resolved;
+            }
+            if (this.hasProvidedColumnMetadata) {
+                this.columnMetadataCache.set(column, null);
+                return null;
+            }
             const result = await getColumnMetadata({
                 connectionId: this.connectionId,
                 database: this.databaseName,
@@ -977,11 +1035,11 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
 
     async getColumnForField(field: string) {
         if (field === IMPLICIT_FIELD) {
-            if (!this.implicitColumnExpression) {
+            if (!this.implicitColumnExpression && !Object.values(this.variantImplicitPaths).some(paths => paths.length > 0)) {
                 throw new Error('Can not search bare text without an implicit column set.');
             }
 
-            const expressions = splitAndTrimWithBracket(this.implicitColumnExpression);
+            const expressions = this.implicitColumnExpression ? splitAndTrimWithBracket(this.implicitColumnExpression) : [];
             const implicitFieldCandidates = Array.from(
                 new Set(
                     expressions
@@ -1034,8 +1092,26 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
                 )
             ).filter((target) => target !== null);
 
+            for (const [root, paths] of Object.entries(this.variantImplicitPaths)) {
+                const rootMeta = await this.fetchColumnMetadata(root);
+                if (!rootMeta || !this.isVariantColumnType(rootMeta.type)) continue;
+                (paths || []).slice(0, 200).forEach(path => {
+                    if (!path.length) return;
+                    const expression = SqlString.format(`??${Array(path.length).fill('[?]').join('')}`, [root, ...path]);
+                    implicitTargets.push({
+                        column: expression,
+                        sourceColumn: root,
+                        propertyType: JSDataType.Variant,
+                        supportsTextSearch: false,
+                        exactVariantValue: true,
+                    });
+                });
+            }
+
             return {
-                column:
+                column: expressions.length === 0
+                    ? undefined
+                    :
                     expressions.length > 1
                         ? `concatWithSeparator(';',${expressions.join(',')})`
                         : this.implicitColumnExpression,

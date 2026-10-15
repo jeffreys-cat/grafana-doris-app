@@ -2,9 +2,9 @@ import React from 'react';
 import type { DataSourcePluginOptionsEditorProps } from '@grafana/data';
 import { getBackendSrv } from '@grafana/runtime';
 import { Button, Field, Input, SecretInput, Switch, TextArea } from '@grafana/ui';
-import type { DorisSSOJsonData, GroupRoleMapping } from './types';
+import type { DorisSSOJsonData, DorisSecureJsonData, GroupRoleMapping } from './types';
 
-type Props = DataSourcePluginOptionsEditorProps<DorisSSOJsonData>;
+type Props = DataSourcePluginOptionsEditorProps<DorisSSOJsonData, DorisSecureJsonData>;
 export interface SSOProfileStatus {
     configured: boolean;
     issuer?: string;
@@ -35,8 +35,10 @@ export function isSSOEnabled(data?: DorisSSOJsonData) {
     // Existing datasource configurations predate the toggle and were SSO-only.
     return data?.enableSso ?? Boolean(data?.oidcIssuer || data?.keyrockIssuer || data?.oauthPassThru);
 }
-const update = (props: Props, key: keyof DorisSSOJsonData, value: unknown) =>
-    props.onOptionsChange({ ...props.options, jsonData: { ...normalizedJsonData(props.options.jsonData), [key]: value } });
+const update = (props: Props, key: keyof DorisSSOJsonData, value: unknown) => {
+    const jsonData = { ...normalizedJsonData(props.options.jsonData), [key]: value };
+    props.onOptionsChange({ ...props.options, jsonData: { ...jsonData, oauthPassThru: isSSOEnabled(jsonData) } });
+};
 const updateMappings = (props: Props, mappings: GroupRoleMapping[]) => update(props, 'groupRoleMappings', mappings);
 function quoteIdentifier(value: string) {
     return `\`${value.replace(/`/g, '``')}\``;
@@ -89,12 +91,26 @@ ${mappingSQL};`
 }
 
 export function ConfigEditor(props: Props) {
+    const { options, onOptionsChange } = props;
     const data = normalizedJsonData(props.options.jsonData);
     const ssoEnabled = isSSOEnabled(data);
     const tlsEnabled = ssoEnabled || data.tlsEnabled || Boolean(data.tlsServerName);
     const mappings = data.groupRoleMappings ?? [];
     const datasourceUID = props.options.uid;
     const [profile, setProfile] = React.useState<SSOProfileStatus | undefined>();
+
+    // Repair existing SSO configurations so opening the editor and saving also
+    // enables Grafana's token forwarding, even without toggling SSO again.
+    React.useEffect(() => {
+        const jsonData = options.jsonData;
+        if (ssoEnabled ? jsonData.oauthPassThru === true : jsonData.oauthPassThru !== true) {
+            return;
+        }
+        onOptionsChange({
+            ...options,
+            jsonData: { ...jsonData, enableSso: ssoEnabled, oauthPassThru: ssoEnabled },
+        });
+    }, [ssoEnabled, options, onOptionsChange]);
 
     React.useEffect(() => {
         if (!datasourceUID || !ssoEnabled) {
@@ -135,11 +151,23 @@ export function ConfigEditor(props: Props) {
             <Field label="Enable TLS" description={ssoEnabled ? 'TLS is required when SSO is enabled.' : 'Enable this when the Doris MySQL port is configured for TLS.'}>
                 <Switch value={tlsEnabled} disabled={ssoEnabled} onChange={event => update(props, 'tlsEnabled', event.currentTarget.checked)} />
             </Field>
+            {tlsEnabled && (
+                <Field
+                    label="Verify Doris TLS certificate"
+                    description="When disabled, TLS remains encrypted, but the certificate's CA and host/IP are not verified (like MySQL ssl-mode=REQUIRED)."
+                >
+                    <Switch
+                        aria-label="Verify Doris TLS certificate"
+                        value={!data.tlsSkipVerify}
+                        onChange={event => update(props, 'tlsSkipVerify', !event.currentTarget.checked)}
+                    />
+                </Field>
+            )}
             <Field label="Default database">
                 <Input value={data.database ?? ''} onChange={e => update(props, 'database', e.currentTarget.value)} />
             </Field>
-            <Field label="Enable SSO" description="When disabled, the datasource uses the configured shared Doris username and password.">
-                <Switch value={ssoEnabled} onChange={event => update(props, 'enableSso', event.currentTarget.checked)} />
+            <Field label="Enable SSO" description="Automatically forwards the signed-in user's OAuth identity when enabled. When disabled, uses the configured shared Doris username and password.">
+                <Switch aria-label="Enable SSO" value={ssoEnabled} onChange={event => update(props, 'enableSso', event.currentTarget.checked)} />
             </Field>
             {!ssoEnabled ? (
                 <>
@@ -168,6 +196,55 @@ export function ConfigEditor(props: Props) {
                     </Field>
                     <Field label="OIDC audience / Grafana OAuth Client ID">
                         <Input value={data.oidcAudience ?? ''} onChange={e => update(props, 'oidcAudience', e.currentTarget.value)} />
+                    </Field>
+                    <Field
+                        label="Skip IDP TLS certificate verification"
+                        description="Disables certificate chain and hostname verification for IDP Discovery and JWKS requests. Disabled by default; enable only for testing."
+                    >
+                        <Switch
+                            aria-label="Skip IDP TLS certificate verification"
+                            value={data.idpTlsSkipVerify ?? false}
+                            onChange={event => update(props, 'idpTlsSkipVerify', event.currentTarget.checked)}
+                        />
+                    </Field>
+                    <Field
+                        label="IDP CA certificate"
+                        description={
+                            data.idpTlsSkipVerify
+                                ? 'Paste a PEM CA bundle. It will be used when certificate verification is enabled again.'
+                                : 'Optional PEM CA bundle added to the system trusted certificates for IDP Discovery and JWKS requests.'
+                        }
+                    >
+                        {props.options.secureJsonFields?.idpTlsCACert ? (
+                            <div>
+                                <span>IDP CA certificate configured</span>{' '}
+                                <Button
+                                    variant="secondary"
+                                    onClick={() =>
+                                        props.onOptionsChange({
+                                            ...props.options,
+                                            secureJsonData: { ...props.options.secureJsonData, idpTlsCACert: '' },
+                                            secureJsonFields: { ...props.options.secureJsonFields, idpTlsCACert: false },
+                                        })
+                                    }
+                                >
+                                    Reset IDP CA certificate
+                                </Button>
+                            </div>
+                        ) : (
+                            <TextArea
+                                aria-label="IDP CA certificate"
+                                rows={6}
+                                placeholder="-----BEGIN CERTIFICATE-----"
+                                value={props.options.secureJsonData?.idpTlsCACert ?? ''}
+                                onChange={event =>
+                                    props.onOptionsChange({
+                                        ...props.options,
+                                        secureJsonData: { ...props.options.secureJsonData, idpTlsCACert: event.currentTarget.value },
+                                    })
+                                }
+                            />
+                        )}
                     </Field>
                     <Field label="Resolved identity provider" description="Derived values are validated by Save & test; they are not independently editable.">
                         <TextArea

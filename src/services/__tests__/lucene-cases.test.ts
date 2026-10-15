@@ -37,6 +37,8 @@ type LuceneCase = {
     tableReference?: string;
     columns?: Record<string, ColumnFixture>;
     invertedIndexColumns?: string[];
+    variantImplicitPaths?: Record<string, string[][]>;
+    columnMeta?: { columns: Array<{ name: string; type: string }>; invertedIndexColumns: string[] };
 };
 
 function loadCaseFixtures(): Array<LuceneCase & { fileName: string }> {
@@ -102,6 +104,8 @@ describe('Lucene case fixtures', () => {
                 tableReference,
                 columns = {},
                 invertedIndexColumns = [],
+                variantImplicitPaths,
+                columnMeta,
             } = testCase;
 
             const metadataLookup = Object.entries(columns).reduce<Record<string, ColumnFixture>>((acc, [key, value]) => {
@@ -124,6 +128,8 @@ describe('Lucene case fixtures', () => {
                 connectionId,
                 implicitColumnExpression,
                 datasourceType,
+                variantImplicitPaths,
+                columnMeta,
             });
 
             if (!expectedWhere && !expectedSql) {
@@ -142,4 +148,23 @@ describe('Lucene case fixtures', () => {
             }
         },
     );
+
+    it('uses supplied column and inverted-index metadata without metadata requests', async () => {
+        mockedGetColumn.mockReset();
+        mockedGetInvertedIndexColumns.mockReset();
+
+        await getWhereSQLViaLucene({
+            query: 'attrs.http.method:GET',
+            databaseName: 'logs',
+            tableName: 'otel_traces',
+            connectionId: 'test-connection',
+            columnMeta: {
+                columns: [{ name: 'attrs', type: 'VARIANT' }],
+                invertedIndexColumns: ['attrs'],
+            },
+        });
+
+        expect(mockedGetColumn).not.toHaveBeenCalled();
+        expect(mockedGetInvertedIndexColumns).not.toHaveBeenCalled();
+    });
 });

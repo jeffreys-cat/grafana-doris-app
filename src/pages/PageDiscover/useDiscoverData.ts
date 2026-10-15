@@ -22,6 +22,7 @@ import {
     tableDataChartsAtom,
     tableFieldsAtom,
     variantFieldsAtom,
+    variantImplicitPathsAtom,
     variantMetadataFieldsAtom,
     tableTotalCountAtom,
     tableTracesDataAtom,
@@ -51,6 +52,8 @@ import { DiscoverQuerySource, DiscoverSort } from 'types/discover';
 import { resolveQuerySortField } from 'services/sql';
 import { deriveVariantFields, flattenVariantLeaves, mergeVariantFields } from 'utils/variant-fields';
 import { enrichStructuredFilterTypes } from 'utils/sql-filter';
+import { getVariantPathSampleService } from 'services/metaservice';
+import { collectStringVariantPaths } from 'utils/variant-fields';
 
 type RefreshOptions = {
     skipPageReset?: boolean;
@@ -82,6 +85,9 @@ export function useDiscoverData() {
     const pageSize = useAtomValue(pageSizeAtom);
     const setTableData = useSetAtom(tableDataAtom);
     const setVariantFields = useSetAtom(variantFieldsAtom);
+    const variantImplicitPaths = useAtomValue(variantImplicitPathsAtom);
+    const setVariantImplicitPaths = useSetAtom(variantImplicitPathsAtom);
+    const sampledVariantPathKeysRef = useRef(new Set<string>());
     const setTableDataCharts = useSetAtom(tableDataChartsAtom);
     const selectdbDS = useAtomValue(selectedDatasourceAtom);
     const currentTimeField = useAtomValue(currentTimeFieldAtom);
@@ -729,6 +735,57 @@ export function useDiscoverData() {
                 setPage(1);
             }
             const requestId = beginQuery();
+            const variantPathKey = JSON.stringify([selectdbDS.uid, currentDatabase, currentTable]);
+            const variantColumns = tableFields
+                .filter((field: any) => String(field?.Type ?? '').toUpperCase().startsWith('VARIANT'))
+                .map((field: any) => String(field.Field));
+            if (variantColumns.length && !variantImplicitPaths[variantPathKey] && !sampledVariantPathKeysRef.current.has(variantPathKey)) {
+                sampledVariantPathKeysRef.current.add(variantPathKey);
+                getVariantPathSampleService({
+                    selectdbDS,
+                    database: currentDatabase,
+                    table: currentTable,
+                    timeField: currentTimeField,
+                    startDate: formatCurrentTime(currentDate[0])!,
+                    endDate: formatCurrentTime(currentDate[1] as Dayjs)!,
+                    columns: variantColumns,
+                }).subscribe({
+                    next: ({ data, ok }: any) => {
+                        const frameData = data?.results?.sampleVariantPaths?.frames?.[0];
+                        if (!ok || !frameData) {
+                            sampledVariantPathKeysRef.current.delete(variantPathKey);
+                            return;
+                        }
+                        const frame = toDataFrame(frameData);
+                        const countsByColumn = new Map<string, Map<string, { path: string[]; count: number }>>();
+                        variantColumns.forEach((column, columnIndex) => {
+                            const counts = new Map<string, { path: string[]; count: number }>();
+                            countsByColumn.set(column, counts);
+                            const values = Array.from(frame.fields[columnIndex]?.values ?? []);
+                            values.forEach(value => {
+                                try {
+                                    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+                                    collectStringVariantPaths(parsed).forEach(path => {
+                                        const key = JSON.stringify(path);
+                                        const entry = counts.get(key) || { path, count: 0 };
+                                        entry.count += 1;
+                                        counts.set(key, entry);
+                                    });
+                                } catch { /* malformed sample rows are skipped */ }
+                            });
+                        });
+                        const pathMap: Record<string, string[][]> = {};
+                        variantColumns.forEach(column => {
+                            pathMap[column] = Array.from(countsByColumn.get(column)?.values() ?? [])
+                                .sort((a, b) => b.count - a.count)
+                                .slice(0, 200)
+                                .map(entry => entry.path);
+                        });
+                        setVariantImplicitPaths(previous => ({ ...previous, [variantPathKey]: pathMap }));
+                    },
+                    error: () => sampledVariantPathKeysRef.current.delete(variantPathKey),
+                });
+            }
             void getTableDataCharts(requestId);
             void getTableData({ requestId, nextPage });
             void getTableDataCount(requestId);
@@ -736,7 +793,7 @@ export function useDiscoverData() {
                 void getTopData(requestId, nextPage);
             }
         },
-        [beginQuery, clearData, currentDatabase, currentTable, currentTimeField, getTableData, getTableDataCharts, getTableDataCount, getTopData, page, selectdbDS, setPage, topNEnabled],
+        [beginQuery, clearData, currentDatabase, currentDate, currentTable, currentTimeField, formatCurrentTime, getTableData, getTableDataCharts, getTableDataCount, getTopData, page, selectdbDS, setPage, setVariantImplicitPaths, tableFields, topNEnabled, variantImplicitPaths],
     );
 
     const handleQuerying = useCallback(() => {

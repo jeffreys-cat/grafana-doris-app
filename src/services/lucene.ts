@@ -14,6 +14,8 @@ type GetWhereSQLParams = {
     connectionId: string;
     implicitColumnExpression?: string;
     datasourceType?: string;
+    columnMeta?: { columns: Array<{ name: string; type: string }>; invertedIndexColumns: string[] };
+    variantImplicitPaths?: Record<string, string[][]>;
 };
 
 function assertSupportedLuceneSyntax(query: string): void {
@@ -24,7 +26,7 @@ function assertSupportedLuceneSyntax(query: string): void {
     }
 }
 
-export async function getWhereSQLViaLucene({ query, databaseName, tableName, connectionId, implicitColumnExpression, datasourceType }: GetWhereSQLParams): Promise<string> {
+export async function getWhereSQLViaLucene({ query, databaseName, tableName, connectionId, implicitColumnExpression, datasourceType, columnMeta, variantImplicitPaths }: GetWhereSQLParams): Promise<string> {
     const trimmedQuery = query?.trim();
     if (!trimmedQuery) {
         return '';
@@ -58,6 +60,8 @@ export async function getWhereSQLViaLucene({ query, databaseName, tableName, con
         datasourceType,
         supportsTryCast: tryCastSupported,
         supportsJsonSearch: jsonSearchSupported,
+        columnMeta,
+        variantImplicitPaths,
     });
 
     try {

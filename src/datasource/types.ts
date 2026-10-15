@@ -29,6 +29,7 @@ export interface DorisSSOJsonData extends DataSourceJsonData {
     keyrockBaseUrl?: string;
     keyrockClientId?: string;
     allowInsecureIdp?: boolean;
+    idpTlsSkipVerify?: boolean;
     localDevelopment?: boolean;
     // Legacy fields are read by the backend for provisioned datasource migration.
     keyrockIssuer?: string;
@@ -37,4 +38,10 @@ export interface DorisSSOJsonData extends DataSourceJsonData {
     dorisRole?: string;
     groupRoleMappings?: GroupRoleMapping[];
     oauthPassThru?: boolean;
+}
+
+export interface DorisSecureJsonData {
+    password?: string;
+    tlsCACert?: string;
+    idpTlsCACert?: string;
 }

@@ -14,8 +14,19 @@ payload="$(jq -n '{
     host: "doris",
     port: 9030,
     database: "otel",
-    username: "root",
-    enableSso: false
+    enableSso: true,
+    oauthPassThru: true,
+    providerMode: "oidcDiscovery",
+    oidcIssuer: "http://localhost:8085/realms/velodb",
+    oidcAudience: "grafana-keycloak-local",
+    oidcBackchannelUrl: "http://host.docker.internal:8085",
+    allowInsecureIdp: true,
+    tlsEnabled: true,
+    tlsSkipVerify: true,
+    groupRoleMappings: [
+      { oidcGroup: "/doris-readers", dorisRole: "doris_reader" },
+      { oidcGroup: "/doris-writers", dorisRole: "doris_writer" }
+    ]
   }
 }')"
 
@@ -33,4 +44,4 @@ curl --silent --show-error --fail-with-body \
   -X POST --data "$payload" \
   "$grafana_url/api/datasources" >/dev/null
 
-echo "Configured velodb-doris-datasource with shared Doris credentials"
+echo "Configured velodb-doris-datasource with OIDC SSO"
