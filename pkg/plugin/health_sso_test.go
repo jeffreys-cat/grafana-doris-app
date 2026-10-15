@@ -23,7 +23,7 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 )
 
-func TestSSOHealthChecksDorisConnection(t *testing.T) {
+func TestSSOHealthAndViewerQuery(t *testing.T) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
@@ -54,6 +54,7 @@ func TestSSOHealthChecksDorisConnection(t *testing.T) {
 		skip                                          bool
 		want                                          backend.HealthStatus
 		connect                                       bool
+		query                                         bool
 	}{
 		{name: "untrusted self-signed", token: rawToken, want: backend.HealthStatusError, message: "certificate signed by unknown authority", connect: true},
 		{name: "trusted CA", ca: ca, token: rawToken, want: backend.HealthStatusOk, message: "SELECT 1 succeeded", connect: true},
@@ -62,8 +63,11 @@ func TestSSOHealthChecksDorisConnection(t *testing.T) {
 		{name: "invalid CA", ca: "invalid", token: rawToken, want: backend.HealthStatusError, message: "Doris TLS CA certificate is invalid"},
 		{name: "authentication rejected", ca: ca, token: rawToken, failure: "auth", want: backend.HealthStatusError, message: "Access denied", connect: true},
 		{name: "query rejected", ca: ca, token: rawToken, failure: "query", want: backend.HealthStatusError, message: "SELECT denied", connect: true},
-		{name: "missing identity", want: backend.HealthStatusError, message: "Doris connection and TLS certificate have not been verified"},
+		{name: "missing identity", want: backend.HealthStatusOk, message: "SSO verification pending"},
 		{name: "invalid identity", token: "invalid", want: backend.HealthStatusError, message: "OIDC ID token validation failed"},
+		{name: "viewer query verifies SSO", ca: ca, token: rawToken, want: backend.HealthStatusOk, connect: true, query: true},
+		{name: "viewer query requires identity", want: backend.HealthStatusError, message: "OIDC ID token is required", query: true},
+		{name: "viewer query rejects invalid identity", token: "invalid", want: backend.HealthStatusError, message: "OIDC ID token validation failed", query: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -87,21 +91,46 @@ func TestSSOHealthChecksDorisConnection(t *testing.T) {
 			portNumber, _ := strconv.Atoi(port)
 			settings := Settings{EnableSSO: true, Host: host, Port: portNumber, ProviderMode: providerModeOIDCDiscovery, OIDCIssuer: issuer, OIDCAudience: "grafana", AllowInsecureIDP: true, TLSSkipVerify: tc.skip, TLSServerName: tc.serverName}
 			ctx := idpContext(1, "health")
+			ctx.User = &backend.User{Login: "admin", Role: "Admin"}
+			if tc.query {
+				ctx.User = &backend.User{Login: "user", Role: "Viewer"}
+			}
 			ctx.DataSourceInstanceSettings.JSONData, _ = json.Marshal(settings)
 			ctx.DataSourceInstanceSettings.DecryptedSecureJSONData = map[string]string{"tlsCACert": tc.ca}
 			d := newDatasource(http.DefaultClient, &SSOProfile{Issuer: "https://grafana.example/sso", SigningKey: key, SigningKeyID: "doris-key"}, nil)
 			d.listenerOnce.Do(func() {})
-			req := &backend.CheckHealthRequest{PluginContext: ctx}
-			req.SetHTTPHeader(idTokenHeader, tc.token)
-			result, err := d.CheckHealth(context.Background(), req)
-			if err != nil || result.Status != tc.want || !strings.Contains(result.Message, tc.message) {
-				t.Fatalf("health=%#v err=%v", result, err)
+			if tc.query {
+				model, _ := json.Marshal(queryModel{RawSQL: "SELECT 1", Format: "table"})
+				req := &backend.QueryDataRequest{PluginContext: ctx, Queries: []backend.DataQuery{{RefID: "A", JSON: model}}}
+				req.SetHTTPHeader(idTokenHeader, tc.token)
+				result, err := d.QueryData(context.Background(), req)
+				if tc.want == backend.HealthStatusOk {
+					if err != nil || result == nil {
+						t.Fatalf("viewer query failed: result=%#v err=%v", result, err)
+					}
+					response := result.Responses["A"]
+					if response.Error != nil || len(response.Frames) != 1 || response.Frames[0].Rows() != 1 {
+						t.Fatalf("expected SELECT 1 result: %#v", response)
+					}
+				} else if err == nil || !strings.Contains(err.Error(), tc.message) {
+					t.Fatalf("expected query identity rejection %q, got %v", tc.message, err)
+				}
+			} else {
+				req := &backend.CheckHealthRequest{PluginContext: ctx}
+				req.SetHTTPHeader(idTokenHeader, tc.token)
+				result, err := d.CheckHealth(context.Background(), req)
+				if err != nil || result.Status != tc.want || !strings.Contains(result.Message, tc.message) {
+					t.Fatalf("health=%#v err=%v", result, err)
+				}
+				if tc.token == "" && (!strings.Contains(result.Message, "Doris connection and TLS certificate have not been verified") || !strings.Contains(result.Message, "datasource management permissions are not required")) {
+					t.Fatalf("pending health must explain what remains unverified and how a query user can verify it: %s", result.Message)
+				}
 			}
 			if !tc.connect {
 				_ = listener.Close()
 			}
 			serverErr := <-served
-			if tc.want == backend.HealthStatusOk && serverErr != nil {
+			if tc.connect && tc.want == backend.HealthStatusOk && serverErr != nil {
 				t.Fatalf("MySQL fixture: %v", serverErr)
 			}
 			if !tc.connect && connected.Load() {

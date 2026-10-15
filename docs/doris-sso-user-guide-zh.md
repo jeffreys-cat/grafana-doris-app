@@ -2,6 +2,8 @@
 
 本指南说明如何让用户通过公司的标准 OIDC 登录 Grafana，并以各自的身份查询 Doris。用户不需要 Doris 密码，也不需要在 Datasource 中填写私钥或 JWKS 地址。
 
+从全新服务器搭建单机验证环境，请按 [Keycloak 单机从零部署指南](./keycloak-single-host-deployment-zh.md) 操作，其中提供完整 Compose、配套安装包说明、参数替换表和实际控制台截图。该教程明确区分已经完成的容器验收与尚未实测的 Ubuntu 24.04 主机安装步骤。
+
 ## 先理解三类角色
 
 | 谁                        | 负责什么                                                                                                                                  |
@@ -159,7 +161,7 @@ Nginx 与 Grafana 在同一个 Compose 网络时，无需为 8999 配置宿主�
     ```
 
 3. 保存 Datasource 后，确认页面的只读 Profile 摘要显示预期的 issuer、JWKS URL 和 key ID，再由 Doris 管理员执行页面生成的 bootstrap SQL。issuer 必须与 JWT 的 `iss` 一致，包括路径和尾部斜杠。
-4. 使用公司 OIDC 账号登录 Grafana 并执行 **Save & test**，验证用户身份及实际 Doris 连接。JWKS URL 能访问只说明公钥服务正常，不代表用户登录、Doris integration 或表权限已配置完成。
+4. 管理员可以用本地 admin 保存 Datasource 配置；没有 OIDC ID Token 时会提示“SSO verification pending”（待验证）。普通用户用公司 OIDC 账号登录 Grafana 后，在 Explore 或 Doris App Discover 执行查询，验证用户身份及实际 Doris 连接，无需数据源管理权限。JWKS URL 能访问只说明公钥服务正常，不代表用户登录、Doris integration 或表权限已配置完成。
 
 | 现象 | 优先检查 |
 | ---- | -------- |
@@ -203,7 +205,7 @@ velodb-doris:<datasource-uid>
 
 1. 开启 **Enable SSO**，页面会自动启用 TLS 和 OAuth 身份转发。
 2. 关闭 **Verify Doris TLS certificate**。
-3. 使用 OIDC 登录 Grafana，然后点击 **Save & test**。
+3. 管理员点击 **Save & test** 保存配置；没有 OIDC ID Token 时显示待验证。普通 OIDC 用户登录后，在 Explore 或 Doris App Discover 执行查询完成验证。
 
 关闭证书验证会设置 `jsonData.tlsSkipVerify: true`，连接仍使用 TLS 加密，但不验证 Doris 证书的 CA 和 IP／域名。无需手工编辑 JSON，也无需修改 SSO Token 签名私钥。该开关只影响 Doris MySQL 连接，与下方的 IDP TLS 开关独立；在用户名密码模式下启用 TLS 时也可使用。
 
@@ -247,9 +249,9 @@ datasources:
               -----END CERTIFICATE-----
 ```
 
-**Save & test** 会检查 Discovery 和 IDP JWKS 是否可获取、可解析，并验证当前登录用户转发的 ID Token，交换 Doris 令牌后通过 TLS 连接 Doris 执行 `SELECT 1`。只有这些检查全部通过才会报告成功；证书、主机名、身份认证或连接错误会返回对应失败信息。Doris 使用自签证书时，需要配置可信 CA，或在测试环境开启 Doris 的跳过证书验证选项；IDP 的跳过验证选项不会影响 Doris。
+**Save & test** 会检查部署级 SSO Profile、Discovery 和 IDP JWKS 是否可获取、可解析。管理员可以使用本地 admin 保存配置，无需先给 OIDC 用户授予数据源管理权限。当前会话没有 ID Token 时，基础检查通过后返回非错误的“SSO verification pending”（待验证）提示，并明确 Doris 连接及证书尚未验证；这不代表 SSO 连接已经成功。有 ID Token 时，继续校验身份、交换 Doris 令牌，通过 TLS 连接 Doris 执行 `SELECT 1`。配置、证书、主机名、身份认证或连接错误仍返回对应失败信息。Doris 使用自签证书时，需要配置可信 CA，或在测试环境开启 Doris 的跳过证书验证选项；IDP 的跳过验证选项不会影响 Doris。
 
-请使用 SSO 登录 Grafana，并开启 **Forward OAuth Identity** 后测试。如果测试请求没有携带 ID Token，会报告失败并明确提示 Doris 连接及证书尚未验证。`SELECT 1` 通过后，实际业务表的访问权限仍需通过查询验证。
+普通用户只需拥有该数据源的查询访问权限，使用 OIDC 登录 Grafana 后，在 Explore 或 Doris App Discover 选择已配置的数据源并执行 `SELECT 1`，即可验证 SSO 链路，无需打开配置页或执行 **Save & test**。随后查询业务表验证 Doris 授权。查询接口始终要求有效的 ID Token；缺少或无效的 token 仍会拒绝查询，不会回退到账号密码认证。待验证是当前检查请求的结果，不会限制后续用户查询，也不是全局持久化的验证状态。
 
 ## 初始化 Doris
 

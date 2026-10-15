@@ -26,16 +26,16 @@ Doris 根据 Bootstrap SQL 中的 group → role 规则授予权限
 ## 测试前准备
 
 1. 按 [Doris SSO Datasource 使用指南](./doris-sso-user-guide-zh.md) 完成部署级 SSO Profile、Grafana Generic OAuth、Doris FE TLS 与 OIDC plugin 配置。
-2. 在 Datasource 中填写 OIDC issuer 和 audience，并配置需要的 group → Doris role 映射。
+2. 使用本地 admin 在 Datasource 中填写 OIDC issuer 和 audience，并配置需要的 group → Doris role 映射。点击 **Save & test** 后，基础检查通过且当前会话没有 ID Token 时，应显示“SSO verification pending”（待验证），明确 Doris 连接及证书尚未验证；不应因缺少 token 报错。
 3. 保存 Datasource 后，复制页面生成的 **Doris bootstrap SQL**，由 Doris 管理员执行；同时为角色授予测试库、表所需的最小权限。
-4. 准备至少两个 OIDC 测试用户：一个属于已映射 group，另一个不属于任何映射 group。若要验证并集，再准备属于多个 group 的用户。
+4. 准备至少两个仅具备数据源查询访问权限、没有数据源管理权限的 OIDC 测试用户：一个属于已映射 group，另一个不属于任何映射 group。若要验证并集，再准备属于多个 group 的用户。
 
 ## 用户验收步骤
 
 ### 1. 验证已映射用户可查询
 
 1. 使用属于例如 `/engineering/readers` 的 OIDC 用户登录 Grafana。
-2. 打开 **Connections → Data sources → Doris SSO**，执行 **Save & test**。
+2. 打开 Explore 或 Doris App Discover，选择管理员已配置的数据源；无需打开数据源配置页。
 3. 在 Explore 或 Doris App Discover 执行一条只读 SQL，例如：
 
     ```sql
@@ -75,7 +75,7 @@ Doris 根据 Bootstrap SQL 中的 group → role 规则授予权限
 
 | 场景                                                       | 预期结果                                     |
 | ---------------------------------------------------------- | -------------------------------------------- |
-| 未启用 Grafana 的 Forward OAuth Identity 或未获得 ID Token | 请求在 Datasource 拒绝，不回退至数据库密码。 |
+| 未启用 Grafana 的 Forward OAuth Identity 或未获得 ID Token | 查询请求在 Datasource 拒绝，不回退至数据库密码；Save & test 基础检查通过时显示待验证。 |
 | ID Token 的 `aud` 与 Datasource audience 不一致            | Token 校验失败。                             |
 | ID Token 的 `iss` 与 Discovery issuer 不一致               | Token 校验失败。                             |
 | ID Token 过期、尚未生效或签名不是 RS256                    | Token 校验失败。                             |

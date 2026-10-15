@@ -304,10 +304,10 @@ func TestDatasourceIDPTLSHealthAndQuery(t *testing.T) {
 	}
 	check(nil, backend.HealthStatusError, "fetch OIDC discovery")
 	settings.IDPTLSSkipVerify = true
-	check(nil, backend.HealthStatusError, "Doris connection and TLS certificate have not been verified")
+	check(nil, backend.HealthStatusOk, "SSO verification pending")
 	settings.IDPTLSSkipVerify = false
 	check(map[string]string{"idpTlsCACert": "invalid"}, backend.HealthStatusError, "IDP TLS CA certificate")
-	check(map[string]string{"idpTlsCACert": certificatePEM(server.Certificate())}, backend.HealthStatusError, "Doris connection and TLS certificate have not been verified")
+	check(map[string]string{"idpTlsCACert": certificatePEM(server.Certificate())}, backend.HealthStatusOk, "SSO verification pending")
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{"iss": endpoint, "aud": "grafana", "sub": "user", "exp": time.Now().Add(time.Minute).Unix()})
 	token.Header["kid"] = "kid"
 	raw, err := token.SignedString(key)

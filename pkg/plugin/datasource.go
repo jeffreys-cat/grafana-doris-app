@@ -140,7 +140,10 @@ func (d *Datasource) CheckHealth(ctx context.Context, req *backend.CheckHealthRe
 	}
 	rawToken := idTokenFromHeader(req.GetHTTPHeader(idTokenHeader))
 	if rawToken == "" {
-		return &backend.CheckHealthResult{Status: backend.HealthStatusError, Message: "OIDC " + provider.Mode + " provider resolved; Doris connection and TLS certificate have not been verified: OIDC ID token is required; enable Forward OAuth Identity and sign in to Grafana with SSO before testing"}, nil
+		// Grafana exposes only success/error health results in Save & test. A
+		// missing interactive identity is pending verification, not a config error.
+		// QueryData still requires a verified token for every SSO query.
+		return &backend.CheckHealthResult{Status: backend.HealthStatusOk, Message: "SSO configuration checks passed (OIDC " + provider.Mode + "); SSO verification pending: no OIDC ID token in the current session. Doris connection and TLS certificate have not been verified. An OIDC user with datasource query access can sign in and run a query in Explore or Doris App Discover to verify SSO; datasource management permissions are not required."}, nil
 	}
 	identity, err := exchanger.verifyKeyrockIDToken(ctx, rawToken, settings)
 	if err != nil {

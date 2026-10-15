@@ -187,6 +187,11 @@ export function ConfigEditor(props: Props) {
             ) : (
                 <>
                     <h2 style={sectionHeadingStyle}>Identity and access</h2>
+                    <p>
+                        Administrators can save SSO configuration without signing in through OIDC. Save &amp; test checks the configuration; without an OIDC
+                        ID token, SSO verification remains pending. An OIDC user with datasource query access can sign in and run a query in Explore or
+                        Doris App Discover to verify the connection. Datasource management permissions are not required.
+                    </p>
                     <Field label="OIDC issuer" description="The issuer must expose /.well-known/openid-configuration.">
                         <Input
                             placeholder="https://idp.example.com/realms/velodb"

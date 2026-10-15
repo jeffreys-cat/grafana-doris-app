@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.17 (2026-10-15)
+
+### 🐛 Bug Fixes
+
+* allow local administrators to save SSO datasource configuration without an OIDC ID Token; report SSO verification as pending after configuration checks pass, with Doris connectivity and TLS still unverified
+* let OIDC users verify SSO by querying in Explore or Doris App Discover with query access only; keep rejecting queries with missing or invalid tokens
+* clarify the administrator setup and ordinary-user verification workflow in the datasource editor and documentation
+
 ## 1.1.16 (2026-10-14)
 
 ### ✨ Features
