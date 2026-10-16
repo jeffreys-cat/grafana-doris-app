@@ -17,6 +17,7 @@ import {
     discoverCurrentAtom,
     selectedDatasourceAtom,
     tableFieldsAtom,
+    timeZoneAtom,
     discoverRowsExpandedAtom,
     discoverRowsWrappedAtom,
     discoverColumnLayoutsAtom,
@@ -34,6 +35,8 @@ import { usePluginContext } from '@grafana/data';
 import { mergeLogsConfig, type AppPluginSettings } from 'types/plugin-settings';
 import {
     formatFieldDisplayValue,
+    formatRecordTimes,
+    generateHighlightedResults,
     formatRecordDisplayValue,
     formatTimestampToDateTime,
     isComplexType,
@@ -65,6 +68,7 @@ type DiscoverContentProps = {
 
 export default function DiscoverContent({ fetchNextPage, getTraceData, queryState, sort, onSortChange }: DiscoverContentProps) {
     const theme = useTheme2();
+    const timeZone = useAtomValue(timeZoneAtom);
     const [fields, setFields] = useState<any[]>([]);
     const tableTotalCount = normalizeCount(useAtomValue(tableTotalCountAtom));
     const [tableData, _setTableData] = useAtom(tableDataAtom);
@@ -220,12 +224,12 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
             return {
                 _original: item._original,
                 time: item._original?.[currentTimeField] || '',
-                _source: item._source,
+                _source: generateHighlightedResults({ search_value: '', indexes: [] }, [formatRecordTimes(item._original, tableFields, timeZone)])[0]._source,
                 _uid: item?._uid,
             };
         });
         setFields(data);
-    }, [tableData, currentTimeField]);
+    }, [tableData, currentTimeField, timeZone, tableFields]);
 
     const handleRemove = React.useCallback(
         (field: any) => {
@@ -288,9 +292,9 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                         >
                             <tbody>
                                 {subTableData.map((item: any) => {
-                                    const fieldValue = formatFieldDisplayValue(item.value, 'compact');
                                     const fieldName = item.field;
                                     const fieldType = tableFields.find((field: any) => field.Field === fieldName)?.Type;
+                                    const fieldValue = isValidTimeFieldType(String(fieldType || '').toUpperCase()) && item.value != null ? formatTimestampToDateTime(item.value, 3, timeZone) : formatFieldDisplayValue(item.value, 'compact');
                                     const tableRowStyle = css`
                                         &:hover {
                                             .filter-table-content {
@@ -311,7 +315,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                                         visibility: hidden;
                                                     `}`}
                                                 >
-                                                    <ContentTableActions fieldName={fieldName} fieldValue={fieldValue} />
+                                                    <ContentTableActions fieldName={fieldName} fieldValue={formatFieldDisplayValue(item.value)} />
                                                 </div>
                                             </td>
                                             <td
@@ -424,21 +428,8 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                     const fieldType = fieldInfo?.Type || '';
                     let timeField: any = fieldValue;
 
-                    // If this field is a valid time field type, try to format it
-                    try {
-                        if (fieldInfo && isValidTimeFieldType(String(fieldInfo.Type).toUpperCase())) {
-                            // if numeric timestamp, convert
-                            const num = Number(fieldValue);
-                            if (!Number.isNaN(num)) {
-                                timeField = formatTimestampToDateTime(num);
-                            } else {
-                                // otherwise keep raw string (or attempt Date parse)
-                                timeField = String(fieldValue || '');
-                            }
-                        }
-                    } catch (e) {
-                        // fallback to raw
-                        timeField = fieldValue;
+                    if (fieldInfo && isValidTimeFieldType(String(fieldInfo.Type).toUpperCase()) && fieldValue != null) {
+                        timeField = formatTimestampToDateTime(fieldValue, 3, timeZone);
                     }
                     return (
                         <div className={HoverStyle}>
@@ -578,7 +569,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                         ),
                         cell: ({ row }: any) => {
                             const rawFieldValue = getVariantFieldValue(row.original._original, field);
-                            const fieldValue = formatFieldDisplayValue(rawFieldValue, 'compact');
+                            const fieldValue = isValidTimeFieldType(String(field.Type || '').toUpperCase()) && rawFieldValue != null ? formatTimestampToDateTime(rawFieldValue, 3, timeZone) : formatFieldDisplayValue(rawFieldValue, 'compact');
                             const fieldName = field.Field;
                             const fieldType = field.Type;
                             return (
@@ -644,7 +635,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                             visibility: hidden;
                                         `}`}
                                     >
-                                        <ContentItem fieldName={fieldName} fieldValue={fieldValue} fieldType={fieldType} />
+                                        <ContentItem fieldName={fieldName} fieldValue={rawFieldValue} fieldType={fieldType} />
                                     </div>
                                 </div>
                             );
@@ -655,7 +646,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
         }
         return dynamicColumns;
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentTimeField, discoverRowsWrapped, handleRemove, hasSelectedFields, selectedFields, theme.isDark]);
+    }, [timeZone, currentTimeField, discoverRowsWrapped, handleRemove, hasSelectedFields, selectedFields, theme.isDark]);
 
     const tableSorting = useMemo<SortingState>(() => {
         const selectedColumnId =

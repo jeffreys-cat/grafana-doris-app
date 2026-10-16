@@ -15,6 +15,7 @@ export interface QueryTableDataParams {
     data_filters: any[];
     interval?: IntervalEnum;
     interval_value?: number;
+    timeZone?: string;
     search_type: string;
     search_value: string;
     indexes?: string;
@@ -51,6 +52,7 @@ export interface SurroundingParams {
     cluster: string;
     timeField: string;
     time: string;
+    windowHours?: number;
     data_filters: any;
     pageSize: string;
     operator: '>' | '<';
@@ -199,6 +201,7 @@ export type QueryTracesParams = {
 };
 
 export type TracesServicesParams = {
+  database?: string;
   table: string;
   timeField: string;
   startDate: string;
@@ -206,6 +209,7 @@ export type TracesServicesParams = {
 };
 
 export type TracesOperationsParams = {
+  database?: string;
   table: string;
   timeField: string;
   startDate: string;

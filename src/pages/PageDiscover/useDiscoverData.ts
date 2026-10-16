@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Dayjs } from 'dayjs';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import {
     currentCatalogAtom,
     currentDatabaseAtom,
@@ -22,7 +22,6 @@ import {
     tableDataChartsAtom,
     tableFieldsAtom,
     variantFieldsAtom,
-    variantImplicitPathsAtom,
     variantMetadataFieldsAtom,
     tableTotalCountAtom,
     tableTracesDataAtom,
@@ -44,19 +43,18 @@ import { message } from 'antd';
 import { getAutoInterval, IntervalEnum } from '../../constants';
 import { toDataFrame } from '@grafana/data';
 import { logError } from '@grafana/runtime';
-import { useLuceneWhereClause } from './useLuceneWhereClause';
+import { rememberVariantSamples, useLuceneWhereClause } from './useLuceneWhereClause';
 import { toError } from 'utils/errors';
-import { formatTimeInZone } from 'utils/time';
+import { formatSqlTime } from 'utils/time';
 import { createDiscoverQueryError } from 'utils/query-error';
 import { DiscoverQuerySource, DiscoverSort } from 'types/discover';
 import { resolveQuerySortField } from 'services/sql';
 import { deriveVariantFields, flattenVariantLeaves, mergeVariantFields } from 'utils/variant-fields';
 import { enrichStructuredFilterTypes } from 'utils/sql-filter';
-import { getVariantPathSampleService } from 'services/metaservice';
-import { collectStringVariantPaths } from 'utils/variant-fields';
 
 type RefreshOptions = {
     skipPageReset?: boolean;
+    forceRefresh?: boolean;
 };
 
 function measureDiscoverPhase(requestId: number, source: string, phase: string, startTime: number) {
@@ -71,6 +69,7 @@ function measureDiscoverPhase(requestId: number, source: string, phase: string, 
 }
 
 export function useDiscoverData() {
+    const store = useStore();
     const didRunPageEffect = useRef(false);
     const didRunAutoRefreshEffect = useRef(false);
     const requestGenerationRef = useRef(0);
@@ -85,9 +84,6 @@ export function useDiscoverData() {
     const pageSize = useAtomValue(pageSizeAtom);
     const setTableData = useSetAtom(tableDataAtom);
     const setVariantFields = useSetAtom(variantFieldsAtom);
-    const variantImplicitPaths = useAtomValue(variantImplicitPathsAtom);
-    const setVariantImplicitPaths = useSetAtom(variantImplicitPathsAtom);
-    const sampledVariantPathKeysRef = useRef(new Set<string>());
     const setTableDataCharts = useSetAtom(tableDataChartsAtom);
     const selectdbDS = useAtomValue(selectedDatasourceAtom);
     const currentTimeField = useAtomValue(currentTimeFieldAtom);
@@ -119,6 +115,12 @@ export function useDiscoverData() {
     const buildLuceneWhereClause = useLuceneWhereClause();
     const sortContextKey = `${selectdbDS?.uid || ''}\u0000${currentDatabase}\u0000${currentTable}\u0000${currentTimeField}`;
     const sortContextRef = useRef(sortContextKey);
+    const requestContextRef = useRef(sortContextKey);
+    if (requestContextRef.current !== sortContextKey) {
+        requestContextRef.current = sortContextKey;
+        requestGenerationRef.current += 1;
+    }
+    useEffect(() => () => { requestGenerationRef.current += 1; }, []);
     useEffect(() => {
         variantFieldsRef.current = variantFields;
     }, [variantFields]);
@@ -127,9 +129,9 @@ export function useDiscoverData() {
     }, [variantMetadataFields]);
     const formatCurrentTime = useCallback(
         (time?: Dayjs) => {
-            return time ? formatTimeInZone(time, timeZone) : undefined;
+            return time ? formatSqlTime(time) : undefined;
         },
-        [timeZone],
+        [],
     );
 
     const beginQuery = useCallback(() => {
@@ -154,7 +156,7 @@ export function useDiscoverData() {
     );
 
     const getTableData = useCallback(
-        async (options?: { requestId?: number; nextPage?: number; nextSort?: DiscoverSort }) => {
+        async (options?: { requestId?: number; nextPage?: number; nextSort?: DiscoverSort; luceneWhere?: string }) => {
             if (!currentTable || !currentDatabase || !selectdbDS) {
                 return;
             }
@@ -203,10 +205,11 @@ export function useDiscoverData() {
 
             if (searchType === 'Lucene') {
                 try {
-                    const luceneWhere = await buildLuceneWhereClause();
-                    if (luceneWhere) {
-                        payload.lucene_where = luceneWhere;
+                    const luceneWhere = options?.luceneWhere ?? await buildLuceneWhereClause();
+                    if (requestGenerationRef.current !== requestId) {
+                        return;
                     }
+                    payload.lucene_where = luceneWhere;
                 } catch (error) {
                     setLoading(prev => ({ ...prev, getTableData: false }));
                     setTableData([]);
@@ -345,7 +348,7 @@ export function useDiscoverData() {
     );
 
     const getTableDataCharts = useCallback(
-        async (requestId: number) => {
+        async (requestId: number, sharedLuceneWhere: string) => {
             if (!currentTable || !currentDatabase || !selectdbDS) {
                 return;
             }
@@ -367,6 +370,7 @@ export function useDiscoverData() {
                 sort: 'DESC',
                 interval: timeInterval,
                 interval_value: timeIntervalValue,
+                timeZone,
                 search_type: searchType,
                 indexes: indexesStatement,
             };
@@ -377,10 +381,11 @@ export function useDiscoverData() {
 
             if (searchType === 'Lucene') {
                 try {
-                    const luceneWhere = await buildLuceneWhereClause();
-                    if (luceneWhere) {
-                        payload.lucene_where = luceneWhere;
+                    const luceneWhere = sharedLuceneWhere;
+                    if (requestGenerationRef.current !== requestId) {
+                        return;
                     }
+                    payload.lucene_where = luceneWhere;
                 } catch (error) {
                     setLoading(prev => ({ ...prev, getTableDataCharts: false }));
                     setTableDataCharts([]);
@@ -420,7 +425,7 @@ export function useDiscoverData() {
                         TT: item,
                         'sum(cnt)': values[index],
                     }));
-                    const chartsData = getChartsData(tableDataCharts, currentDate as [Dayjs, Dayjs]);
+                    const chartsData = getChartsData(tableDataCharts, currentDate as [Dayjs, Dayjs], timeZone, { interval_unit: timeInterval as any, interval_value: timeIntervalValue });
                     setTableDataCharts(chartsData);
                     measureDiscoverPhase(requestId, 'histogram', 'processing', processingStartedAt);
                 },
@@ -436,7 +441,6 @@ export function useDiscoverData() {
             });
         },
         [
-            buildLuceneWhereClause,
             addAuxiliaryError,
             currentDate,
             currentDatabase,
@@ -453,11 +457,12 @@ export function useDiscoverData() {
             setLoading,
             setTableDataCharts,
             tableFields,
+            timeZone,
         ],
     );
 
     const getTopData = useCallback(
-        async (requestId: number, nextPage = 1) => {
+        async (requestId: number, nextPage = 1, sharedLuceneWhere = '') => {
             if (!currentTable || !currentDatabase || !selectdbDS) {
                 return;
             }
@@ -488,10 +493,11 @@ export function useDiscoverData() {
 
             if (searchType === 'Lucene') {
                 try {
-                    const luceneWhere = await buildLuceneWhereClause();
-                    if (luceneWhere) {
-                        payload.lucene_where = luceneWhere;
+                    const luceneWhere = sharedLuceneWhere;
+                    if (requestGenerationRef.current !== requestId) {
+                        return;
                     }
+                    payload.lucene_where = luceneWhere;
                 } catch (error) {
                     logError(toError(error), { source: 'useDiscoverData', action: 'buildLuceneWhereClause' });
                     setTopData([]);
@@ -512,7 +518,10 @@ export function useDiscoverData() {
                         measureDiscoverPhase(requestId, 'top-data', 'processing', processingStartedAt);
                         return;
                     }
-                    setTopData(convertColumnToRowViaFieldsType(frames[0], tableFields));
+                    const samples = convertColumnToRowViaFieldsType(frames[0], tableFields);
+                    setTopData(samples);
+                    rememberVariantSamples(store, JSON.stringify([selectdbDS.uid, currentDatabase, currentTable]),
+                        tableFields.filter((field: any) => /^VARIANT/i.test(field.Type || '')).map((field: any) => String(field.Field)), samples);
                     measureDiscoverPhase(requestId, 'top-data', 'processing', processingStartedAt);
                 },
                 error: (err: any) => {
@@ -526,7 +535,6 @@ export function useDiscoverData() {
             });
         },
         [
-            buildLuceneWhereClause,
             addAuxiliaryError,
             currentCatalog,
             currentDate,
@@ -541,11 +549,12 @@ export function useDiscoverData() {
             formatCurrentTime,
             setTopData,
             tableFields,
+            store,
         ],
     );
 
     const getTableDataCount = useCallback(
-        async (requestId: number) => {
+        async (requestId: number, sharedLuceneWhere: string) => {
             if (!currentTable || !currentDatabase || !selectdbDS) {
                 return;
             }
@@ -576,10 +585,11 @@ export function useDiscoverData() {
 
             if (searchType === 'Lucene') {
                 try {
-                    const luceneWhere = await buildLuceneWhereClause();
-                    if (luceneWhere) {
-                        payload.lucene_where = luceneWhere;
+                    const luceneWhere = sharedLuceneWhere;
+                    if (requestGenerationRef.current !== requestId) {
+                        return;
                     }
+                    payload.lucene_where = luceneWhere;
                 } catch (error) {
                     logError(toError(error), { source: 'useDiscoverData', action: 'buildLuceneWhereClause' });
                     setTableTotalCount(0);
@@ -622,7 +632,6 @@ export function useDiscoverData() {
             });
         },
         [
-            buildLuceneWhereClause,
             addAuxiliaryError,
             currentDate,
             currentDatabase,
@@ -724,7 +733,7 @@ export function useDiscoverData() {
     }, [setQueryState, setTableData, setTableDataCharts, setTableTotalCount, setTopData, setTopNFields, setTopNRows]);
 
     const refreshData = useCallback(
-        ({ skipPageReset = false }: RefreshOptions = {}) => {
+        async ({ skipPageReset = false, forceRefresh = false }: RefreshOptions = {}) => {
             if (!selectdbDS || !currentDatabase || !currentTable || !currentTimeField) {
                 clearData();
                 return;
@@ -735,65 +744,32 @@ export function useDiscoverData() {
                 setPage(1);
             }
             const requestId = beginQuery();
-            const variantPathKey = JSON.stringify([selectdbDS.uid, currentDatabase, currentTable]);
-            const variantColumns = tableFields
-                .filter((field: any) => String(field?.Type ?? '').toUpperCase().startsWith('VARIANT'))
-                .map((field: any) => String(field.Field));
-            if (variantColumns.length && !variantImplicitPaths[variantPathKey] && !sampledVariantPathKeysRef.current.has(variantPathKey)) {
-                sampledVariantPathKeysRef.current.add(variantPathKey);
-                getVariantPathSampleService({
-                    selectdbDS,
-                    database: currentDatabase,
-                    table: currentTable,
-                    timeField: currentTimeField,
-                    startDate: formatCurrentTime(currentDate[0])!,
-                    endDate: formatCurrentTime(currentDate[1] as Dayjs)!,
-                    columns: variantColumns,
-                }).subscribe({
-                    next: ({ data, ok }: any) => {
-                        const frameData = data?.results?.sampleVariantPaths?.frames?.[0];
-                        if (!ok || !frameData) {
-                            sampledVariantPathKeysRef.current.delete(variantPathKey);
-                            return;
-                        }
-                        const frame = toDataFrame(frameData);
-                        const countsByColumn = new Map<string, Map<string, { path: string[]; count: number }>>();
-                        variantColumns.forEach((column, columnIndex) => {
-                            const counts = new Map<string, { path: string[]; count: number }>();
-                            countsByColumn.set(column, counts);
-                            const values = Array.from(frame.fields[columnIndex]?.values ?? []);
-                            values.forEach(value => {
-                                try {
-                                    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
-                                    collectStringVariantPaths(parsed).forEach(path => {
-                                        const key = JSON.stringify(path);
-                                        const entry = counts.get(key) || { path, count: 0 };
-                                        entry.count += 1;
-                                        counts.set(key, entry);
-                                    });
-                                } catch { /* malformed sample rows are skipped */ }
-                            });
-                        });
-                        const pathMap: Record<string, string[][]> = {};
-                        variantColumns.forEach(column => {
-                            pathMap[column] = Array.from(countsByColumn.get(column)?.values() ?? [])
-                                .sort((a, b) => b.count - a.count)
-                                .slice(0, 200)
-                                .map(entry => entry.path);
-                        });
-                        setVariantImplicitPaths(previous => ({ ...previous, [variantPathKey]: pathMap }));
-                    },
-                    error: () => sampledVariantPathKeysRef.current.delete(variantPathKey),
-                });
-            }
-            void getTableDataCharts(requestId);
-            void getTableData({ requestId, nextPage });
-            void getTableDataCount(requestId);
-            if (!topNEnabled) {
-                void getTopData(requestId, nextPage);
+            setLoading(previous => ({ ...previous, getTableData: true, getTableDataCharts: true }));
+            try {
+                const luceneWhere = await buildLuceneWhereClause({ refreshMetadata: forceRefresh, refreshPaths: forceRefresh });
+                if (requestGenerationRef.current !== requestId) {
+                    return;
+                }
+                void getTableDataCharts(requestId, luceneWhere);
+                void getTableData({ requestId, nextPage, luceneWhere });
+                void getTableDataCount(requestId, luceneWhere);
+                if (!topNEnabled) {
+                    void getTopData(requestId, nextPage, luceneWhere);
+                }
+            } catch (error) {
+                if (requestGenerationRef.current !== requestId) {
+                    return;
+                }
+                setTableData([]);
+                setTableDataCharts([]);
+                setTableTotalCount(0);
+                setTopData([]);
+                setTopNRows([]);
+                setQueryState({ status: 'error', rowCount: 0, error: createDiscoverQueryError(error, { source: 'lucene', searchType, searchValue }), auxiliaryErrors: [] });
+                setLoading(previous => ({ ...previous, getTableData: false, getTableDataCharts: false }));
             }
         },
-        [beginQuery, clearData, currentDatabase, currentDate, currentTable, currentTimeField, formatCurrentTime, getTableData, getTableDataCharts, getTableDataCount, getTopData, page, selectdbDS, setPage, setVariantImplicitPaths, tableFields, topNEnabled, variantImplicitPaths],
+        [beginQuery, clearData, currentDatabase, currentTable, currentTimeField, getTableData, getTableDataCharts, getTableDataCount, getTopData, page, selectdbDS, setPage, topNEnabled, buildLuceneWhereClause, searchType, searchValue, setQueryState, setLoading, setTableData, setTableDataCharts, setTableTotalCount, setTopData, setTopNRows],
     );
 
     const handleQuerying = useCallback(() => {
@@ -801,7 +777,7 @@ export function useDiscoverData() {
             clearData();
             return;
         }
-        refreshData();
+        void refreshData();
     }, [clearData, currentTimeField, refreshData]);
 
     const lastTopNRunRequest = useRef(0);
@@ -867,7 +843,7 @@ export function useDiscoverData() {
         }
         refreshData({ skipPageReset: false });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentDate, currentDatabase, currentTable, currentTimeField, dataFilter, interval, selectdbDS, shareReady]);
+    }, [currentDate, currentDatabase, currentTable, currentTimeField, dataFilter, interval, selectdbDS, shareReady, timeZone]);
 
     return {
         loading,
@@ -875,6 +851,7 @@ export function useDiscoverData() {
         sort,
         onSortChange: handleSortChange,
         onQuerying: handleQuerying,
+        onRefresh: () => { void refreshData({ forceRefresh: true }); },
         getTraceData,
     };
 }

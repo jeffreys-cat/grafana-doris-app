@@ -1,3 +1,4 @@
+import { VariantPathFrequencies } from 'utils/variant-path-cache';
 import { atom } from 'jotai';
 import { atomWithStorage, selectAtom } from 'jotai/utils';
 // import { focusAtom } from 'jotai-optics'
@@ -98,7 +99,11 @@ export const surroundingTableFieldsAtom = atom<any[]>([]);
 
 export const datasourcesAtom = atom<Array<DataSourceInstanceSettings<DataSourceJsonData>>>([]);
 export const selectedDatasourceAtom = atomWithStorage<DataSourceInstanceSettings<DataSourceJsonData> | undefined>('discover-selected-datasource', undefined);
-export const timeZoneAtom = atomWithStorage<TimeZone>('discover-time-zone', getGrafanaUserTimeZone());
+const timeZoneOverrideAtom = atomWithStorage<TimeZone | null>('discover-time-zone', null);
+export const timeZoneAtom = atom(
+    get => get(timeZoneOverrideAtom) || getGrafanaUserTimeZone(),
+    (_get, set, value: TimeZone) => set(timeZoneOverrideAtom, value),
+);
 export const timeRangeAtom = atom<any>({
     from: dateTime(DISCOVER_SHORTCUTS[3].range()[0].toDate()),
     to: dateTime(DISCOVER_SHORTCUTS[3].range()[1].toDate()),
@@ -115,3 +120,8 @@ export const discoverLoadingAtom = atom({
     getTimeFields: false,
     getTableFields: false,
 });
+
+// Physical metadata is scoped independently of persisted UI field selections.
+export const tableMetadataAtom = atom<Record<string, { fields?: any[]; indexes?: any[] }>>({});
+export const variantPathFrequenciesAtom = atomWithStorage<Record<string, VariantPathFrequencies>>('discover-variant-path-frequencies-v1', {});
+export const variantSamplingWarningAtom = atom<Record<string, string>>({});

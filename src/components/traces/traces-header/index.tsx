@@ -9,6 +9,7 @@ import { dateTime, rangeUtil, usePluginContext, toDataFrame } from '@grafana/dat
 import { mergeLogsConfig, type AppPluginSettings } from 'types/plugin-settings';
 import {
     indexesAtom,
+    tableMetadataAtom,
     discoverCurrentAtom,
     locationAtom,
     // currentClusterAtom,
@@ -21,13 +22,14 @@ import {
     datasourcesAtom,
     selectedDatasourceAtom,
     timeRangeAtom,
+    timeZoneAtom,
     databasesAtom,
     tablesAtom,
     disabledOptionsAtom,
 } from 'store/discover';
 import { isValidTimeFieldType } from 'utils/data';
 import { Select, Field, useTheme2, TimeRangeInput } from '@grafana/ui';
-import { FORMAT_DATE } from '../../../constants';
+import { formatShareTime, parseTimeInZone, getGrafanaUserTimeZone as getDisplayTimeZone, normalizeTimeZone } from 'utils/time';
 import { getDatabases, getFieldsService, getIndexesService, getTablesService } from 'services/metaservice';
 import { currentTraceTableAtom } from 'store/traces';
 import { Subscription } from 'rxjs';
@@ -88,8 +90,8 @@ function parseUrlDate(value?: string | null) {
         return undefined;
     }
 
-    const parsedDate = dayjs(value);
-    return parsedDate.isValid() ? parsedDate : undefined;
+    const parsedDate = parseTimeInZone(value, 'browser');
+    return parsedDate?.isValid() ? parsedDate : undefined;
 }
 
 function buildAbsoluteTimeRange(start: dayjs.Dayjs, end: dayjs.Dayjs) {
@@ -103,8 +105,8 @@ function buildAbsoluteTimeRange(start: dayjs.Dayjs, end: dayjs.Dayjs) {
     };
 }
 
-function buildRelativeTimeRange(rawFrom: string, rawTo: string) {
-    const relativeRange = rangeUtil.convertRawToRange({ from: rawFrom, to: rawTo });
+function buildRelativeTimeRange(rawFrom: string, rawTo: string, zone = getDisplayTimeZone()) {
+    const relativeRange = rangeUtil.convertRawToRange({ from: rawFrom, to: rawTo }, zone);
 
     return {
         from: relativeRange.from,
@@ -135,6 +137,9 @@ function isRelativeRawRange(raw?: { from?: unknown; to?: unknown }) {
 export default function TracesHeader() {
     // const catalogs = useAtomValue(catalogAtom);
     const setIndexes = useSetAtom(indexesAtom);
+    const setTableMetadata = useSetAtom(tableMetadataAtom);
+    const requestedFieldsKey = React.useRef('');
+    const requestedIndexesKey = React.useRef('');
     const [discoverCurrent, setDiscoverCurrent] = useAtom(discoverCurrentAtom);
     if (process.env.NODE_ENV !== 'production') {
         discoverCurrentAtom.debugLabel = 'current';
@@ -227,6 +232,7 @@ export default function TracesHeader() {
     }, [currentIndex, setDisabledOptions]);
 
     const theme = useTheme2();
+    const [timeZone, setTimeZone] = useAtom(timeZoneAtom);
 
     useEffect(() => {
         if (!selectdbDS) {
@@ -248,12 +254,17 @@ export default function TracesHeader() {
             return;
         }
 
+        const metadataKey = JSON.stringify([effectiveDatasource.uid, effectiveDatabase, selectedTable.value]);
+        requestedFieldsKey.current = metadataKey;
         getFieldsService({
             selectdbDS: effectiveDatasource,
             database: effectiveDatabase,
             table: selectedTable.value,
         }).subscribe({
             next: ({ data, ok }: any) => {
+                if (requestedFieldsKey.current !== metadataKey) {
+                    return;
+                }
                 if (ok) {
                     const frame = toDataFrame(data.results.getFields.frames[0]);
                     const values = Array.from(frame.fields[0].values);
@@ -268,6 +279,7 @@ export default function TracesHeader() {
                         };
                     });
 
+                    setTableMetadata(previous => ({ ...previous, [metadataKey]: { ...previous[metadataKey], fields: tableFields } }));
                     setTableFields(tableFields);
 
                     if (values) {
@@ -307,12 +319,17 @@ export default function TracesHeader() {
             return;
         }
 
+        const metadataKey = JSON.stringify([effectiveDatasource.uid, effectiveDatabase, selectedTable.value]);
+        requestedIndexesKey.current = metadataKey;
         getIndexesService({
             selectdbDS: effectiveDatasource,
             database: effectiveDatabase,
             table: selectedTable.value,
         }).subscribe({
             next: ({ data, ok }: any) => {
+                if (requestedIndexesKey.current !== metadataKey) {
+                    return;
+                }
                 if (ok) {
                     const frame = toDataFrame(data.results.getIndexes.frames[0]);
                     const values = Array.from(frame.fields[2]?.values || []);
@@ -320,6 +337,7 @@ export default function TracesHeader() {
                     const indexesTypes = Array.from(frame.fields[10]?.values || []);
 
                     if (!values || values.length === 0) {
+                        setTableMetadata(previous => ({ ...previous, [metadataKey]: { ...previous[metadataKey], indexes: [] } }));
                         setIndexes([]);
                         setCurrentIndex([]);
                         return;
@@ -334,6 +352,7 @@ export default function TracesHeader() {
                         };
                     });
 
+                    setTableMetadata(previous => ({ ...previous, [metadataKey]: { ...previous[metadataKey], indexes: tableIndexes } }));
                     setIndexes(tableIndexes);
 
                     if (tableIndexes) {
@@ -359,6 +378,10 @@ export default function TracesHeader() {
         const urlDatabase = urlSearchParams.get('database')?.trim() || '';
         const urlTable = urlSearchParams.get('table')?.trim() || '';
         const urlTimeField = urlSearchParams.get('timeField')?.trim() || '';
+        const urlTimeZone = normalizeTimeZone(urlSearchParams.get('timeZone')) || timeZone;
+        if (urlTimeZone !== timeZone) {
+            setTimeZone(urlTimeZone);
+        }
         const urlStartTime = parseUrlDate(urlSearchParams.get('startTime'));
         const urlEndTime = parseUrlDate(urlSearchParams.get('endTime'));
         const urlTimeRawFrom = urlSearchParams.get('timeRawFrom')?.trim() || '';
@@ -379,7 +402,7 @@ export default function TracesHeader() {
         const defaultTraceTable = persistedTable || logsConfig.targetTraceTable || logsConfig.logsTable || '';
 
         if (urlTimeRawFrom && urlTimeRawTo) {
-            const relativeTimeRange = buildRelativeTimeRange(urlTimeRawFrom, urlTimeRawTo);
+            const relativeTimeRange = buildRelativeTimeRange(urlTimeRawFrom, urlTimeRawTo, urlTimeZone);
             setCurrentDate([dayjs(relativeTimeRange.from.toDate()), dayjs(relativeTimeRange.to.toDate())]);
             setTimeRange((prev: any) => ({
                 ...prev,
@@ -495,8 +518,8 @@ export default function TracesHeader() {
         const rawFrom = normalizeRawTimeValue(timeRange?.raw?.from);
         const rawTo = normalizeRawTimeValue(timeRange?.raw?.to);
         const shouldShareRelativeRaw = isRelativeRawRange(timeRange?.raw);
-        const currentStartTime = _currentDate[0]?.format(FORMAT_DATE);
-        const currentEndTime = _currentDate[1]?.format(FORMAT_DATE);
+        const currentStartTime = _currentDate[0] ? formatShareTime(_currentDate[0]) : undefined;
+        const currentEndTime = _currentDate[1] ? formatShareTime(_currentDate[1]) : undefined;
 
         const hasRelativeTimeParams = Boolean(urlTimeRawFrom && urlTimeRawTo);
         const hasAbsoluteTimeParams = Boolean(urlStartTime && urlEndTime);
@@ -504,8 +527,8 @@ export default function TracesHeader() {
         const isAbsoluteTimeSynced =
             hasAbsoluteTimeParams &&
             !shouldShareRelativeRaw &&
-            currentStartTime === urlStartTime?.format(FORMAT_DATE) &&
-            currentEndTime === urlEndTime?.format(FORMAT_DATE);
+            currentStartTime === (urlStartTime ? formatShareTime(urlStartTime) : undefined) &&
+            currentEndTime === (urlEndTime ? formatShareTime(urlEndTime) : undefined);
 
         if ((hasRelativeTimeParams || hasAbsoluteTimeParams) && !isRelativeTimeSynced && !isAbsoluteTimeSynced) {
             return;
@@ -516,12 +539,13 @@ export default function TracesHeader() {
             database: discoverCurrent.database,
             table: currentTable || discoverCurrent.table,
             timeField: currentTimeField,
+            timeZone,
             startTime: shouldShareRelativeRaw ? undefined : currentStartTime,
             endTime: shouldShareRelativeRaw ? undefined : currentEndTime,
             timeRawFrom: shouldShareRelativeRaw ? rawFrom : undefined,
             timeRawTo: shouldShareRelativeRaw ? rawTo : undefined,
         });
-    }, [currentTable, currentTimeField, _currentDate, discoverCurrent.database, discoverCurrent.table, locSearch, selectedDatasource, timeRange?.raw, updateShareParams]);
+    }, [currentTable, currentTimeField, _currentDate, discoverCurrent.database, discoverCurrent.table, locSearch, selectedDatasource, timeRange?.raw, updateShareParams, timeZone]);
 
     return (
         <div
@@ -553,6 +577,8 @@ export default function TracesHeader() {
                             if (!allowedDatasourceUids.has(item.uid)) {
                                 return;
                             }
+                            requestedFieldsKey.current = '';
+                            requestedIndexesKey.current = '';
                             setSelectedDatasource(item);
                             updateShareParams({
                                 datasource: item?.uid || item?.name || '',
@@ -567,6 +593,8 @@ export default function TracesHeader() {
                         options={databases}
                         value={discoverCurrent.database}
                         onChange={(selectedDatabase: any) => {
+                            requestedFieldsKey.current = '';
+                            requestedIndexesKey.current = '';
                             setDiscoverCurrent({
                                 ...discoverCurrent,
                                 database: selectedDatabase.value,
@@ -633,6 +661,9 @@ export default function TracesHeader() {
                     </Field>
                     <Field label="Time Range" style={{ marginLeft: 8, marginRight: 8 }}>
                         <TimeRangeInput
+                            hideTimeZone={false}
+                            timeZone={timeZone}
+                            onChangeTimeZone={zone => { setTimeZone(zone); updateShareParams({ timeZone: zone }); }}
                             isReversed={false}
                             onChange={timeRange => {
                                 const start = dayjs(timeRange.from.toDate());
@@ -647,8 +678,8 @@ export default function TracesHeader() {
                                     raw: hasRelativeRaw && rawFrom && rawTo ? { from: rawFrom, to: rawTo } : { from: dateTime(timeRange.from.toDate()), to: dateTime(timeRange.to.toDate()) },
                                 });
                                 updateShareParams({
-                                    startTime: hasRelativeRaw ? undefined : start.format(FORMAT_DATE),
-                                    endTime: hasRelativeRaw ? undefined : end.format(FORMAT_DATE),
+                                    startTime: hasRelativeRaw ? undefined : formatShareTime(start),
+                                    endTime: hasRelativeRaw ? undefined : formatShareTime(end),
                                     timeRawFrom: hasRelativeRaw ? rawFrom : undefined,
                                     timeRawTo: hasRelativeRaw ? rawTo : undefined,
                                 });

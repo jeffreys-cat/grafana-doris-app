@@ -1,3 +1,4 @@
+import { normalizeColumnType } from './column-types';
 import * as lucene from '@hyperdx/lucene';
 import SqlString from './sqlstring-browser';
 import { getColumn as getColumnMetadata, getInvertedIndexColumns } from '../../services/metaservice';
@@ -817,7 +818,7 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
         this.variantImplicitPaths = variantImplicitPaths ?? {};
         this.hasProvidedColumnMetadata = Boolean(columnMeta);
         for (const column of columnMeta?.columns ?? []) {
-            this.providedColumnMetadata.set(column.name.toLowerCase(), { name: column.name, type: column.type || 'Unknown' });
+            this.providedColumnMetadata.set(column.name.toLowerCase(), { name: column.name, type: normalizeColumnType({ columnType: column.type }) || 'Unknown' });
         }
         if (columnMeta) {
             this.invertedIndexColumns = new Set(columnMeta.invertedIndexColumns.map(name => name.toLowerCase()));
@@ -1059,6 +1060,11 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
                             const candidatePropertyType =
                                 convertCHTypeToPrimitiveJSType(candidateExpression.columnType) ?? undefined;
 
+                            // Implicit search must never stringify a whole VARIANT root,
+                            // nor send numeric/time/unknown columns to text operators.
+                            if (![JSDataType.String, JSDataType.JSON].includes(candidatePropertyType as JSDataType)) {
+                                return null;
+                            }
                             let candidateSupportsTextSearch: boolean | undefined;
                             if (
                                 (candidatePropertyType === JSDataType.String ||
@@ -1094,9 +1100,13 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
 
             for (const [root, paths] of Object.entries(this.variantImplicitPaths)) {
                 const rootMeta = await this.fetchColumnMetadata(root);
-                if (!rootMeta || !this.isVariantColumnType(rootMeta.type)) continue;
+                if (!rootMeta || !this.isVariantColumnType(rootMeta.type)) {
+                    continue;
+                }
                 (paths || []).slice(0, 200).forEach(path => {
-                    if (!path.length) return;
+                    if (!path.length) {
+                        return;
+                    }
                     const expression = SqlString.format(`??${Array(path.length).fill('[?]').join('')}`, [root, ...path]);
                     implicitTargets.push({
                         column: expression,
@@ -1109,7 +1119,7 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
             }
 
             return {
-                column: expressions.length === 0
+                column: expressions.length === 0 || implicitTargets.length === 0
                     ? undefined
                     :
                     expressions.length > 1

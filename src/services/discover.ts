@@ -1,3 +1,4 @@
+import { defer, lastValueFrom } from 'rxjs';
 import { getBackendSrv } from '@grafana/runtime';
 import { getFieldStatisticsSummarySQL, getFieldStatisticsTopValuesSQL, getQueryTableChartsSQL, getQueryTableResultCountSQL, getQueryTableResultSQL, getSurroundingSQL, getTopNQuerySQL } from './sql';
 import { withErrorHandler } from 'components/with-error-handler/withErrorHandler';
@@ -150,4 +151,23 @@ export function getSurroundingDataService(payload: any) {
         credentials: 'include',
     }));
     return response;
+}
+
+/** Each wider query replaces the preceding result; the anchor never moves. */
+export function getSurroundingDataWithWindow(payload: any) {
+    return defer(async () => {
+        let response: any;
+        for (const windowHours of [1, 6, 24]) {
+            response = await lastValueFrom(getSurroundingDataService({ ...payload, windowHours }));
+            const result = response?.data?.results?.getSurroundingData;
+            if (!response?.ok || result?.error || result?.status >= 400) {
+                throw new Error(result?.error || 'Surrounding logs query failed');
+            }
+            const count = result?.frames?.reduce((total: number, frame: any) => total + (frame.data?.values?.[0]?.length || 0), 0) || 0;
+            if (count >= Number(payload.pageSize)) {
+                break;
+            }
+        }
+        return response;
+    });
 }

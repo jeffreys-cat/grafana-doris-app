@@ -18,10 +18,8 @@ import {
   getOperationListService,
   getServiceListService,
   getTableDataTraceService,
-  getTracesService,
 } from '../traces';
 import {
-  buildTraceAggSQLFromParams,
   getOperationListSQL,
   getQueryTableTraceSQL,
   getServiceListSQL,
@@ -46,7 +44,6 @@ describe('Trace service requests', () => {
 
   it.each([
     ['trace detail', getTableDataTraceService, getQueryTableTraceSQL, 'TRACE DETAIL SQL', 'getTableDataTrace'],
-    ['trace list', getTracesService, buildTraceAggSQLFromParams, 'TRACE LIST SQL', 'getTraces'],
     ['service list', getServiceListService, getServiceListSQL, 'SERVICE LIST SQL', 'getServiceList'],
     ['operation list', getOperationListService, getOperationListSQL, 'OPERATION LIST SQL', 'getOperationList'],
   ])('builds the expected request for %s', (_name, service, sqlBuilder, sql, refId) => {

@@ -1,3 +1,4 @@
+import { buildAbsoluteTimeRange, formatTimeInZone } from 'utils/time';
 import ReactECharts from 'echarts-for-react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useEffect, useRef, useState } from 'react';
@@ -5,7 +6,7 @@ import dayjs from 'dayjs';
 import { IconButton, Select, useTheme2 } from '@grafana/ui';
 import { IntervalEnum } from 'types/type';
 import { TIME_INTERVALS } from 'utils/data';
-import { getAutoInterval, FORMAT_DATE, translationDateIntervalType } from '../../constants';
+import { getAutoInterval, translationDateIntervalType } from '../../constants';
 import {
     currentDateAtom,
     discoverCurrentAtom,
@@ -16,6 +17,7 @@ import {
     pageSizeAtom,
     pageAtom,
     timeRangeAtom,
+    timeZoneAtom,
 } from 'store/discover';
 import { css } from '@emotion/css';
 import { normalizeCount } from 'utils/count';
@@ -28,6 +30,7 @@ type DiscoverHistogramProps = {
 
 export function DiscoverHistogram({ height = 300, collapsed = false, onToggleCollapsed }: DiscoverHistogramProps) {
     const theme = useTheme2().isDark ? 'dark' : 'light';
+    const timeZone = useAtomValue(timeZoneAtom);
     const [currentDate, setCurrentDate] = useAtom(currentDateAtom);
     const ReactEChartsInstance = useRef<ReactECharts>(null);
     const [discoverCurrent, setDiscoverCurrent] = useAtom(discoverCurrentAtom);
@@ -69,7 +72,7 @@ export function DiscoverHistogram({ height = 300, collapsed = false, onToggleCol
         color: theme === 'light' ? ['#608DFF'] : ['#608DFF'],
         xAxis: {
             type: 'category',
-            data: tableDataCharts.map(e => e['TT']),
+            data: tableDataCharts.map(e => e.label),
             axisLabel: {
                 fontSize: '12px', // 字体大小
                 fontStyle: 'normal',
@@ -160,23 +163,11 @@ export function DiscoverHistogram({ height = 300, collapsed = false, onToggleCol
                 setPageSize(50);
                 setActiveItem(undefined);
                 const [startIndex, endIndex] = (areas[0] as any).coordRange as [startIndex: number, endIndex: number];
-                const timeInterval = interval === IntervalEnum.Auto ? getAutoInterval(currentDate as any).interval_unit : interval;
-                const chartsEndDate = dayjs(new Date(tableDataCharts[endIndex]['TT'])).add(interval_value, timeInterval);
-                setDiscoverCurrent({
-                    ...discoverCurrent,
-                    date: [dayjs(tableDataCharts[startIndex]['TT']), chartsEndDate],
-                });
-
-                setCurrentDate([dayjs(tableDataCharts[startIndex]['TT']), chartsEndDate]);
-                const timeRange = {
-                    from: dayjs(tableDataCharts[startIndex]['TT']).format(FORMAT_DATE),
-                    to: chartsEndDate.format(FORMAT_DATE),
-                    raw: {
-                        from: dayjs(tableDataCharts[startIndex]['TT']).format(FORMAT_DATE),
-                        to: chartsEndDate.format(FORMAT_DATE),
-                    },
-                };
-                setTimeRange(timeRange);
+                const chartsStartDate = dayjs(tableDataCharts[startIndex].TT);
+                const chartsEndDate = dayjs(tableDataCharts[endIndex].bucketEnd);
+                setDiscoverCurrent({ ...discoverCurrent, date: [chartsStartDate, chartsEndDate] });
+                setCurrentDate([chartsStartDate, chartsEndDate]);
+                setTimeRange(buildAbsoluteTimeRange(chartsStartDate, chartsEndDate));
                 chart.getEchartsInstance().dispatchAction({
                     type: 'brush',
                     command: 'clear',
@@ -238,7 +229,7 @@ export function DiscoverHistogram({ height = 300, collapsed = false, onToggleCol
                         color: rgb(190, 190, 193);
                     `}
                 >
-                    {currentDate && `${currentDate[0]?.format(FORMAT_DATE)} ~ ${currentDate[1]?.format(FORMAT_DATE)} `}
+                    {currentDate && `${(currentDate[0] ? formatTimeInZone(currentDate[0], timeZone) : '')} ~ ${(currentDate[1] ? formatTimeInZone(currentDate[1], timeZone) : '')} `}
                 </div>
                 <div
                     className={css`

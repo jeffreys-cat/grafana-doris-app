@@ -71,6 +71,9 @@ async function nodeTerm(node: lucene.Node, serializer: Serializer): Promise<stri
             term = nodeTermInstance.prefix + decodeSpecialTokens(nodeTermInstance.term);
         }
 
+        if (field === '_exists_') {
+            return serializer.isNotNull(term, isNegatedField);
+        }
         if (nodeTermInstance.quoted && !isImplicitField) {
             return serializer.eq(field, term, isNegatedField);
         }

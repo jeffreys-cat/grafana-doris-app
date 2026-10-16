@@ -1,125 +1,166 @@
 import { useCallback, useRef } from 'react';
-import { useAtomValue } from 'jotai';
+import { useStore } from 'jotai';
+import { lastValueFrom } from 'rxjs';
+import { toDataFrame } from '@grafana/data';
 import {
     currentDatabaseAtom,
     currentTableAtom,
+    currentDateAtom,
+    currentTimeFieldAtom,
     searchTypeAtom,
     searchValueAtom,
     selectedDatasourceAtom,
+    tableMetadataAtom,
     tableFieldsAtom,
     indexesAtom,
-    variantFieldsAtom,
     variantImplicitPathsAtom,
-    topDataAtom,
+    variantPathFrequenciesAtom,
+    variantSamplingWarningAtom,
 } from 'store/discover';
 import { getWhereSQLViaLucene } from 'services/lucene';
-import { collectStringVariantPaths, flattenVariantLeaves } from 'utils/variant-fields';
+import { getFieldsService, getIndexesService, getVariantPathSampleService } from 'services/metaservice';
+import { formatSqlTime } from 'utils/time';
+import { mergeVariantPathSamples, variantPathsFromFrequencies } from 'utils/variant-path-cache';
+import SqlString from 'sqlstring';
+
+export type LuceneBuildOptions = { refreshMetadata?: boolean; refreshPaths?: boolean };
+
+function rowsFromResponse(response: any, refId: string): Array<Record<string, any>> {
+    const result = response?.data?.results?.[refId];
+    if (!response?.ok || result?.error) {
+        throw new Error(result?.error || 'Failed to load search metadata');
+    }
+    const frame = result?.frames?.[0];
+    if (!frame) {
+        return [];
+    }
+    const fields = toDataFrame(frame).fields;
+    return Array.from(fields[0]?.values || []).map((_, i) => Object.fromEntries(fields.map(field => [field.name, field.values[i]])));
+}
+
+export function rememberVariantSamples(store: ReturnType<typeof useStore>, key: string, columns: string[], rows: Array<Record<string, unknown>>) {
+    const oldPaths = store.get(variantImplicitPathsAtom)[key] || {};
+    const previous =
+        store.get(variantPathFrequenciesAtom)[key] || Object.fromEntries(Object.entries(oldPaths).map(([column, paths]) => [column, paths.map(path => ({ path, count: 0 }))]));
+    const frequencies = mergeVariantPathSamples(previous, columns, rows);
+    store.set(variantPathFrequenciesAtom, all => ({ ...all, [key]: frequencies }));
+    store.set(variantImplicitPathsAtom, all => ({ ...all, [key]: variantPathsFromFrequencies(frequencies) }));
+}
 
 export function useLuceneWhereClause() {
+    const store = useStore();
+    const sampledContext = useRef('');
     const inFlight = useRef<{ key: string; promise: Promise<string> } | null>(null);
-    const searchType = useAtomValue(searchTypeAtom);
-    const searchValue = useAtomValue(searchValueAtom);
-    const currentTable = useAtomValue(currentTableAtom);
-    const currentDatabase = useAtomValue(currentDatabaseAtom);
-    const selectdbDS = useAtomValue(selectedDatasourceAtom);
-    const tableFields = useAtomValue(tableFieldsAtom);
-    const indexes = useAtomValue(indexesAtom);
-    const variantFields = useAtomValue(variantFieldsAtom);
-    const variantPathCache = useAtomValue(variantImplicitPathsAtom);
-    const topData = useAtomValue(topDataAtom);
-
-    return useCallback((): Promise<string> => {
-        if (searchType !== 'Lucene') {
-            return Promise.resolve('');
-        }
-
-        const trimmedQuery = searchValue?.trim();
-        if (!trimmedQuery || !currentTable || !currentDatabase || !selectdbDS) {
-            return Promise.resolve('');
-        }
-
-        const key = JSON.stringify([selectdbDS.uid, currentDatabase, currentTable, searchValue, tableFields, indexes, variantPathCache]);
-        if (inFlight.current?.key === key) {
-            return inFlight.current.promise;
-        }
-
-        const candidateFieldNames = (tableFields || [])
-            .map((field: any) => {
-                const rawName = field?.Field ?? field?.value ?? field?.name;
-                const type = String(field?.Type ?? '').toUpperCase();
-                if (!rawName) {
-                    return null;
-                }
-
-                if (!type) {
-                    return rawName;
-                }
-
-                return /(CHAR|TEXT|STRING|JSON)/.test(type) && !/(VARIANT|DATETIME|DATE|TIME|INT|FLOAT|DOUBLE|DECIMAL)/.test(type) ? rawName : null;
-            })
-            .filter(Boolean) as string[];
-
-        const implicitExpressions = candidateFieldNames.slice(0, 10).map(name => `coalesce(\`${name}\`, '')`);
-
-        let implicitColumnExpression: string | undefined;
-        if (implicitExpressions.length > 0) {
-            implicitColumnExpression = implicitExpressions.join(',\n');
-        }
-
-        const cacheKey = JSON.stringify([selectdbDS.uid, currentDatabase, currentTable]);
-        const cachedPaths = variantPathCache[cacheKey] || {};
-        const variantImplicitPaths = Object.entries(cachedPaths).reduce<Record<string, string[][]>>((acc, [root, paths]) => {
-            acc[root] = [...paths];
-            return acc;
-        }, {});
-        flattenVariantLeaves(variantFields).forEach(field => {
-            const path = field.variantPath || [];
-            const root = path[0];
-            if (root && path.length > 1 && String(field.Type).toUpperCase().includes('CHAR')) {
-                const target = (variantImplicitPaths[root] ||= []);
-                const childPath = path.slice(1);
-                if (!target.some(existing => JSON.stringify(existing) === JSON.stringify(childPath))) target.push(childPath);
+    return useCallback(
+        (options: LuceneBuildOptions = {}): Promise<string> => {
+            const datasource = store.get(selectedDatasourceAtom);
+            const database = store.get(currentDatabaseAtom);
+            const table = store.get(currentTableAtom);
+            const query = store.get(searchValueAtom).trim();
+            const mode = store.get(searchTypeAtom);
+            if ((mode !== 'Lucene' && !options.refreshMetadata) || !datasource || !database || !table) {
+                return Promise.resolve('');
             }
-        });
-        tableFields.filter((field: any) => String(field?.Type ?? '').toUpperCase().startsWith('VARIANT')).forEach((field: any) => {
-            const root = String(field.Field);
-            const target = (variantImplicitPaths[root] ||= []);
-            topData.forEach((row: any) => {
-                let value = row?.[root];
-                if (typeof value === 'string') {
-                    try { value = JSON.parse(value); } catch { return; }
+            const key = JSON.stringify([datasource.uid, database, table]);
+            const requestKey = JSON.stringify([key, query, store.get(currentDateAtom).map(date => date.valueOf()), options]);
+            if (inFlight.current?.key === requestKey) {
+                return inFlight.current.promise;
+            }
+            const isCurrent = () => key === JSON.stringify([store.get(selectedDatasourceAtom)?.uid, store.get(currentDatabaseAtom), store.get(currentTableAtom)]);
+            const promise = (async () => {
+                let meta = store.get(tableMetadataAtom)[key];
+                if (options.refreshMetadata || !meta?.fields || !meta?.indexes) {
+                    const [fields, indexes] = await Promise.all([
+                        options.refreshMetadata || !meta?.fields
+                            ? lastValueFrom(getFieldsService({ selectdbDS: datasource, database, table })).then(response =>
+                                  rowsFromResponse(response, 'getFields').map(field => ({ ...field, label: field.Field, value: field.Field })),
+                              )
+                            : meta.fields,
+                        options.refreshMetadata || !meta?.indexes
+                            ? lastValueFrom(getIndexesService({ selectdbDS: datasource, database, table })).then(response =>
+                                  rowsFromResponse(response, 'getIndexes').map(index => ({
+                                      type: index.Index_type,
+                                      columnName: index.Column_name,
+                                      label: index.Key_name,
+                                      value: index.Key_name,
+                                  })),
+                              )
+                            : meta.indexes,
+                    ]);
+                    meta = { fields, indexes };
+                    store.set(tableMetadataAtom, previous => ({ ...previous, [key]: meta! }));
+                    if (!isCurrent()) {
+                        throw new Error('Search table changed while loading metadata');
+                    }
+                    store.set(tableFieldsAtom, fields);
+                    store.set(indexesAtom, indexes);
                 }
-                collectStringVariantPaths(value).forEach(path => {
-                    if (!target.some(existing => JSON.stringify(existing) === JSON.stringify(path))) target.push(path);
+                if (!isCurrent()) {
+                    throw new Error('Search table changed while loading metadata');
+                }
+                const fields = meta.fields!;
+                const columns = fields.filter(field => /^VARIANT/i.test(field.Type || '')).map(field => String(field.Field));
+                if (columns.length && (options.refreshPaths || sampledContext.current !== key)) {
+                    const dates = store.get(currentDateAtom);
+                    try {
+                        const response = await lastValueFrom(
+                            getVariantPathSampleService({
+                                selectdbDS: datasource,
+                                database,
+                                table,
+                                columns,
+                                timeField: store.get(currentTimeFieldAtom),
+                                startDate: formatSqlTime(dates[0]),
+                                endDate: formatSqlTime(dates[1]),
+                            }),
+                        );
+                        const samples = rowsFromResponse(response, 'sampleVariantPaths').map(row =>
+                            Object.fromEntries(columns.map((column, index) => [column, row[`c${index + 1}`]])),
+                        );
+                        rememberVariantSamples(store, key, columns, samples);
+                        store.set(variantSamplingWarningAtom, previous => ({ ...previous, [key]: '' }));
+                        if (isCurrent()) {
+                            sampledContext.current = key;
+                        }
+                    } catch {
+                        store.set(variantSamplingWarningAtom, previous => ({
+                            ...previous,
+                            [key]: 'Attribute path sampling failed. Free-text search uses cached paths and may miss attribute values.',
+                        }));
+                    }
+                }
+                if (!isCurrent()) {
+                    throw new Error('Search table changed while sampling attributes');
+                }
+                const implicitFields = fields.filter(field => /^(?:CHAR|VARCHAR|TEXT|STRING|JSON)/i.test(field.Type || ''));
+                if (!query || mode !== 'Lucene') {
+                    return '';
+                }
+                return getWhereSQLViaLucene({
+                    query,
+                    connectionId: datasource.uid,
+                    datasourceType: datasource.type,
+                    databaseName: database,
+                    tableName: table,
+                    implicitColumnExpression:
+                        implicitFields
+                            .slice(0, 10)
+                            .map(field => `coalesce(${SqlString.escapeId(field.Field)}, '')`)
+                            .join(',\n') || undefined,
+                    columnMeta: {
+                        columns: fields.map(field => ({ name: String(field.Field), type: String(field.Type || 'Unknown') })),
+                        invertedIndexColumns: meta.indexes!.filter(index => /inverted/i.test(index.type || '')).map(index => String(index.columnName)),
+                    },
+                    variantImplicitPaths: store.get(variantImplicitPathsAtom)[key] || {},
                 });
+            })().finally(() => {
+                if (inFlight.current?.key === requestKey) {
+                    inFlight.current = null;
+                }
             });
-        });
-        Object.keys(variantImplicitPaths).forEach(root => {
-            variantImplicitPaths[root] = variantImplicitPaths[root].slice(0, 200);
-        });
-
-        const promise = getWhereSQLViaLucene({
-            query: trimmedQuery,
-            databaseName: currentDatabase,
-            tableName: currentTable,
-            connectionId: selectdbDS.uid,
-            datasourceType: selectdbDS.type,
-            implicitColumnExpression,
-            columnMeta: {
-                columns: (tableFields || []).map((field: any) => ({
-                    name: String(field?.Field ?? field?.value ?? field?.name ?? ''),
-                    type: String(field?.Type ?? 'Unknown'),
-                })).filter((field: { name: string }) => Boolean(field.name)),
-                invertedIndexColumns: (indexes || [])
-                    .filter((index: any) => String(index?.type ?? '').toLowerCase().includes('inverted'))
-                    .map((index: any) => String(index?.columnName ?? index?.Column_name ?? ''))
-                    .filter(Boolean),
-            },
-            variantImplicitPaths,
-        }).finally(() => {
-            if (inFlight.current?.key === key) inFlight.current = null;
-        });
-        inFlight.current = { key, promise };
-        return promise;
-    }, [currentDatabase, currentTable, searchType, searchValue, selectdbDS, tableFields, indexes, variantFields, variantPathCache, topData]);
+            inFlight.current = { key: requestKey, promise };
+            return promise;
+        },
+        [store],
+    );
 }

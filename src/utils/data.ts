@@ -1,12 +1,13 @@
+import { formatDorisTime, getGrafanaUserTimeZone, histogramOrigin, nextHistogramBucket, parseDorisTime, HistogramInterval, buildRelativeTimeRange } from './time';
 import { getAutoInterval } from '../constants';
 import dayjs, { Dayjs, ManipulateType } from 'dayjs';
-import { flatten, orderBy, some } from 'lodash-es';
+import { flatten, some } from 'lodash-es';
 import { nanoid } from 'nanoid';
-import { DiscoverCurrent, AutoInterval, IntervalEnum } from 'types/type';
+import { DiscoverCurrent } from 'types/type';
 export { addSqlFilter, getFilterSQL } from './sql-filter';
 import jsTokens from 'js-tokens';
 import localeData from 'dayjs/plugin/localeData';
-import { DataFrame, FieldType } from '@grafana/data';
+import { DataFrame, FieldType, TimeZone } from '@grafana/data';
 import utc from 'dayjs/plugin/utc';
 dayjs.extend(utc);
 dayjs.extend(localeData);
@@ -374,11 +375,15 @@ export const SURROUNDING_LOGS_OPERATORS = [
     },
 ];
 
-export function getLatestTime(id: string) {
+export function getLatestTime(id: string, timeZone: TimeZone = getGrafanaUserTimeZone()) {
     if (!id) {
         return null;
     }
     const selectedItem = DISCOVER_SHORTCUTS.find(item => item.key === id);
+    if (selectedItem?.raw) {
+        const range = buildRelativeTimeRange(String(selectedItem.raw.from), String(selectedItem.raw.to), timeZone);
+        return [dayjs(range.from.valueOf()), dayjs(range.to.valueOf())];
+    }
     return selectedItem?.range();
 }
 
@@ -558,52 +563,33 @@ export function resetDate(date: Dayjs, interval: ManipulateType) {
     return date_reset;
 }
 
-export function getDateRange(startDate: Dayjs, endDate: Dayjs, interval: any) {
-    const DATE_FORMAT = formatDate(interval.interval_unit);
-    if (dayjs(startDate, DATE_FORMAT).isSame(dayjs(endDate, DATE_FORMAT), interval.interval_unit)) {
-        return [endDate];
-    }
-    let date: any = resetDate(startDate, interval.interval_unit);
-    const formatStartDate = date.format(DATE_FORMAT);
-    const dates = [formatStartDate];
-    do {
-        date = dayjs(date).add(interval.interval_value, interval.interval_unit);
-        if (dayjs(date).isBefore(endDate)) {
-            dates.push(date.format(DATE_FORMAT));
+export function getDateRange(startDate: Dayjs, endDate: Dayjs, interval: HistogramInterval, timeZone: TimeZone = getGrafanaUserTimeZone()): number[] {
+    const dates: number[] = [];
+    let date = histogramOrigin(startDate, interval, timeZone);
+    while (date.valueOf() < endDate.valueOf()) {
+        dates.push(date.valueOf());
+        const next = nextHistogramBucket(date, interval, timeZone);
+        if (next.valueOf() <= date.valueOf()) {
+            break;
         }
-    } while (dayjs(date).isBefore(endDate));
+        date = next;
+    }
     return dates;
 }
 
-export function getChartsData(tableDataCharts: any[], currentDate: [Dayjs, Dayjs]) {
-    const selectInterval: AutoInterval = getAutoInterval(currentDate);
-    const [startDate, endDate] = currentDate;
-    const intervalUnit: any = selectInterval.interval_unit || IntervalEnum.Auto;
-    const timeInterval: any = intervalUnit === IntervalEnum.Auto ? selectInterval : { interval_value: 1, interval_unit: intervalUnit };
-    const dates = getDateRange(startDate as Dayjs, endDate as Dayjs, timeInterval);
-    const tableDataMap = new Map();
-    const result: any[] = [];
-    const DATE_FORMAT_FROM_INTERVAL = formatDate(timeInterval.interval_unit);
-
-    tableDataCharts.forEach(e => {
-        const currentLocale = dayjs.locale();
-        const date = dayjs.utc(e['TT']).locale(currentLocale).format(DATE_FORMAT_FROM_INTERVAL);
-        tableDataMap.set(date, e['sum(cnt)']);
-    });
-    dates.forEach(date => {
-        const newDate = dayjs(date).format(DATE_FORMAT_FROM_INTERVAL);
-        if (!tableDataMap.get(newDate)) {
-            tableDataMap.set(newDate, null);
+export function getChartsData(tableDataCharts: any[], currentDate: [Dayjs, Dayjs], timeZone: TimeZone = getGrafanaUserTimeZone(), interval?: HistogramInterval) {
+    const selected = interval || getAutoInterval(currentDate) as HistogramInterval;
+    const values = new Map<number, number | null>(getDateRange(currentDate[0], currentDate[1], selected, timeZone).map(time => [time, null]));
+    for (const row of tableDataCharts) {
+        const key = parseDorisTime(row.TT).valueOf();
+        if (Number.isFinite(key)) {
+            values.set(key, Number(row['sum(cnt)'] || 0));
         }
-    });
-
-    tableDataMap.forEach((value, key) => {
-        result.push({
-            TT: key,
-            ['sum(cnt)']: value,
-        });
-    });
-    return orderBy(result, ['TT'], ['asc']);
+    }
+    return [...values.entries()].sort(([a], [b]) => a - b).map(([time, count]) => ({
+        TT: time, label: formatDorisTime(time, timeZone, 'YYYY-MM-DD HH:mm:ss Z'),
+        bucketEnd: nextHistogramBucket(dayjs.utc(time), selected, timeZone).valueOf(), 'sum(cnt)': count,
+    }));
 }
 
 export function convertColumnToRow(frame: any): Array<Record<string, any>> {
@@ -671,8 +657,7 @@ export function convertColumnToRowViaFieldsType(frame: any, fields: any): Array<
 }
 
 // 格式化时间戳为 DATETIME([number]) 格式
-export function formatTimestampToDateTime(timestamp: any, precision = 3) {
-    const currentLocale = dayjs.locale();
+export function formatTimestampToDateTime(timestamp: any, precision = 3, timeZone: TimeZone = 'utc') {
     // 基础格式：YYYY-MM-DD HH:mm:ss
     let formatString = 'YYYY-MM-DD HH:mm:ss';
 
@@ -681,7 +666,7 @@ export function formatTimestampToDateTime(timestamp: any, precision = 3) {
         formatString += `.${'S'.repeat(precision)}`;
     }
     // 转换时间戳并格式化
-    return dayjs.utc(timestamp).locale(currentLocale).format(formatString);
+    return formatDorisTime(timestamp, timeZone, formatString);
 }
 
 function parseJsonIfString(item: any) {
@@ -718,10 +703,16 @@ function normalizeTraceTags(item: any) {
     }
 
     if (parsed && typeof parsed === 'object') {
-        return Object.entries(parsed).map(([key, value]) => ({
-            key,
-            value,
-        }));
+        const tags: Array<{ key: string; value: string }> = [];
+        const visit = (value: any, key: string) => {
+            if (value && typeof value === 'object' && !Array.isArray(value)) {
+                Object.entries(value).forEach(([child, nested]) => visit(nested, key ? `${key}.${child}` : child));
+            } else {
+                tags.push({ key, value: typeof value === 'string' ? value : JSON.stringify(value) ?? '' });
+            }
+        };
+        Object.entries(parsed).forEach(([key, value]) => visit(value, key));
+        return tags;
     }
 
     return [];
@@ -925,3 +916,14 @@ export function generateHighlightedResults(data: { search_value: string; indexes
 }
 
 export const QUERY_TRACE_FIELDS = ['trace_id', 'span_id', 'parent_span_id', 'span_name', 'service_name'];
+
+/** Presentation copy; query cursors and filter values always use the original row. */
+export function formatRecordTimes(record: Record<string, any>, fields: any[], timeZone: TimeZone): Record<string, any> {
+    const displayed = { ...record };
+    for (const field of fields) {
+        if (isValidTimeFieldType(String(field.Type || '').toUpperCase()) && displayed[field.Field] != null) {
+            displayed[field.Field] = formatTimestampToDateTime(displayed[field.Field], 3, timeZone);
+        }
+    }
+    return displayed;
+}

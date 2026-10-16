@@ -475,7 +475,7 @@ describe('getWhereSQLViaLucene', () => {
         expect(result).toBe('(1 = 0)');
     });
 
-    it('uses variant root fallback for implicit bare text searches', async () => {
+    it('never stringifies an entire VARIANT root for implicit bare text searches', async () => {
         mockedGetColumn.mockImplementation(async ({ column }) => {
             if (column === 'attrs') {
                 return {
@@ -495,6 +495,17 @@ describe('getWhereSQLViaLucene', () => {
             query: 'error',
         });
 
-        expect(result).toBe("(lower(CAST(`attrs` AS STRING)) LIKE lower('%error%'))");
+        expect(result).toBe('(1 = 0)');
     });
+});
+
+it('normalizes physical Doris metadata without fetching columns or indexes', async () => {
+    mockedSupportsTryCast.mockResolvedValue(true);
+    mockedSupportsJsonSearch.mockResolvedValue(true);
+    mockedGetColumn.mockClear();
+    mockedGetInvertedIndexColumns.mockClear();
+    const where = await getWhereSQLViaLucene({ query: 'message:error', databaseName: 'otel', tableName: 'logs', connectionId: 'ds', columnMeta: { columns: [{ name: 'message', type: 'VARCHAR(255)' }], invertedIndexColumns: ['message'] } });
+    expect(where).toContain("MATCH_ANY 'error'");
+    expect(mockedGetColumn).not.toHaveBeenCalled();
+    expect(mockedGetInvertedIndexColumns).not.toHaveBeenCalled();
 });

@@ -16,6 +16,10 @@ function setOverflow(element: HTMLElement, { width = false, height = false } = {
 }
 
 describe('LongTextCell', () => {
+    beforeEach(() => {
+        // Grafana ClipboardButton uses navigator.clipboard only on HTTPS.
+        Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
+    });
     it('does not expose a preview or copy action when the cell fits', () => {
         render(<LongTextCell copyText="short">short</LongTextCell>);
         const cell = screen.getByTestId('long-text-cell');
@@ -39,7 +43,7 @@ describe('LongTextCell', () => {
         });
 
         expect(writeText).toHaveBeenCalledWith('the complete value');
-        expect(screen.getByRole('status')).toHaveTextContent('Copied');
+        expect(screen.getByText('Copied').closest('[aria-live]')).toHaveAttribute('aria-live', 'polite');
     });
 
     it('reports an error when copying is unavailable', async () => {

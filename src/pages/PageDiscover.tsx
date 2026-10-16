@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { PluginPage } from '@grafana/runtime';
-import { IconButton, LoadingBar, useTheme2 } from '@grafana/ui';
+import { Alert, IconButton, LoadingBar, useTheme2 } from '@grafana/ui';
 
 import DiscoverFilter from 'components/discover-filter';
 import DiscoverSidebar from 'components/discover-sidebar';
@@ -29,9 +29,10 @@ import {
     selectedFieldsAtom,
     timeRangeAtom,
     timeZoneAtom,
+    variantSamplingWarningAtom,
 } from 'store/discover';
 import { DISCOVER_SHARE_STATE_PARAM, DISCOVER_SHARE_STATE_VERSION, encodeDiscoverShareState } from 'utils/discover-share-state';
-import { formatTimeInZone } from 'utils/time';
+import { formatShareTime } from 'utils/time';
 import {
     DISCOVER_CHART_MIN_HEIGHT,
     DISCOVER_SIDEBAR_MAX_WIDTH,
@@ -43,7 +44,7 @@ import {
 
 export default function PageDiscover() {
     const theme = useTheme2();
-    const { loading, queryState, sort, onSortChange, onQuerying, getTraceData } = useDiscoverData();
+    const { loading, queryState, sort, onSortChange, onQuerying, onRefresh, getTraceData } = useDiscoverData();
     const searchType = useAtomValue(searchTypeAtom);
     const currentDatabase = useAtomValue(currentDatabaseAtom);
     const currentTable = useAtomValue(currentTableAtom);
@@ -51,6 +52,8 @@ export default function PageDiscover() {
     const [, setLoc] = useAtom(locationAtom);
     const shareReady = useAtomValue(discoverShareReadyAtom);
     const selectedDatasource = useAtomValue(selectedDatasourceAtom);
+    const samplingWarnings = useAtomValue(variantSamplingWarningAtom);
+    const samplingWarning = samplingWarnings[JSON.stringify([selectedDatasource?.uid, currentDatabase, currentTable])];
     const searchValue = useAtomValue(searchValueAtom);
     const dataFilter = useAtomValue(dataFilterAtom);
     const selectedFields = useAtomValue(selectedFieldsAtom);
@@ -83,8 +86,8 @@ export default function PageDiscover() {
             timeZone,
             timeRawFrom: relative ? rawFrom : undefined,
             timeRawTo: relative ? rawTo : undefined,
-            startTime: relative || !currentDate[0] ? undefined : formatTimeInZone(currentDate[0], timeZone),
-            endTime: relative || !currentDate[1] ? undefined : formatTimeInZone(currentDate[1], timeZone),
+            startTime: relative || !currentDate[0] ? undefined : formatShareTime(currentDate[0]),
+            endTime: relative || !currentDate[1] ? undefined : formatShareTime(currentDate[1]),
             mode: searchType,
             query: searchValue,
             filters: dataFilter,
@@ -224,7 +227,8 @@ export default function PageDiscover() {
                     `}
                 >
                     <div data-testid={testIds.pageTwo.container} style={{ flex: 'none' }}>
-                        <DiscoverHeader onQuerying={onQuerying} loading={loading.getTableData || loading.getTableDataCharts} />
+                        <DiscoverHeader onRefresh={onRefresh} onQuerying={onQuerying} loading={loading.getTableData || loading.getTableDataCharts} />
+                        {searchType === 'Lucene' && samplingWarning && <Alert title="Attribute search coverage" severity="warning">{samplingWarning}</Alert>}
                         <DiscoverFilter />
                         <DiscoverQueryFeedback queryState={queryState} searchType={searchType} database={currentDatabase} table={currentTable} />
                     </div>

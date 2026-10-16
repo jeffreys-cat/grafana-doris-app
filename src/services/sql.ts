@@ -1,3 +1,6 @@
+import SqlString from 'sqlstring';
+import dayjs from 'dayjs';
+import { parseDorisTime, histogramOrigin, formatSqlTime } from 'utils/time';
 import { FieldStatisticsParams, QueryTableDataParams, SurroundingParams, TopNQueryParams } from 'types/type';
 import { addSqlFilter, getFilterFieldReference, transformFieldPath } from 'utils/sql-filter';
 
@@ -141,7 +144,17 @@ export function getFieldStatisticsTopValuesSQL(params: FieldStatisticsParams) {
 
 export function getQueryTableChartsSQL(params: QueryTableDataParams) {
     const indexes = params.indexes;
-    let statement = `SELECT ${params.interval}_FLOOR(table_per_time.T,${params.interval_value}) as TT,sum(table_per_time.cnt) FROM (SELECT ${params.interval}_FLOOR(${params.timeField}) as T,count(*) as cnt FROM \`${params.database}\`.\`${params.table}\` WHERE`;
+    const unit = ['second', 'minute', 'hour', 'day', 'week', 'month', 'year'].includes(params.interval || '') ? params.interval! : 'hour';
+    const period = Math.max(1, Math.floor(params.interval_value || 1));
+    const zone = params.timeZone === 'browser' ? Intl.DateTimeFormat().resolvedOptions().timeZone : params.timeZone || 'UTC';
+    const origin = histogramOrigin(parseDorisTime(params.startDate), { interval_unit: unit as dayjs.ManipulateType, interval_value: period }, zone);
+    const field = SqlString.escapeId(params.timeField);
+    // Fixed units stay on the absolute timeline so repeated DST hours remain distinct.
+    const fixedUnit = ['second', 'minute', 'hour'].includes(unit);
+    const bucket = fixedUnit
+        ? `${unit}_FLOOR(${field}, ${period}, ${SqlString.escape(formatSqlTime(origin))})`
+        : `CONVERT_TZ(${unit}_FLOOR(CONVERT_TZ(${field}, 'UTC', ${SqlString.escape(zone)}), ${period}, ${SqlString.escape(origin.format('YYYY-MM-DD HH:mm:ss'))}), ${SqlString.escape(zone)}, 'UTC')`;
+    let statement = `SELECT ${bucket} AS TT, COUNT(*) AS \`sum(cnt)\` FROM \`${params.database}\`.\`${params.table}\` WHERE`;
     if (indexes && params.search_type === 'Search') {
         statement += ` (${indexes}) AND`;
     }
@@ -158,7 +171,7 @@ export function getQueryTableChartsSQL(params: QueryTableDataParams) {
     if (params.search_type === 'Lucene' && params.lucene_where) {
         statement = statement + ` AND (${params.lucene_where})`;
     }
-    statement = statement + ` ` + `GROUP BY T ORDER BY T) as table_per_time GROUP BY TT ORDER BY TT`;
+    statement = statement + ` ` + `GROUP BY TT ORDER BY TT`;
 
     return statement;
 }
@@ -192,12 +205,16 @@ export function getQueryTableResultCountSQL(params: QueryTableDataParams) {
 }
 
 export function getSurroundingSQL(params: SurroundingParams) {
-    let statement = `SELECT * FROM \`${params.database}\`.\`${params.table}\` WHERE`;
-    statement += ` (\`${params.timeField}\` ${params.operator} '${params.time}')`;
-    statement = params.data_filters.reduce((prev: any, curr: any) => {
-        return addSqlFilter(prev, curr);
-    }, statement);
-    const orderSymbol = params.operator === '<' ? 'DESC' : 'ASC';
-    statement = statement + ` ` + `ORDER BY \`${params.timeField}\` ${orderSymbol} LIMIT ${+params.pageSize}`;
-    return statement;
+    const anchor = parseDorisTime(params.time);
+    if (!anchor.isValid()) {
+        throw new Error('Invalid surrounding log anchor');
+    }
+    const hours = [1, 6, 24].includes(params.windowHours || 1) ? params.windowHours || 1 : 1;
+    const anchorLiteral = SqlString.escape(anchor.format('YYYY-MM-DD HH:mm:ss.SSS'));
+    const field = SqlString.escapeId(params.timeField);
+    const lower = params.operator === '<' ? `${anchorLiteral} - INTERVAL ${hours} HOUR` : anchorLiteral;
+    const upper = params.operator === '>' ? `${anchorLiteral} + INTERVAL ${hours} HOUR` : anchorLiteral;
+    let statement = `SELECT * FROM ${SqlString.escapeId(params.database)}.${SqlString.escapeId(params.table)} WHERE (${field} BETWEEN ${lower} AND ${upper}) AND (${field} ${params.operator === '<' ? '<' : '>'} ${anchorLiteral})`;
+    statement = (params.data_filters || []).reduce((sql: string, filter: any) => addSqlFilter(sql, filter), statement);
+    return `${statement} ORDER BY ${field} ${params.operator === '<' ? 'DESC' : 'ASC'} LIMIT ${Math.max(1, Math.floor(+params.pageSize))}`;
 }

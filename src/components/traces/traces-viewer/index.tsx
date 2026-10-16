@@ -1,18 +1,19 @@
+import { formatDorisTime } from 'utils/time';
 import React, { useMemo } from 'react';
 import { Select, useTheme2, Pagination } from '@grafana/ui';
 import { css } from '@emotion/css';
 import { TraceItem } from './trace-item';
 import ReactECharts from 'echarts-for-react';
 import { useAtom, useAtomValue } from 'jotai';
-import { pageAtom, pageSizeAtom } from 'store/discover';
+import { pageAtom, pageSizeAtom, timeZoneAtom } from 'store/discover';
 import { currentSortAtom } from 'store/traces';
 import TraceDetail from 'components/trace-detail';
 
-export const TraceView: React.FC<any> = React.memo(({ traces: propTraces, onSortByChange }) => {
+export const TraceView: React.FC<any> = React.memo(({ traces: propTraces, total = 0, onSortByChange, onPageChange }) => {
     const theme = useTheme2();
     const [page, setPage] = useAtom(pageAtom);
     const pageSize = useAtomValue(pageSizeAtom);
-    const total = propTraces[0]?.total || 0;
+    const timeZone = useAtomValue(timeZoneAtom);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const traces: any[] = propTraces || [];
     const [sort, setSort] = useAtom(currentSortAtom);
@@ -60,7 +61,7 @@ export const TraceView: React.FC<any> = React.memo(({ traces: propTraces, onSort
             xAxis: {
                 type: 'category',
                 name: 'Time',
-                data: traces.map(s => s.time),
+                data: traces.map(s => formatDorisTime(Number(s.time) * 1000, timeZone)),
                 axisLabel: { color: theme.colors.text.primary },
             },
             yAxis: {
@@ -77,7 +78,7 @@ export const TraceView: React.FC<any> = React.memo(({ traces: propTraces, onSort
                 },
             ],
         };
-    }, [seriesData, traces, theme]);
+    }, [seriesData, traces, theme, timeZone]);
 
     const onEvents = {
         click: (params: any) => {
@@ -160,7 +161,7 @@ export const TraceView: React.FC<any> = React.memo(({ traces: propTraces, onSort
                     <div>{traces.length} Traces, </div>
                     <div>Total {total}</div>
                 </h3>
-                <Pagination currentPage={page} numberOfPages={Math.ceil(total / pageSize) || 1} onNavigate={toPage => setPage(toPage)} />
+                <Pagination currentPage={page} numberOfPages={Math.ceil(total / pageSize) || 1} onNavigate={toPage => { setPage(toPage); onPageChange?.(toPage); }} />
             </div>
 
             {/* Trace List */}
@@ -173,8 +174,8 @@ export const TraceView: React.FC<any> = React.memo(({ traces: propTraces, onSort
             >
                 {traces.map(trace => (
                     <TraceItem
-                        key={trace.id}
-                        trace={trace}
+                        key={trace.trace_id}
+                        trace={{ ...trace, time: formatDorisTime(Number(trace.time) * 1000, timeZone) }}
                         onClick={() => {
                             setTraceId(trace.trace_id);
                             setDrawerOpen(true);

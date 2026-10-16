@@ -11,6 +11,7 @@ import { SelectableValue, TimeZone, dateTime, usePluginContext, toDataFrame } fr
 import { mergeLogsConfig, type AppPluginSettings } from 'types/plugin-settings';
 import {
     indexesAtom,
+    tableMetadataAtom,
     searchTypeAtom,
     discoverCurrentAtom,
     locationAtom,
@@ -47,7 +48,7 @@ import Lucene from './lucene';
 import { toError } from 'utils/errors';
 import { getLuceneFieldsWithoutInvertedIndex } from 'utils/query-parser/lucene-index-warning';
 import { useDatasourcePermissions } from 'hooks/useDatasourcePermissions';
-import { buildAbsoluteTimeRange, buildRelativeTimeRange, formatTimeInZone, normalizeTimeZone, parseTimeInZone, toDayjsRange } from 'utils/time';
+import { formatSqlTime, formatShareTime, buildAbsoluteTimeRange, buildRelativeTimeRange, normalizeTimeZone, parseTimeInZone, toDayjsRange } from 'utils/time';
 import { APPLICATION_FILTER_ID, applyApplicationFilter, getCommittedApplication, getConfiguredApplicationAttributeKey } from './application-filter';
 import { deriveVariantFields, deriveVariantFieldsFromMetadata } from 'utils/variant-fields';
 import { DiscoverShareState, readDiscoverShareState } from 'utils/discover-share-state';
@@ -146,13 +147,17 @@ function findShortcutByRaw(rawFrom?: string, rawTo?: string) {
 export default function DiscoverHeader(
     props: PropsWithChildren & {
         onQuerying: () => void;
+        onRefresh?: () => void;
         loading: boolean;
     },
 ) {
-    const { loading, onQuerying } = props;
+    const { loading, onQuerying, onRefresh } = props;
     // const catalog = 'internal';
     // const catalogs = useAtomValue(catalogAtom);
     const setIndexes = useSetAtom(indexesAtom);
+    const setTableMetadata = useSetAtom(tableMetadataAtom);
+    const requestedFieldsKey = React.useRef('');
+    const requestedIndexesKey = React.useRef('');
     const [searchType, setSearchType] = useAtom(searchTypeAtom);
     const [discoverCurrent, setDiscoverCurrent] = useAtom(discoverCurrentAtom);
     if (process.env.NODE_ENV !== 'production') {
@@ -231,8 +236,8 @@ export default function DiscoverHeader(
     const hasResourceAttributes =
         isApplicationFilterConfigured && resolvedFieldsContext === fieldsContext && tableFields.some((field: any) => field?.Field === 'resource_attributes');
     const committedApplication = getCommittedApplication(dataFilter, applicationAttributeKey);
-    const applicationStartDate = _currentDate[0] ? formatTimeInZone(_currentDate[0], timeZone) : '';
-    const applicationEndDate = _currentDate[1] ? formatTimeInZone(_currentDate[1], timeZone) : '';
+    const applicationStartDate = _currentDate[0] ? formatSqlTime(_currentDate[0]) : '';
+    const applicationEndDate = _currentDate[1] ? formatSqlTime(_currentDate[1]) : '';
     const visibleApplicationOptions = React.useMemo(() => {
         if (!applicationDraft || applicationOptions.some(option => option.value === applicationDraft)) {
             return applicationOptions;
@@ -242,6 +247,8 @@ export default function DiscoverHeader(
     }, [applicationDraft, applicationOptions]);
 
     const resetApplicationFilter = React.useCallback(() => {
+        requestedFieldsKey.current = '';
+        requestedIndexesKey.current = '';
         setApplicationDraft('');
         setDataFilter(current => {
             const next = current.filter(filter => filter.id !== APPLICATION_FILTER_ID);
@@ -348,12 +355,17 @@ export default function DiscoverHeader(
 
         setResolvedFieldsContext('');
 
+        const metadataKey = JSON.stringify([effectiveDatasource.uid, effectiveDatabase, selectedTable.value]);
+        requestedFieldsKey.current = metadataKey;
         getFieldsService({
             selectdbDS: effectiveDatasource,
             database: effectiveDatabase,
             table: selectedTable.value,
         }).subscribe({
             next: ({ data, ok }: any) => {
+                if (requestedFieldsKey.current !== metadataKey) {
+                    return;
+                }
                 if (ok) {
                     const frame = toDataFrame(data.results.getFields.frames[0]);
                     const values = Array.from(frame.fields[0].values);
@@ -368,6 +380,7 @@ export default function DiscoverHeader(
                         };
                     });
 
+                    setTableMetadata(previous => ({ ...previous, [metadataKey]: { ...previous[metadataKey], fields: tableFields } }));
                     setTableFields(tableFields);
                     setVariantFields(deriveVariantFields(tableFields, []));
                     setVariantMetadataFields([]);
@@ -387,6 +400,9 @@ export default function DiscoverHeader(
 
                     getVariantFieldsService({ selectdbDS: effectiveDatasource, database: effectiveDatabase, table: selectedTable.value }).subscribe({
                         next: ({ data, ok }: any) => {
+                            if (requestedFieldsKey.current !== metadataKey) {
+                                return;
+                            }
                             const metadataFrame = data?.results?.getVariantFields?.frames?.[0];
                             if (!ok || !metadataFrame) {
                                 return;
@@ -457,21 +473,28 @@ export default function DiscoverHeader(
             return;
         }
 
+        const metadataKey = JSON.stringify([effectiveDatasource.uid, effectiveDatabase, selectedTable.value]);
+        requestedIndexesKey.current = metadataKey;
         getIndexesService({
             selectdbDS: effectiveDatasource,
             database: effectiveDatabase,
             table: selectedTable.value,
         }).subscribe({
             next: ({ data, ok }: any) => {
+                if (requestedIndexesKey.current !== metadataKey) {
+                    return;
+                }
                 if (ok) {
                     const frameData = data?.results?.getIndexes?.frames?.[0];
                     if (!frameData) {
+                        setTableMetadata(previous => ({ ...previous, [metadataKey]: { ...previous[metadataKey], indexes: [] } }));
                         setIndexes([]);
                         setCurrentIndex([]);
                         return;
                     }
                     const frame = toDataFrame(frameData);
                     if (frame.fields.length === 0) {
+                        setTableMetadata(previous => ({ ...previous, [metadataKey]: { ...previous[metadataKey], indexes: [] } }));
                         setIndexes([]);
                         setCurrentIndex([]);
                         return;
@@ -481,6 +504,7 @@ export default function DiscoverHeader(
                     const indexesTypes = Array.from((frame.fields.find(field => field.name === 'Index_type') ?? frame.fields[10])?.values ?? []);
 
                     if (!values || values.length === 0) {
+                        setTableMetadata(previous => ({ ...previous, [metadataKey]: { ...previous[metadataKey], indexes: [] } }));
                         setIndexes([]);
                         setCurrentIndex([]);
                         return;
@@ -495,6 +519,7 @@ export default function DiscoverHeader(
                         };
                     });
 
+                    setTableMetadata(previous => ({ ...previous, [metadataKey]: { ...previous[metadataKey], indexes: tableIndexes } }));
                     setIndexes(tableIndexes);
 
                     if (tableIndexes) {
@@ -688,8 +713,8 @@ export default function DiscoverHeader(
         const rawFrom = normalizeRawTimeValue(timeRange?.raw?.from);
         const rawTo = normalizeRawTimeValue(timeRange?.raw?.to);
         const shouldShareRelativeRaw = isRelativeRawRange(timeRange?.raw);
-        const currentStartTime = _currentDate[0] ? formatTimeInZone(_currentDate[0], timeZone) : undefined;
-        const currentEndTime = _currentDate[1] ? formatTimeInZone(_currentDate[1], timeZone) : undefined;
+        const currentStartTime = _currentDate[0] ? formatShareTime(_currentDate[0]) : undefined;
+        const currentEndTime = _currentDate[1] ? formatShareTime(_currentDate[1]) : undefined;
 
         const hasRelativeTimeParams = Boolean(urlTimeRawFrom && urlTimeRawTo);
         const hasAbsoluteTimeParams = Boolean(urlStartTime && urlEndTime);
@@ -917,6 +942,7 @@ export default function DiscoverHeader(
                     </Field>
                     <Field label="Time Range" style={{ marginLeft: 8, marginRight: 8 }}>
                         <TimeRangeInput
+                            hideTimeZone={false}
                             isReversed={false}
                             onChange={timeRange => {
                                 const [start, end] = toDayjsRange(timeRange);
@@ -933,8 +959,8 @@ export default function DiscoverHeader(
                                         searchParams?.set('timeRawFrom', rawFrom);
                                         searchParams?.set('timeRawTo', rawTo);
                                     } else {
-                                        searchParams?.set('startTime', formatTimeInZone(start, timeZone));
-                                        searchParams?.set('endTime', formatTimeInZone(end, timeZone));
+                                        searchParams?.set('startTime', formatShareTime(start));
+                                        searchParams?.set('endTime', formatShareTime(end));
                                         searchParams?.delete('timeRawFrom');
                                         searchParams?.delete('timeRawTo');
                                     }
@@ -983,9 +1009,12 @@ export default function DiscoverHeader(
                             </span>
                         </Tooltip>
                     ) : null}
+                    <Tooltip content="Refresh table metadata and sampled attribute paths">
+                        <Button aria-label="Refresh search metadata" variant="secondary" icon="sync" disabled={loading || !currentTimeField} onClick={onRefresh} />
+                    </Tooltip>
                     <Button
                         onClick={() => {
-                            const latestTime = getLatestTime(activeItem?.key as string);
+                            const latestTime = getLatestTime(activeItem?.key as string, timeZone);
                             if (latestTime) {
                                 const [latestStartTime, latestEndTime] = latestTime;
                                 const currentShortcut = DISCOVER_SHORTCUTS.find(shortcut => shortcut.key === activeItem?.key);

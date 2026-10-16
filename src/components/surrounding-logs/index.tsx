@@ -1,7 +1,7 @@
 'use client';
 
 import { Row, ColumnDef } from '@tanstack/react-table';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { ColumnStyleWrapper, HoverStyle } from '../discover-content/discover-content.style';
 import { useAtom, useAtomValue } from 'jotai';
 import { useRequest } from 'ahooks';
@@ -29,12 +29,13 @@ import {
     dataFilterAtom,
     selectedFieldsAtom,
     tableFieldsAtom,
+    timeZoneAtom,
 } from 'store/discover';
 // import dayjs from 'dayjs';
 import { sortBy } from 'lodash-es';
-import { getSurroundingDataService } from 'services/discover';
+import { getSurroundingDataWithWindow as getSurroundingDataService } from 'services/discover';
 import { lastValueFrom } from 'rxjs';
-import { convertColumnToRowViaFieldsType, escapeHtml, formatFieldDisplayValue, formatRecordDisplayValue, formatTimestampToDateTime, isStructuredJsonType, parseJsonLikeValue } from 'utils/data';
+import { convertColumnToRowViaFieldsType, escapeHtml, formatFieldDisplayValue, formatRecordDisplayValue, formatRecordTimes, generateHighlightedResults, formatTimestampToDateTime, isStructuredJsonType, isValidTimeFieldType, parseJsonLikeValue } from 'utils/data';
 import { generateTableDataUID } from 'utils/utils';
 import { SurroundingColumnAction } from './column-action';
 import { logError } from '@grafana/runtime';
@@ -45,6 +46,7 @@ import { LongTextCell } from 'components/long-text-cell';
 
 export default function SurroundingLogs() {
     const theme = useTheme2();
+    const timeZone = useAtomValue(timeZoneAtom);
     const selectedRow = useAtomValue(selectedRowAtom);
     const selectdbDS = useAtomValue(selectedDatasourceAtom);
     const currentTimeField = useAtomValue(currentTimeFieldAtom);
@@ -64,6 +66,11 @@ export default function SurroundingLogs() {
     const [beforeTime, setBeforeTime] = useAtom(beforeTimeAtom);
     const [afterTime, setAfterTime] = useAtom(afterTimeAtom);
     const tableFields = useAtomValue(tableFieldsAtom);
+    const contextKey = JSON.stringify([selectdbDS?.uid, currentDatabase, currentTable, currentTimeField, selectedRow._uid, selectedRow.time, dataFilter]);
+    const contextRef = useRef(contextKey);
+    contextRef.current = contextKey;
+    const requestSurrounding = (params: SurroundingParams) => lastValueFrom(getSurroundingDataService({ selectdbDS, ...params }))
+        .then(response => ({ ...response, surroundingContext: contextKey }));
     const [state, updateState] = useState([
         {
             label: 'Table',
@@ -81,37 +88,31 @@ export default function SurroundingLogs() {
         setSelectedFields(current => current.filter((item: any) => item.Field !== field.Field));
     }
 
-    const getAfterResultWrap = (result: any[]) => {
-        const [_, ...newResult] = result;
-        return newResult;
-    }
 
     const { loading: getAfterSurroundingDataLoading, run: getAfterSurroundingData } = useRequest(
         ({ pageSize = afterTimeFieldPageSize, time = afterTime }: any) => {
             const params: SurroundingParams = getQueryParams({
-                pageSize: pageSize + 1,
+                pageSize,
                 operator: '>',
                 time,
             });
 
-            return lastValueFrom(
-                getSurroundingDataService({
-                    selectdbDS,
-                    ...params,
-                }),
-            );
+            return requestSurrounding(params);
         },
         {
             manual: true,
-            onSuccess: async (res: any, params: any) => {
+            onSuccess: async (res: any) => {
+                if (res.surroundingContext !== contextRef.current) {
+                    return;
+                }
                 if (res.ok) {
                     const rowsData = convertColumnToRowViaFieldsType(res.data.results.getSurroundingData.frames[0], tableFields);
-                    const result = getAfterResultWrap(generateSurroundingResult(rowsData, currentTimeField));
-                    let data = [...surroundingTableData];
-                    data.push(...result);
-                    setAfterCount(afterCount + result.length);
-                    setAfterTime(result[result.length - 1]._original[currentTimeField]);
-                    setSurroundingTableData(data);
+                    const result = generateSurroundingResult(rowsData, currentTimeField);
+                    setAfterCount(previous => previous + result.length);
+                    if (result.length) {
+                        setAfterTime(result[result.length - 1]._original[currentTimeField]);
+                    }
+                    setSurroundingTableData(previous => [...previous, ...result]);
                     // setTimeout(() => {
                     //     scrollToSelectedRow();
                     // }, 50);
@@ -147,24 +148,22 @@ export default function SurroundingLogs() {
                 time,
             });
 
-            return lastValueFrom(
-                getSurroundingDataService({
-                    selectdbDS,
-                    ...params,
-                }),
-            );
+            return requestSurrounding(params);
         },
         {
             manual: true,
-            onSuccess: async (res: any, params: any) => {
+            onSuccess: async (res: any) => {
+                if (res.surroundingContext !== contextRef.current) {
+                    return;
+                }
                 if (res.ok) {
                     const rowsData = convertColumnToRowViaFieldsType(res.data.results.getSurroundingData.frames[0], tableFields);
                     const result = generateSurroundingResult(rowsData, currentTimeField);
-                    let data = [...surroundingTableData];
-                    data.unshift(...result);
-                    setBeforeCount(beforeCount + result.length);
-                    setBeforeTime(result[0]._original[currentTimeField]);
-                    setSurroundingTableData(data);
+                    setBeforeCount(previous => previous + result.length);
+                    if (result.length) {
+                        setBeforeTime(result[0]._original[currentTimeField]);
+                    }
+                    setSurroundingTableData(previous => [...result, ...previous]);
                     // setTimeout(() => {
                     //     scrollToSelectedRow();
                     // }, 50);
@@ -187,35 +186,33 @@ export default function SurroundingLogs() {
             });
             const afterTimeParams: SurroundingParams = getQueryParams({
                 operator: '>',
-                pageSize: 6
+                pageSize: 5
             });
             return Promise.all([
-                lastValueFrom(
-                    getSurroundingDataService({
-                        selectdbDS,
-                        ...prevTimeParams,
-                    }),
-                ),
-                lastValueFrom(
-                    getSurroundingDataService({
-                        selectdbDS,
-                        ...afterTimeParams,
-                    }),
-                ),
+                requestSurrounding(prevTimeParams),
+                requestSurrounding(afterTimeParams),
             ]);
         },
         {
-            refreshDeps: [dataFilter],
+            refreshDeps: [contextKey],
             onSuccess: async (res: any) => {
+                if (res.some((item: any) => item.surroundingContext !== contextRef.current)) {
+                    return;
+                }
                 if (res[0].ok && res[1].ok) {
                     const rowsData1 = convertColumnToRowViaFieldsType(res[0].data.results.getSurroundingData.frames[0], tableFields);
                     const rowsData2 = convertColumnToRowViaFieldsType(res[1].data.results.getSurroundingData.frames[0], tableFields);
                     const result1 = generateSurroundingResult(rowsData1, currentTimeField);
-                    const result2 = getAfterResultWrap(generateSurroundingResult(rowsData2, currentTimeField));
+                    const result2 = generateSurroundingResult(rowsData2, currentTimeField);
                     const selectedResult = generateSurroundingResult([selectedRow._original], currentTimeField);
                     const data = [...result1, ...selectedResult, ...result2];
                     const rowsDataWithUID = await generateTableDataUID(data);
+                    if (res.some((item: any) => item.surroundingContext !== contextRef.current)) {
+                        return;
+                    }
 
+                    setBeforeCount(result1.length);
+                    setAfterCount(result2.length);
                     if (result1.length > 0) {
                         setBeforeCount(result1.length);
                         setBeforeTime(result1[0]._original[currentTimeField]);
@@ -247,13 +244,13 @@ export default function SurroundingLogs() {
             return {
                 _original: item._original,
                 time: item._original?.[currentTimeField] || '',
-                _source: item._source,
+                _source: generateHighlightedResults({ search_value: '', indexes: [] }, [formatRecordTimes(item._original, tableFields, timeZone)])[0]._source,
                 _uid: item._uid,
                 selected: item._uid === selectedRow._uid,
             };
         });
         setFields(data);
-    }, [surroundingTableData, currentTimeField, selectedRow._uid]);
+    }, [surroundingTableData, currentTimeField, selectedRow._uid, tableFields, timeZone]);
 
     const renderBeforeLoadingBar = () => {
         if (initLoading || getBeforeSurroundingDataLoading) {
@@ -336,9 +333,9 @@ export default function SurroundingLogs() {
                         <table className="bg-b1/20 pl-4 backdrop-blur-md dark:bg-n9/60">
                             <tbody>
                                 {subTableData.map((item: any) => {
-                                    const fieldValue = formatFieldDisplayValue(item.value, 'compact');
                                     const fieldName = item.field;
                                     const fieldType = tableFields.find((field: any) => field.Field === fieldName)?.Type;
+                                    const fieldValue = isValidTimeFieldType(String(fieldType || '').toUpperCase()) && item.value != null ? formatTimestampToDateTime(item.value, 3, timeZone) : formatFieldDisplayValue(item.value, 'compact');
                                     const tableRowStyle = css`
                                         &:hover {
                                             .filter-table-content {
@@ -437,7 +434,7 @@ export default function SurroundingLogs() {
                 cell: ({ row, getValue }) => {
                     const fieldValue = getValue<string>();
                     const fieldName = currentTimeField;
-                    const timeField = formatTimestampToDateTime(fieldValue);
+                    const timeField = formatTimestampToDateTime(fieldValue, 3, timeZone);
                     return (
                         <div
                             className={`${css`
@@ -548,7 +545,7 @@ export default function SurroundingLogs() {
                         ),
                         cell: ({ row }: any) => {
                             const rawFieldValue = getVariantFieldValue(row.original._original, field);
-                            const fieldValue = formatFieldDisplayValue(rawFieldValue, 'compact');
+                            const fieldValue = isValidTimeFieldType(String(field.Type || '').toUpperCase()) && rawFieldValue != null ? formatTimestampToDateTime(rawFieldValue, 3, timeZone) : formatFieldDisplayValue(rawFieldValue, 'compact');
                             const fieldName = field.Field;
                             const fieldType = field.Type;
                             return (
@@ -583,7 +580,7 @@ export default function SurroundingLogs() {
         }
         return dynamicColumns;
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentTimeField, handleRemove, hasSelectedFields, selectedFields]);
+    }, [timeZone, currentTimeField, handleRemove, hasSelectedFields, selectedFields]);
 
     return (
         <div>

@@ -21,7 +21,7 @@ describe('getSurroundingSQL', () => {
                 theme: 'light',
             }),
         ).toBe(
-            "SELECT * FROM `otel`.`logs` WHERE (`timestamp` > '2026-09-20 10:00:00') AND (`level` = 'ERROR') ORDER BY `timestamp` ASC LIMIT 5",
+            "SELECT * FROM `otel`.`logs` WHERE (`timestamp` BETWEEN '2026-09-20 10:00:00.000' AND '2026-09-20 10:00:00.000' + INTERVAL 1 HOUR) AND (`timestamp` > '2026-09-20 10:00:00.000') AND (`level` = 'ERROR') ORDER BY `timestamp` ASC LIMIT 5",
         );
     });
 });
