@@ -112,8 +112,14 @@ func TestSSOHealthAndViewerQuery(t *testing.T) {
 					if response.Error != nil || len(response.Frames) != 1 || response.Frames[0].Rows() != 1 {
 						t.Fatalf("expected SELECT 1 result: %#v", response)
 					}
-				} else if err == nil || !strings.Contains(err.Error(), tc.message) {
-					t.Fatalf("expected query identity rejection %q, got %v", tc.message, err)
+				} else {
+					if err != nil || result == nil {
+						t.Fatalf("expected an unmasked query identity rejection: result=%#v err=%v", result, err)
+					}
+					response := result.Responses["A"]
+					if response.Error == nil || !strings.Contains(response.Error.Error(), tc.message) {
+						t.Fatalf("expected query identity rejection %q, got %#v", tc.message, response)
+					}
 				}
 			} else {
 				req := &backend.CheckHealthRequest{PluginContext: ctx}

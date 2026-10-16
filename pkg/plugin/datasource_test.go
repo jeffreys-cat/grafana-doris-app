@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -95,11 +96,57 @@ func TestQueryDataRejectsMissingOIDCTokenBeforeDorisQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = datasource.QueryData(context.Background(), &backend.QueryDataRequest{
+	response, err := datasource.QueryData(context.Background(), &backend.QueryDataRequest{
 		PluginContext: backend.PluginContext{DataSourceInstanceSettings: &backend.DataSourceInstanceSettings{UID: "datasource-a", JSONData: settings}},
 		Queries:       []backend.DataQuery{{RefID: "A", JSON: model}},
 	})
-	if err == nil || !strings.Contains(err.Error(), "OIDC ID token is required") {
-		t.Fatalf("expected token rejection before querying Doris, got %v", err)
+	if err != nil || response == nil {
+		t.Fatalf("expected a query response rather than a masked plugin error, got response=%#v err=%v", response, err)
+	}
+	if result := response.Responses["A"]; result.Status != backend.StatusInternal || result.Error == nil || !strings.Contains(result.Error.Error(), "OIDC ID token is required") {
+		t.Fatalf("expected token rejection before querying Doris, got %#v", result)
+	}
+}
+
+func TestQueryDataExposesSetupErrorsForEveryQuery(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		settings    *backend.DataSourceInstanceSettings
+		profile     *SSOProfile
+		profileErr  error
+		listenerErr error
+		status      backend.Status
+		message     string
+	}{
+		{name: "missing settings", status: backend.StatusBadRequest, message: "Doris datasource settings are missing"},
+		{name: "invalid settings", settings: &backend.DataSourceInstanceSettings{JSONData: json.RawMessage(`{`)}, status: backend.StatusBadRequest, message: "invalid datasource configuration"},
+		{name: "missing profile", settings: &backend.DataSourceInstanceSettings{UID: "test", JSONData: json.RawMessage(`{"enableSso":true}`)}, status: backend.StatusInternal, message: "Doris SSO Profile is not configured"},
+		{name: "invalid profile", settings: &backend.DataSourceInstanceSettings{UID: "test", JSONData: json.RawMessage(`{"enableSso":true}`)}, profileErr: errors.New("Doris SSO Profile signing key is invalid"), status: backend.StatusInternal, message: "Doris SSO Profile signing key is invalid"},
+		{name: "JWKS listener", settings: &backend.DataSourceInstanceSettings{UID: "test", JSONData: json.RawMessage(`{"enableSso":true}`)}, profile: &SSOProfile{}, listenerErr: errors.New("Doris SSO Profile JWKS listener could not start"), status: backend.StatusInternal, message: "JWKS listener could not start"},
+		{name: "invalid IDP CA", settings: &backend.DataSourceInstanceSettings{UID: "test", JSONData: json.RawMessage(`{"enableSso":true}`), DecryptedSecureJSONData: map[string]string{"idpTlsCACert": "invalid"}}, profile: &SSOProfile{}, status: backend.StatusInternal, message: "IDP TLS CA certificate"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			datasource := newDatasource(http.DefaultClient, tc.profile, tc.profileErr)
+			datasource.listenerOnce.Do(func() {})
+			datasource.listenerErr = tc.listenerErr
+			response, err := datasource.QueryData(context.Background(), &backend.QueryDataRequest{
+				PluginContext: backend.PluginContext{DataSourceInstanceSettings: tc.settings},
+				Queries:       []backend.DataQuery{{RefID: "A", JSON: json.RawMessage(`{"rawSql":"SELECT 1"}`)}, {RefID: "B", JSON: json.RawMessage(`{"rawSql":"SELECT 2"}`)}},
+			})
+			if err != nil || response == nil {
+				t.Fatalf("expected query errors instead of a masked plugin error: response=%#v err=%v", response, err)
+			}
+			for _, refID := range []string{"A", "B"} {
+				result, ok := response.Responses[refID]
+				if !ok || result.Error == nil || result.Status != tc.status || !strings.Contains(result.Error.Error(), tc.message) || len(result.Frames) != 0 {
+					t.Fatalf("query %s lost setup error %q: %#v", refID, tc.message, result)
+				}
+				// Check the SDK JSON serialization used in Grafana's results response.
+				raw, err := json.Marshal(result)
+				if err != nil || !strings.Contains(string(raw), tc.message) {
+					t.Fatalf("query %s lost its public message when serialized: %s err=%v", refID, raw, err)
+				}
+			}
+		})
 	}
 }

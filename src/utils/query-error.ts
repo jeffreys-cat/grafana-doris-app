@@ -24,9 +24,11 @@ export function getQueryErrorMessage(error: any): string {
         error?.backendError ||
         resultError?.error ||
         responseData?.error?.message ||
+        (typeof responseData?.error === 'string' ? responseData.error : undefined) ||
         responseData?.message ||
-        error?.statusText ||
         error?.message ||
+        error?.statusText ||
+        (typeof error === 'string' ? error : undefined) ||
         'Request failed',
     );
 }
@@ -127,6 +129,18 @@ function extractLocation(error: any, message: string, generatedSql?: string, sea
 
 function getLikelyCause(message: string) {
     const normalized = message.toLowerCase();
+    if (normalized.includes('an error occurred within the plugin')) {
+        return 'Grafana did not return the underlying plugin error. Check the Grafana server/plugin logs for the cause, or ask your administrator.';
+    }
+    if (normalized.includes('oidc id token is required')) {
+        return 'Sign in with OIDC and enable Forward OAuth Identity for this datasource, then retry the query.';
+    }
+    if (/oidc id token validation failed/.test(normalized)) {
+        return 'Sign in again to refresh your OIDC session. If the error persists, check the identity provider issuer, audience, and signing keys.';
+    }
+    if (/sso profile|jwks|oidc|keyrock|identity provider/.test(normalized)) {
+        return 'Check the Doris SSO Profile and identity provider configuration using the backend message.';
+    }
     if (/syntax|parse|mismatched|unexpected|unterminated|no viable|expected/.test(normalized)) {
         return 'Check SQL/Lucene keywords, operators, quotes, and matching parentheses near the reported position.';
     }

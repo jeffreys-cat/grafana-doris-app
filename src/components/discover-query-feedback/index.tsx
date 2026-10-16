@@ -41,39 +41,38 @@ function QueryErrorDetails({ error }: { error: DiscoverQueryError }) {
                 overflow-wrap: anywhere;
             `}
         >
+            <div>
+                <strong>Backend message</strong>
+                <pre
+                    className={css`
+                        max-height: 180px;
+                        margin: 4px 0 0;
+                        padding: 8px;
+                        overflow: auto;
+                        border-radius: 4px;
+                        background: ${theme.colors.background.canvas};
+                        color: ${theme.colors.text.primary};
+                        white-space: pre-wrap;
+                    `}
+                >
+                    {error.message}
+                </pre>
+            </div>
             <div>{getLocationText(error)}</div>
             {error.location?.near ? <div>Near: <code>{error.location.near}</code></div> : null}
             <div><strong>Possible cause:</strong> {error.likelyCause}</div>
-            <details>
-                <summary
-                    className={css`
-                        width: fit-content;
-                        cursor: pointer;
-                        font-weight: 500;
-                    `}
-                >
-                    Backend details and generated SQL
-                </summary>
-                <div className={css`margin-top: 8px;`}>
-                    <strong>Backend message</strong>
-                    <pre
+            {error.generatedSql ? (
+                <details>
+                    <summary
                         className={css`
-                            max-height: 180px;
-                            margin: 4px 0 0;
-                            padding: 8px;
-                            overflow: auto;
-                            border-radius: 4px;
-                            background: ${theme.colors.background.canvas};
-                            color: ${theme.colors.text.primary};
-                            white-space: pre-wrap;
+                            width: fit-content;
+                            cursor: pointer;
+                            font-weight: 500;
                         `}
                     >
-                        {error.message}
-                    </pre>
-                </div>
-                {error.generatedSql ? (
+                        Generated SQL
+                    </summary>
                     <div className={css`margin-top: 8px;`}>
-                        <strong>Generated SQL</strong>
                         <pre
                             className={css`
                                 max-height: 260px;
@@ -89,8 +88,8 @@ function QueryErrorDetails({ error }: { error: DiscoverQueryError }) {
                             {error.generatedSql}
                         </pre>
                     </div>
-                ) : null}
-            </details>
+                </details>
+            ) : null}
         </div>
     );
 }

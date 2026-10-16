@@ -47,32 +47,35 @@ type queryModel struct {
 }
 
 func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
+	if req.PluginContext.DataSourceInstanceSettings == nil {
+		return queryErrorResponse(req, backend.StatusBadRequest, fmt.Errorf("Doris datasource settings are missing")), nil
+	}
 	settings, secrets, err := parseSettings(req.PluginContext.DataSourceInstanceSettings.JSONData, req.PluginContext.DataSourceInstanceSettings.DecryptedSecureJSONData)
 	if err != nil {
-		return nil, err
+		return queryErrorResponse(req, backend.StatusBadRequest, err), nil
 	}
 	var username, dorisToken string
 	if settings.EnableSSO {
 		profile, audience, err := d.profileForRequest(req.PluginContext.DataSourceInstanceSettings.UID)
 		if err != nil {
-			return nil, err
+			return queryErrorResponse(req, backend.StatusInternal, err), nil
 		}
 		if err := d.ensureJWKS(profile); err != nil {
-			return nil, err
+			return queryErrorResponse(req, backend.StatusInternal, err), nil
 		}
 		exchanger, err := d.idpExchanger(req.PluginContext, settings, secrets)
 		if err != nil {
-			return nil, err
+			return queryErrorResponse(req, backend.StatusInternal, err), nil
 		}
 		identity, err := exchanger.verifyKeyrockIDToken(ctx, idTokenFromHeader(req.GetHTTPHeader(idTokenHeader)), settings)
 		if err != nil {
-			return nil, err
+			return queryErrorResponse(req, backend.StatusInternal, err), nil
 		}
 		// Authorization is owned by Doris. Forward only the verified source groups;
 		// the Doris administrator maps them to roles in the bootstrap SQL.
 		dorisToken, err = d.exchanger.issueDorisToken(identity.Subject, identity.Groups, profile.Issuer, audience, profile.SigningKeyID, profile.SigningKey)
 		if err != nil {
-			return nil, err
+			return queryErrorResponse(req, backend.StatusInternal, err), nil
 		}
 		username = identity.Subject
 	}
@@ -101,6 +104,16 @@ func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataReques
 		response.Responses[query.RefID] = backend.DataResponse{Frames: data.Frames{frame}}
 	}
 	return response, nil
+}
+
+// Query failures must be returned per ref ID. Returning a top-level error makes
+// Grafana replace the useful message with "An error occurred within the plugin".
+func queryErrorResponse(req *backend.QueryDataRequest, status backend.Status, err error) *backend.QueryDataResponse {
+	response := backend.NewQueryDataResponse()
+	for _, query := range req.Queries {
+		response.Responses[query.RefID] = backend.ErrDataResponse(status, err.Error())
+	}
+	return response
 }
 
 func (d *Datasource) CheckHealth(ctx context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {

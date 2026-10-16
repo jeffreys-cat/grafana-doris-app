@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.18 (2026-10-15)
+
+### 🐛 Bug Fixes
+
+* preserve datasource configuration and SSO setup failures in per-query responses so Grafana exposes the underlying error instead of a generic plugin failure
+* display backend error messages directly in Discover, with actionable SSO guidance and log troubleshooting for generic plugin errors
+* consistently extract query error messages across HTTP failures and embedded Grafana query results
+
 ## 1.1.17 (2026-10-15)
 
 ### 🐛 Bug Fixes
