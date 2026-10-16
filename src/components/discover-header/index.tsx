@@ -1,7 +1,7 @@
 'use client';
 import React, { PropsWithChildren, useEffect } from 'react';
 import dayjs from 'dayjs';
-import { DiscoverHeaderSearch } from './discover-header.style';
+import { DiscoverHeaderControls, DiscoverHeaderSearch } from './discover-header.style';
 import SearchType from './search-type';
 import SQLSearch from './sql-search';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
@@ -52,6 +52,7 @@ import { formatSqlTime, formatShareTime, buildAbsoluteTimeRange, buildRelativeTi
 import { APPLICATION_FILTER_ID, applyApplicationFilter, getCommittedApplication, getConfiguredApplicationAttributeKey } from './application-filter';
 import { deriveVariantFields, deriveVariantFieldsFromMetadata } from 'utils/variant-fields';
 import { DiscoverShareState, readDiscoverShareState } from 'utils/discover-share-state';
+import { timeRangeFieldClass } from 'components/time-range-input/time-range-input.styles';
 
 function getStoredValue<T>(key: string): T | undefined {
     if (typeof window === 'undefined') {
@@ -811,13 +812,14 @@ export default function DiscoverHeader(
         <div
             className={css`
                 padding: 1rem;
-                padding-top: 1.5rem;
                 background-color: ${theme.isDark ? 'rgb(24, 27, 31)' : '#FFF'};
                 display: flex;
+                flex-direction: column;
+                gap: 12px;
                 border-radius: 0.25rem 0.25rem 0 0;
             `}
         >
-            <DiscoverHeaderSearch className="h-8 rounded border border-solid border-n9 dark:border-n7">
+            <DiscoverHeaderControls>
                 <Field label="Datasource" description={datasourcePermissionsError ? 'Failed to load team datasource permissions' : undefined}>
                     {/* filter 这个版本无效 */}
                     <DataSourcePicker
@@ -841,7 +843,7 @@ export default function DiscoverHeader(
                     />
                 </Field>
                 {/* 需要从数据源中获取库表信息 */}
-                <Field label="Database" style={{ marginLeft: 8 }}>
+                <Field label="Database">
                     <Select
                         width={15}
                         options={databases}
@@ -871,7 +873,7 @@ export default function DiscoverHeader(
                     ></Select>
                 </Field>
 
-                <Field label="Table" style={{ marginLeft: 8 }}>
+                <Field label="Table">
                     <Select
                         options={tables}
                         width={15}
@@ -889,7 +891,7 @@ export default function DiscoverHeader(
                     />
                 </Field>
                 {isApplicationFilterConfigured ? (
-                    <Field label="Application" style={{ marginLeft: 8 }}>
+                    <Field label="Application">
                         <Select
                             options={visibleApplicationOptions}
                             width={14}
@@ -904,157 +906,159 @@ export default function DiscoverHeader(
                         />
                     </Field>
                 ) : null}
-                <Field label="Mode" style={{ marginLeft: 8, marginRight: 8, width: '120px' }}>
+                {!searchFocus && (
+                    <>
+                        <Field label="Time Field" style={{ width: 120 }}>
+                            <Select
+                                value={currentTimeField}
+                                options={timeFields}
+                                onChange={(selectdbTimeFiled: any) => {
+                                    setDiscoverCurrent({
+                                        ...discoverCurrent,
+                                        timeField: selectdbTimeFiled.value,
+                                    });
+                                    setLoc((prev: any) => {
+                                        const searchParams = new URLSearchParams(prev?.searchParams?.toString() ?? '');
+                                        searchParams?.set('timeField', selectdbTimeFiled.value);
+                                        return {
+                                            ...prev,
+                                            searchParams,
+                                        };
+                                    });
+                                }}
+                                placeholder={'Time Field'}
+                            />
+                        </Field>
+                        <Field label="Time Range" className={timeRangeFieldClass} style={{ marginLeft: 'auto' }}>
+                            <TimeRangeInput
+                                hideTimeZone={false}
+                                isReversed={false}
+                                onChange={timeRange => {
+                                    const [start, end] = toDayjsRange(timeRange);
+                                    setActiveItem(undefined);
+                                    const rawFrom = normalizeRawTimeValue(timeRange.raw?.from);
+                                    const rawTo = normalizeRawTimeValue(timeRange.raw?.to);
+                                    const hasRelativeRaw = isRelativeRawRange(timeRange.raw);
+
+                                    setLoc(prev => {
+                                        const searchParams = new URLSearchParams(prev?.searchParams?.toString() ?? '');
+                                        if (hasRelativeRaw && rawFrom && rawTo) {
+                                            searchParams?.delete('startTime');
+                                            searchParams?.delete('endTime');
+                                            searchParams?.set('timeRawFrom', rawFrom);
+                                            searchParams?.set('timeRawTo', rawTo);
+                                        } else {
+                                            searchParams?.set('startTime', formatShareTime(start));
+                                            searchParams?.set('endTime', formatShareTime(end));
+                                            searchParams?.delete('timeRawFrom');
+                                            searchParams?.delete('timeRawTo');
+                                        }
+                                        searchParams?.set('timeZone', timeZone);
+                                        return {
+                                            ...prev,
+                                            searchParams,
+                                        };
+                                    });
+
+                                    setCurrentDate([start, end]);
+                                    setTimeRange({
+                                        from: dateTime(timeRange.from.toDate()),
+                                        to: dateTime(timeRange.to.toDate()),
+                                        raw:
+                                            hasRelativeRaw && rawFrom && rawTo
+                                                ? { from: rawFrom, to: rawTo }
+                                                : { from: dateTime(timeRange.from.toDate()), to: dateTime(timeRange.to.toDate()) },
+                                    });
+                                }}
+                                onChangeTimeZone={(nextTimeZone: TimeZone) => {
+                                    setTimeZone(nextTimeZone);
+                                    updateShareParams({ timeZone: nextTimeZone });
+                                }}
+                                timeZone={timeZone}
+                                value={timeRange}
+                            />
+                        </Field>
+                    </>
+                )}
+            </DiscoverHeaderControls>
+            <DiscoverHeaderSearch>
+                <Field label="Mode" style={{ flex: '0 0 80px' }}>
                     <SearchType />
                 </Field>
                 {searchType === 'Lucene' ? (
-                    <Field label="Lucene" style={{ flex: '1 1 auto', minWidth: 0 }}>
+                    <Field label="Lucene" style={{ flex: '1 1 0', minWidth: 0 }}>
                         <Lucene onQuerying={commitApplicationAndQuery} />
                     </Field>
                 ) : (
-                    <Field label={searchMode ? 'Search' : 'SQL'} style={{ flex: '1 1 auto', minWidth: 0 }}>
+                    <Field label={searchMode ? 'Search' : 'SQL'} style={{ flex: '1 1 0', minWidth: 0 }}>
                         <SQLSearch style={{ minWidth: 0, width: '100%' }} onQuerying={commitApplicationAndQuery} />
                     </Field>
                 )}
-            </DiscoverHeaderSearch>
-            {!searchFocus && (
-                <>
-                    <Field label="Time Field">
-                        <Select
-                            value={currentTimeField}
-                            options={timeFields}
-                            onChange={(selectdbTimeFiled: any) => {
-                                setDiscoverCurrent({
-                                    ...discoverCurrent,
-                                    timeField: selectdbTimeFiled.value,
-                                });
-                                setLoc((prev: any) => {
-                                    const searchParams = new URLSearchParams(prev?.searchParams?.toString() ?? '');
-                                    searchParams?.set('timeField', selectdbTimeFiled.value);
-                                    return {
-                                        ...prev,
-                                        searchParams,
-                                    };
-                                });
-                            }}
-                            placeholder={'Time Field'}
-                        />
-                    </Field>
-                    <Field label="Time Range" style={{ marginLeft: 8, marginRight: 8 }}>
-                        <TimeRangeInput
-                            hideTimeZone={false}
-                            isReversed={false}
-                            onChange={timeRange => {
-                                const [start, end] = toDayjsRange(timeRange);
-                                setActiveItem(undefined);
-                                const rawFrom = normalizeRawTimeValue(timeRange.raw?.from);
-                                const rawTo = normalizeRawTimeValue(timeRange.raw?.to);
-                                const hasRelativeRaw = isRelativeRawRange(timeRange.raw);
-
-                                setLoc(prev => {
-                                    const searchParams = new URLSearchParams(prev?.searchParams?.toString() ?? '');
-                                    if (hasRelativeRaw && rawFrom && rawTo) {
+                <Field label="">
+                    <div style={{ alignItems: 'center', display: 'flex', gap: theme.spacing(1) }}>
+                        {fieldsWithoutInvertedIndex.length > 0 ? (
+                            <Tooltip
+                                content={
+                                    <span>
+                                        {warningFields}
+                                        {remainingWarningFieldCount > 0 ? ` 等 ${fieldsWithoutInvertedIndex.length} 个字段` : ''} 未配置倒排索引，Lucene 查询可能较慢。
+                                        {jsonFieldsWithoutInvertedIndex.length > 0 ? ' JSON 子路径使用 JSON 函数过滤，通常会扫描数据。' : ''}
+                                    </span>
+                                }
+                                placement="top"
+                            >
+                                <span aria-label="Lucene 倒排索引告警" style={{ color: theme.colors.warning.text, cursor: 'help', display: 'inline-flex' }}>
+                                    <Icon name="exclamation-triangle" size="sm" />
+                                </span>
+                            </Tooltip>
+                        ) : null}
+                        <Tooltip content="Refresh table metadata and sampled attribute paths">
+                            <Button aria-label="Refresh search metadata" variant="secondary" icon="sync" disabled={loading || !currentTimeField} onClick={onRefresh} />
+                        </Tooltip>
+                        <Button
+                            onClick={() => {
+                                const latestTime = getLatestTime(activeItem?.key as string, timeZone);
+                                if (latestTime) {
+                                    const [latestStartTime, latestEndTime] = latestTime;
+                                    const currentShortcut = DISCOVER_SHORTCUTS.find(shortcut => shortcut.key === activeItem?.key);
+                                    const rawFrom = normalizeRawTimeValue(currentShortcut?.raw?.from);
+                                    const rawTo = normalizeRawTimeValue(currentShortcut?.raw?.to);
+                                    setLoc(prev => {
+                                        const searchParams = new URLSearchParams(prev?.searchParams?.toString() ?? '');
                                         searchParams?.delete('startTime');
                                         searchParams?.delete('endTime');
-                                        searchParams?.set('timeRawFrom', rawFrom);
-                                        searchParams?.set('timeRawTo', rawTo);
-                                    } else {
-                                        searchParams?.set('startTime', formatShareTime(start));
-                                        searchParams?.set('endTime', formatShareTime(end));
-                                        searchParams?.delete('timeRawFrom');
-                                        searchParams?.delete('timeRawTo');
-                                    }
-                                    searchParams?.set('timeZone', timeZone);
-                                    return {
+                                        if (rawFrom && rawTo) {
+                                            searchParams?.set('timeRawFrom', rawFrom);
+                                            searchParams?.set('timeRawTo', rawTo);
+                                        } else {
+                                            searchParams?.delete('timeRawFrom');
+                                            searchParams?.delete('timeRawTo');
+                                        }
+                                        return {
+                                            ...prev,
+                                            searchParams,
+                                        };
+                                    });
+                                    setCurrentDate([dayjs(latestStartTime), dayjs(latestEndTime)]);
+                                    setTimeRange((prev: any) => ({
                                         ...prev,
-                                        searchParams,
-                                    };
-                                });
-
-                                setCurrentDate([start, end]);
-                                setTimeRange({
-                                    from: dateTime(timeRange.from.toDate()),
-                                    to: dateTime(timeRange.to.toDate()),
-                                    raw:
-                                        hasRelativeRaw && rawFrom && rawTo
-                                            ? { from: rawFrom, to: rawTo }
-                                            : { from: dateTime(timeRange.from.toDate()), to: dateTime(timeRange.to.toDate()) },
-                                });
+                                        from: dateTime(dayjs(latestStartTime).toDate()),
+                                        to: dateTime(dayjs(latestEndTime).toDate()),
+                                        raw: rawFrom && rawTo ? { from: rawFrom, to: rawTo } : buildAbsoluteTimeRange(dayjs(latestStartTime), dayjs(latestEndTime)).raw,
+                                    }));
+                                }
+                                commitApplicationAndQuery();
                             }}
-                            onChangeTimeZone={(nextTimeZone: TimeZone) => {
-                                setTimeZone(nextTimeZone);
-                                updateShareParams({ timeZone: nextTimeZone });
-                            }}
-                            timeZone={timeZone}
-                            value={timeRange}
-                        />
-                    </Field>
-                </>
-            )}
-            <Field label="">
-                <div style={{ alignItems: 'center', display: 'flex', gap: theme.spacing(1) }}>
-                    {fieldsWithoutInvertedIndex.length > 0 ? (
-                        <Tooltip
-                            content={
-                                <span>
-                                    {warningFields}
-                                    {remainingWarningFieldCount > 0 ? ` 等 ${fieldsWithoutInvertedIndex.length} 个字段` : ''} 未配置倒排索引，Lucene 查询可能较慢。
-                                    {jsonFieldsWithoutInvertedIndex.length > 0 ? ' JSON 子路径使用 JSON 函数过滤，通常会扫描数据。' : ''}
-                                </span>
-                            }
-                            placement="top"
+                            variant="primary"
+                            className="h-8"
+                            icon={loading ? 'fa fa-spinner' : 'sync'}
+                            disabled={!currentTimeField}
                         >
-                            <span aria-label="Lucene 倒排索引告警" style={{ color: theme.colors.warning.text, cursor: 'help', display: 'inline-flex' }}>
-                                <Icon name="exclamation-triangle" size="sm" />
-                            </span>
-                        </Tooltip>
-                    ) : null}
-                    <Tooltip content="Refresh table metadata and sampled attribute paths">
-                        <Button aria-label="Refresh search metadata" variant="secondary" icon="sync" disabled={loading || !currentTimeField} onClick={onRefresh} />
-                    </Tooltip>
-                    <Button
-                        onClick={() => {
-                            const latestTime = getLatestTime(activeItem?.key as string, timeZone);
-                            if (latestTime) {
-                                const [latestStartTime, latestEndTime] = latestTime;
-                                const currentShortcut = DISCOVER_SHORTCUTS.find(shortcut => shortcut.key === activeItem?.key);
-                                const rawFrom = normalizeRawTimeValue(currentShortcut?.raw?.from);
-                                const rawTo = normalizeRawTimeValue(currentShortcut?.raw?.to);
-                                setLoc(prev => {
-                                    const searchParams = new URLSearchParams(prev?.searchParams?.toString() ?? '');
-                                    searchParams?.delete('startTime');
-                                    searchParams?.delete('endTime');
-                                    if (rawFrom && rawTo) {
-                                        searchParams?.set('timeRawFrom', rawFrom);
-                                        searchParams?.set('timeRawTo', rawTo);
-                                    } else {
-                                        searchParams?.delete('timeRawFrom');
-                                        searchParams?.delete('timeRawTo');
-                                    }
-                                    return {
-                                        ...prev,
-                                        searchParams,
-                                    };
-                                });
-                                setCurrentDate([dayjs(latestStartTime), dayjs(latestEndTime)]);
-                                setTimeRange((prev: any) => ({
-                                    ...prev,
-                                    from: dateTime(dayjs(latestStartTime).toDate()),
-                                    to: dateTime(dayjs(latestEndTime).toDate()),
-                                    raw: rawFrom && rawTo ? { from: rawFrom, to: rawTo } : buildAbsoluteTimeRange(dayjs(latestStartTime), dayjs(latestEndTime)).raw,
-                                }));
-                            }
-                            commitApplicationAndQuery();
-                        }}
-                        variant="primary"
-                        className="h-8"
-                        icon={loading ? 'fa fa-spinner' : 'sync'}
-                        disabled={!currentTimeField}
-                    >
-                        {`Query`}
-                    </Button>
-                </div>
-            </Field>
+                            {`Query`}
+                        </Button>
+                    </div>
+                </Field>
+            </DiscoverHeaderSearch>
         </div>
     );
 }

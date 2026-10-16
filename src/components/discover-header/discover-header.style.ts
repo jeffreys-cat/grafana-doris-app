@@ -1,13 +1,27 @@
 import { css } from '@emotion/css';
 import styled from '@emotion/styled';
 
-export const DiscoverHeaderSearch = styled.div`
-    flex: 2;
-    min-width: 0;
+export const DiscoverHeaderControls = styled.div`
     display: flex;
-    border-radius: 6px;
-    align-items: center;
-    margin-right: 8px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 8px;
+    min-width: 0;
+
+    > div {
+        margin-bottom: 0;
+    }
+`;
+
+export const DiscoverHeaderSearch = styled.div`
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    min-width: 0;
+
+    > div {
+        margin-bottom: 0;
+    }
     .ant-select-open {
         .ant-select-arrow {
             .anticon {

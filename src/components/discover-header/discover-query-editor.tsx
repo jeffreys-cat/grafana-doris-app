@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import { css } from '@emotion/css';
-import { CodeEditor, CodeEditorSuggestionItemKind } from '@grafana/ui';
+import { CodeEditor, CodeEditorSuggestionItemKind, useTheme2 } from '@grafana/ui';
 import { searchValueAtom, tableDataAtom, tableFieldsAtom, variantFieldsAtom } from 'store/discover';
 import { flattenVariantLeaves } from 'utils/variant-fields';
 import { DiscoverQueryMode, getQuerySuggestions, QuerySuggestion } from './query-completion';
@@ -18,13 +18,10 @@ const SUGGESTION_KIND: Record<NonNullable<QuerySuggestion['kind']>, CodeEditorSu
     keyword: CodeEditorSuggestionItemKind.Text,
 };
 
-// DiscoverHeaderSearch already owns the compact header frame. Remove the
-// editor's own frame so the query stays a single-line part of that control.
+// Keep the query compact while retaining the editor's input border.
 const singleLineEditorStyle = css`
     width: 100%;
     min-width: 0;
-    border: 0 !important;
-    border-radius: 0;
 
     .monaco-editor,
     .monaco-editor .overflow-guard,
@@ -62,6 +59,7 @@ function isSuggestionVisible(editor: any): boolean {
 }
 
 export default function DiscoverQueryEditor({ mode, onQuerying }: Props) {
+    const theme = useTheme2();
     const [searchValue, setSearchValue] = useAtom(searchValueAtom);
     const tableFields = useAtomValue(tableFieldsAtom);
     const variantFields = useAtomValue(variantFieldsAtom);
@@ -146,9 +144,14 @@ export default function DiscoverQueryEditor({ mode, onQuerying }: Props) {
                 height="32px"
                 showMiniMap={false}
                 showLineNumbers={false}
-                containerStyles={singleLineEditorStyle}
+                containerStyles={css(singleLineEditorStyle, {
+                    border: `1px solid ${theme.components.input.borderColor}`,
+                    borderRadius: theme.shape.radius.default,
+                    '&:focus-within': { borderColor: theme.colors.primary.border },
+                })}
                 monacoOptions={{
                     lineNumbers: 'off',
+                    renderLineHighlight: 'none',
                     renderValidationDecorations: 'off',
                     minimap: { enabled: false },
                     wordWrap: 'on',

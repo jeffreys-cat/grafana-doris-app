@@ -36,6 +36,7 @@ import { Subscription } from 'rxjs';
 import { toError } from 'utils/errors';
 import { useDatasourcePermissions } from 'hooks/useDatasourcePermissions';
 import { SUPPORTED_DATASOURCE_TYPES, isSupportedDatasourceType } from 'services/grafana-permissions';
+import { timeRangeFieldClass } from 'components/time-range-input/time-range-input.styles';
 
 function getStoredValue<T>(key: string): T | undefined {
     if (typeof window === 'undefined') {
@@ -659,7 +660,7 @@ export default function TracesHeader() {
                             placeholder={'Time Field'}
                         />
                     </Field>
-                    <Field label="Time Range" style={{ marginLeft: 8, marginRight: 8 }}>
+                    <Field label="Time Range" className={timeRangeFieldClass} style={{ marginLeft: 8, marginRight: 8 }}>
                         <TimeRangeInput
                             hideTimeZone={false}
                             timeZone={timeZone}
