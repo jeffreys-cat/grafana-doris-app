@@ -15,6 +15,15 @@ export interface SSOProfileStatus {
 }
 
 const sectionHeadingStyle = { fontSize: '20px', lineHeight: '28px' };
+// Grafana owns the Default control outside ConfigEditor. Keep its legacy switch
+// and newer action button hidden only while this datasource editor is mounted.
+const hiddenDefaultControls = `
+    body:has([data-doris-datasource-config]) .gf-form-inline > :has(#basic-settings-default),
+    body:has([data-doris-datasource-config]) .gf-form-button-row > button:not([data-testid]):has(+ button[type="submit"]) {
+        display: none;
+    }
+`;
+
 function normalizedJsonData(data?: DorisSSOJsonData): DorisSSOJsonData {
     const source = data ?? {};
     return {
@@ -140,7 +149,8 @@ export function ConfigEditor(props: Props) {
 
     const dorisSQL = buildDorisBootstrapSQL(data, profile);
     return (
-        <>
+        <div data-doris-datasource-config>
+            <style>{hiddenDefaultControls}</style>
             <h2 style={sectionHeadingStyle}>Connection</h2>
             <Field label="Doris host">
                 <Input value={data.host ?? ''} onChange={e => update(props, 'host', e.currentTarget.value)} />
@@ -163,9 +173,6 @@ export function ConfigEditor(props: Props) {
                     />
                 </Field>
             )}
-            <Field label="Default database">
-                <Input value={data.database ?? ''} onChange={e => update(props, 'database', e.currentTarget.value)} />
-            </Field>
             <Field label="Enable SSO" description="Automatically forwards the signed-in user's OAuth identity when enabled. When disabled, uses the configured shared Doris username and password.">
                 <Switch aria-label="Enable SSO" value={ssoEnabled} onChange={event => update(props, 'enableSso', event.currentTarget.checked)} />
             </Field>
@@ -336,6 +343,6 @@ export function ConfigEditor(props: Props) {
                     ) : null}
                 </>
             )}
-        </>
+        </div>
     );
 }

@@ -13,6 +13,45 @@ function props(jsonData: DorisSSOJsonData): Props {
     } as unknown as Props;
 }
 
+describe('Hidden datasource defaults', () => {
+    it('omits the default database field while preserving saved defaults when another field changes', () => {
+        const input = props({ enableSso: false, database: 'otel' });
+        input.options.isDefault = true;
+        render(<ConfigEditor {...input} />);
+        expect(screen.queryByText('Default database')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Enable SSO' }));
+        expect(input.onOptionsChange).toHaveBeenLastCalledWith(expect.objectContaining({
+            isDefault: true,
+            jsonData: expect.objectContaining({ enableSso: true, database: 'otel' }),
+        }));
+    });
+
+    it('hides both Grafana default controls only while the Doris editor is mounted', () => {
+        render(<>
+            <div className="gf-form-inline">
+                <div><label htmlFor="basic-settings-name">Name</label><input id="basic-settings-name" /></div>
+                <div><label htmlFor="basic-settings-default">Default</label><input type="checkbox" id="basic-settings-default" /></div>
+            </div>
+            <div className="gf-form-button-row">
+                <button type="button" data-testid="delete-datasource">Delete</button>
+                <button type="button">Remove default</button>
+                <button type="submit" data-testid="save-datasource">Save &amp; test</button>
+            </div>
+        </>);
+        const legacyDefault = screen.getByRole('checkbox', { name: 'Default' });
+        const defaultAction = screen.getByRole('button', { name: 'Remove default' });
+        const { unmount } = render(<ConfigEditor {...props({ enableSso: false })} />);
+        expect(legacyDefault).not.toBeVisible();
+        expect(defaultAction).not.toBeVisible();
+        expect(screen.getByRole('textbox', { name: 'Name' })).toBeVisible();
+        expect(screen.getByRole('button', { name: 'Delete' })).toBeVisible();
+        expect(screen.getByRole('button', { name: 'Save & test' })).toBeVisible();
+        unmount();
+        expect(legacyDefault).toBeVisible();
+        expect(defaultAction).toBeVisible();
+    });
+});
+
 describe('SSO identity forwarding', () => {
     it('enables forwarding together with SSO and disables it when switching back to password authentication', () => {
         const input = props({ enableSso: false, host: 'doris.example' });
