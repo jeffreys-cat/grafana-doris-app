@@ -41,9 +41,9 @@ import {
 } from 'store/discover';
 import { DISCOVER_SHORTCUTS, getLatestTime, isValidTimeFieldType } from 'utils/data';
 import { Select, Field, Button, Icon, Tooltip, useTheme2, TimeRangeInput } from '@grafana/ui';
-import { getApplicationValuesService, getDatabases, getFieldsService, getIndexesService, getTablesService, getVariantFieldsService } from 'services/metaservice';
+import { getApplicationValuesService, getFieldsService, getIndexesService, getVariantFieldsService } from 'services/metaservice';
 import { SUPPORTED_DATASOURCE_TYPES, isSupportedDatasourceType } from 'services/grafana-permissions';
-import { Subscription } from 'rxjs';
+import { useDatabaseTableSelection } from 'hooks/useDatabaseTableSelection';
 import Lucene from './lucene';
 import { toError } from 'utils/errors';
 import { getLuceneFieldsWithoutInvertedIndex } from 'utils/query-parser/lucene-index-warning';
@@ -159,6 +159,8 @@ export default function DiscoverHeader(
     const setTableMetadata = useSetAtom(tableMetadataAtom);
     const requestedFieldsKey = React.useRef('');
     const requestedIndexesKey = React.useRef('');
+    const metadataGeneration = React.useRef(0);
+    useEffect(() => () => { metadataGeneration.current += 1; }, []);
     const [searchType, setSearchType] = useAtom(searchTypeAtom);
     const [discoverCurrent, setDiscoverCurrent] = useAtom(discoverCurrentAtom);
     if (process.env.NODE_ENV !== 'production') {
@@ -307,38 +309,6 @@ export default function DiscoverHeader(
         [setLoc],
     );
 
-    const fetchDatabases = React.useCallback(
-        (ds: any) => {
-            if (!ds) {
-                return undefined;
-            }
-
-            return getDatabases(ds).subscribe({
-                next: (resp: any) => {
-                    const { data, ok } = resp;
-                    if (ok) {
-                        const frame = toDataFrame(data.results.getDatabases.frames[0]);
-                        const values = Array.from(frame.fields[0].values);
-                        const options = values.map((item: string) => ({ label: item, value: item }));
-                        setDatabases(options);
-                    }
-                },
-                error: (err: any) => logError(toError(err), { source: 'DiscoverHeader', action: 'fetchDatabases' }),
-            });
-        },
-        [setDatabases],
-    );
-
-    useEffect(() => {
-        if (!selectdbDS) {
-            return;
-        }
-
-        const subscription: Subscription | undefined = fetchDatabases(selectdbDS);
-
-        return () => subscription?.unsubscribe();
-    }, [selectdbDS, fetchDatabases]);
-
     function getFields(
         selectedTable: any,
         initOptions?: {
@@ -356,6 +326,7 @@ export default function DiscoverHeader(
 
         setResolvedFieldsContext('');
 
+        const generation = metadataGeneration.current;
         const metadataKey = JSON.stringify([effectiveDatasource.uid, effectiveDatabase, selectedTable.value]);
         requestedFieldsKey.current = metadataKey;
         getFieldsService({
@@ -364,7 +335,7 @@ export default function DiscoverHeader(
             table: selectedTable.value,
         }).subscribe({
             next: ({ data, ok }: any) => {
-                if (requestedFieldsKey.current !== metadataKey) {
+                if (requestedFieldsKey.current !== metadataKey || metadataGeneration.current !== generation) {
                     return;
                 }
                 if (ok) {
@@ -401,7 +372,7 @@ export default function DiscoverHeader(
 
                     getVariantFieldsService({ selectdbDS: effectiveDatasource, database: effectiveDatabase, table: selectedTable.value }).subscribe({
                         next: ({ data, ok }: any) => {
-                            if (requestedFieldsKey.current !== metadataKey) {
+                            if (requestedFieldsKey.current !== metadataKey || metadataGeneration.current !== generation) {
                                 return;
                             }
                             const metadataFrame = data?.results?.getVariantFields?.frames?.[0];
@@ -447,7 +418,7 @@ export default function DiscoverHeader(
                             ...prev,
                             database: effectiveDatabase,
                             table: selectedTable.value,
-                            timeField: targetTimeField || prev.timeField,
+                            timeField: targetTimeField,
                         }));
                         setTimeFields(options);
                         if (sharedState) {
@@ -474,6 +445,7 @@ export default function DiscoverHeader(
             return;
         }
 
+        const generation = metadataGeneration.current;
         const metadataKey = JSON.stringify([effectiveDatasource.uid, effectiveDatabase, selectedTable.value]);
         requestedIndexesKey.current = metadataKey;
         getIndexesService({
@@ -482,7 +454,7 @@ export default function DiscoverHeader(
             table: selectedTable.value,
         }).subscribe({
             next: ({ data, ok }: any) => {
-                if (requestedIndexesKey.current !== metadataKey) {
+                if (requestedIndexesKey.current !== metadataKey || metadataGeneration.current !== generation) {
                     return;
                 }
                 if (ok) {
@@ -534,6 +506,37 @@ export default function DiscoverHeader(
         });
     }
 
+    const applyTableSelection = (datasource: any, database: string, table: string, timeField?: string) => {
+        metadataGeneration.current += 1;
+        requestedFieldsKey.current = '';
+        requestedIndexesKey.current = '';
+        setTableFields([]);
+        setTimeFields([]);
+        setIndexes([]);
+        setCurrentIndex([]);
+        resetApplicationFilter();
+        setVariantFields([]);
+        setVariantMetadataFields([]);
+        setSelectedFields([]);
+        setDataFilter([]);
+        setSharedColumnOrder([]);
+        setShareSort({ field: '', direction: 'DESC' });
+        setDiscoverShareReady(false);
+        setCurrentTable(table);
+        setDiscoverCurrent(prev => ({ ...prev, database, table, timeField: '' }));
+        if (table) {
+            getFields({ value: table }, { datasource, database, preferredTimeField: timeField ?? '' });
+            getIndexes({ value: table }, { datasource, database });
+        }
+    };
+
+    const { selectDatasource, selectDatabase, databasesLoading, tablesLoading } = useDatabaseTableSelection({
+        setDatabases,
+        setTables,
+        onDatabaseChange: database => setDiscoverCurrent(prev => ({ ...prev, database, table: '', timeField: '' })),
+        onTableChange: applyTableSelection,
+    });
+
     async function initHeaderData() {
         const urlSearchParams = new URLSearchParams(locSearch);
         const sharedState = readDiscoverShareState(urlSearchParams);
@@ -563,7 +566,7 @@ export default function DiscoverHeader(
         const persistedTimeField = urlTimeField || discoverCurrent.timeField || persistedDiscoverCurrentStorage?.timeField || '';
         const requestedDatasourceUid = persistedDatasourceUid || configuredDatasourceUid || '';
         const defaultDatasourceUid = requestedDatasourceUid && allowedDatasourceUids.has(requestedDatasourceUid) ? requestedDatasourceUid : allowedDatasources[0]?.uid || '';
-        const defaultDatabase = persistedDatabase || logsConfig.database || '';
+        const defaultDatabase = persistedDatabase || configuredLogsConfig?.database || '';
         const defaultLogsTable = persistedTable || logsConfig.logsTable || '';
         const hasRelativeTimeParams = Boolean(urlTimeRawFrom && urlTimeRawTo);
         const hasAbsoluteTimeParams = Boolean(urlStartTime && urlEndTime);
@@ -607,7 +610,7 @@ export default function DiscoverHeader(
             return;
         }
 
-        if (!defaultDatasourceUid || !defaultDatabase) {
+        if (!defaultDatasourceUid) {
             if (urlMode) {
                 setSearchType(urlMode);
             }
@@ -635,52 +638,13 @@ export default function DiscoverHeader(
             }
             setSearchValue(urlSearchValue);
 
-            const ds =
-                selectedDatasource?.uid === defaultDatasourceUid
-                    ? selectedDatasource
-                    : allowedDatasources.find(datasource => datasource.uid === defaultDatasourceUid) ?? (await getDataSourceSrv().get({ uid: defaultDatasourceUid }));
+            const ds = allowedDatasources.find(datasource => datasource.uid === defaultDatasourceUid) ??
+                (await getDataSourceSrv().get({ uid: defaultDatasourceUid }));
             if (!ds) {
                 return;
             }
-            if (selectedDatasource?.uid !== defaultDatasourceUid) {
-                setSelectedDatasource(ds as any);
-            }
-            fetchDatabases(ds);
-            getTablesService({
-                selectdbDS: ds,
-                database: defaultDatabase,
-            }).subscribe({
-                next: (resp: any) => {
-                    const { data, ok } = resp;
-                    if (ok) {
-                        const frame = toDataFrame(data.results.getTables.frames[0]);
-                        const values = Array.from(frame.fields[0].values);
-                        const options = values.map((item: string) => ({ label: item, value: item }));
-                        const targetTable = options.find(option => option.value === defaultLogsTable)?.value || options[0]?.value || '';
-
-                        setTables(options);
-                        setCurrentTable(targetTable);
-                        setDiscoverCurrent(prev => ({
-                            ...prev,
-                            database: defaultDatabase,
-                            table: targetTable,
-                        }));
-
-                        if (targetTable) {
-                            getFields(
-                                { value: targetTable },
-                                {
-                                    datasource: ds,
-                                    database: defaultDatabase,
-                                    preferredTimeField: persistedTimeField,
-                                },
-                            );
-                            getIndexes({ value: targetTable }, { datasource: ds, database: defaultDatabase });
-                        }
-                    }
-                },
-                error: (err: any) => logError(toError(err), { source: 'DiscoverHeader', action: 'getTables' }),
-            });
+            setSelectedDatasource(ds as any);
+            selectDatasource(ds, { database: defaultDatabase, table: defaultLogsTable, timeField: persistedTimeField });
         } catch (error) {
             logError(toError(error), { source: 'DiscoverHeader', action: 'initHeaderData' });
         } finally {
@@ -835,10 +799,9 @@ export default function DiscoverHeader(
                             if (!allowedDatasourceUids.has(item.uid)) {
                                 return;
                             }
-                            resetApplicationFilter();
+                            pendingShareStateRef.current = undefined;
                             setSelectedDatasource(item);
-                            // Always fetch databases even if the same datasource is selected
-                            fetchDatabases(item);
+                            selectDatasource(item);
                         }}
                     />
                 </Field>
@@ -848,27 +811,11 @@ export default function DiscoverHeader(
                         width={15}
                         options={databases}
                         value={discoverCurrent.database}
+                        disabled={databasesLoading || !selectedDatasource || databases.length === 0}
+                        isLoading={databasesLoading}
                         onChange={(selectedDatabase: any) => {
-                            resetApplicationFilter();
-                            setDiscoverCurrent({
-                                ...discoverCurrent,
-                                database: selectedDatabase.value,
-                            });
-                            getTablesService({
-                                selectdbDS,
-                                database: selectedDatabase.value,
-                            }).subscribe({
-                                next: (resp: any) => {
-                                    const { data, ok } = resp;
-                                    if (ok) {
-                                        const frame = toDataFrame(data.results.getTables.frames[0]);
-                                        const values = Array.from(frame.fields[0].values);
-                                        const options = values.map((item: string) => ({ label: item, value: item }));
-                                        setTables(options);
-                                    }
-                                },
-                                error: (err: any) => logError(toError(err), { source: 'DiscoverHeader', action: 'getTables' }),
-                            });
+                            pendingShareStateRef.current = undefined;
+                            selectDatabase(selectdbDS, selectedDatabase.value);
                         }}
                     ></Select>
                 </Field>
@@ -878,15 +825,11 @@ export default function DiscoverHeader(
                         options={tables}
                         width={15}
                         value={currentTable}
+                        disabled={databasesLoading || tablesLoading || !discoverCurrent.database || tables.length === 0}
+                        isLoading={tablesLoading}
                         onChange={(selectedTable: any) => {
-                            resetApplicationFilter();
-                            setDiscoverCurrent({
-                                ...discoverCurrent,
-                                table: selectedTable.value,
-                            });
-                            setCurrentTable(selectedTable.value);
-                            getFields(selectedTable);
-                            getIndexes(selectedTable);
+                            pendingShareStateRef.current = undefined;
+                            applyTableSelection(selectdbDS, discoverCurrent.database, selectedTable.value);
                         }}
                     />
                 </Field>

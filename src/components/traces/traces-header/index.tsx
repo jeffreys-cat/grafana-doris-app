@@ -30,9 +30,9 @@ import {
 import { isValidTimeFieldType } from 'utils/data';
 import { Select, Field, useTheme2, TimeRangeInput } from '@grafana/ui';
 import { formatShareTime, parseTimeInZone, getGrafanaUserTimeZone as getDisplayTimeZone, normalizeTimeZone } from 'utils/time';
-import { getDatabases, getFieldsService, getIndexesService, getTablesService } from 'services/metaservice';
+import { getFieldsService, getIndexesService } from 'services/metaservice';
 import { currentTraceTableAtom } from 'store/traces';
-import { Subscription } from 'rxjs';
+import { useDatabaseTableSelection } from 'hooks/useDatabaseTableSelection';
 import { toError } from 'utils/errors';
 import { useDatasourcePermissions } from 'hooks/useDatasourcePermissions';
 import { SUPPORTED_DATASOURCE_TYPES, isSupportedDatasourceType } from 'services/grafana-permissions';
@@ -141,6 +141,8 @@ export default function TracesHeader() {
     const setTableMetadata = useSetAtom(tableMetadataAtom);
     const requestedFieldsKey = React.useRef('');
     const requestedIndexesKey = React.useRef('');
+    const metadataGeneration = React.useRef(0);
+    useEffect(() => () => { metadataGeneration.current += 1; }, []);
     const [discoverCurrent, setDiscoverCurrent] = useAtom(discoverCurrentAtom);
     if (process.env.NODE_ENV !== 'production') {
         discoverCurrentAtom.debugLabel = 'current';
@@ -163,7 +165,8 @@ export default function TracesHeader() {
     const selectdbDS = useAtomValue(selectedDatasourceAtom);
     const context = usePluginContext();
     const jsonData = context.meta.jsonData || {};
-    const logsConfig = mergeLogsConfig((jsonData as AppPluginSettings).logsConfig);
+    const configuredLogsConfig = (jsonData as AppPluginSettings).logsConfig;
+    const logsConfig = mergeLogsConfig(configuredLogsConfig);
     const {
         allowedDatasources,
         allowedDatasourceUids,
@@ -201,25 +204,6 @@ export default function TracesHeader() {
         [setLoc],
     );
 
-    const fetchDatabases = React.useCallback((ds: any) => {
-        if (!ds) {
-            return undefined;
-        }
-
-        return getDatabases(ds).subscribe({
-            next: (resp: any) => {
-                const { data, ok } = resp;
-                if (ok) {
-                    const frame = toDataFrame(data.results.getDatabases.frames[0]);
-                    const values = Array.from(frame.fields[0].values);
-                    const options = values.map((item: string) => ({ label: item, value: item }));
-                    setDatabases(options);
-                }
-            },
-            error: (err: any) => logError(toError(err), { source: 'TracesHeader', action: 'fetchDatabases' }),
-        });
-    }, [setDatabases]);
-
     useEffect(() => {
         setDataSource(allowedDatasources);
     }, [allowedDatasources, setDataSource]);
@@ -235,16 +219,6 @@ export default function TracesHeader() {
     const theme = useTheme2();
     const [timeZone, setTimeZone] = useAtom(timeZoneAtom);
 
-    useEffect(() => {
-        if (!selectdbDS) {
-            return;
-        }
-
-        const subscription: Subscription | undefined = fetchDatabases(selectdbDS);
-
-        return () => subscription?.unsubscribe();
-    }, [selectdbDS, fetchDatabases]);
-
     function getFields(
         selectedTable: any,
         initOptions?: { datasource?: any; database?: string; preferredTimeField?: string },
@@ -255,6 +229,7 @@ export default function TracesHeader() {
             return;
         }
 
+        const generation = metadataGeneration.current;
         const metadataKey = JSON.stringify([effectiveDatasource.uid, effectiveDatabase, selectedTable.value]);
         requestedFieldsKey.current = metadataKey;
         getFieldsService({
@@ -263,7 +238,7 @@ export default function TracesHeader() {
             table: selectedTable.value,
         }).subscribe({
             next: ({ data, ok }: any) => {
-                if (requestedFieldsKey.current !== metadataKey) {
+                if (requestedFieldsKey.current !== metadataKey || metadataGeneration.current !== generation) {
                     return;
                 }
                 if (ok) {
@@ -301,7 +276,7 @@ export default function TracesHeader() {
                             ...prev,
                             database: effectiveDatabase,
                             table: selectedTable.value,
-                            timeField: targetTimeField || prev.timeField,
+                            timeField: targetTimeField,
                         }));
                         setTimeFields(options);
                     }
@@ -320,6 +295,7 @@ export default function TracesHeader() {
             return;
         }
 
+        const generation = metadataGeneration.current;
         const metadataKey = JSON.stringify([effectiveDatasource.uid, effectiveDatabase, selectedTable.value]);
         requestedIndexesKey.current = metadataKey;
         getIndexesService({
@@ -328,7 +304,7 @@ export default function TracesHeader() {
             table: selectedTable.value,
         }).subscribe({
             next: ({ data, ok }: any) => {
-                if (requestedIndexesKey.current !== metadataKey) {
+                if (requestedIndexesKey.current !== metadataKey || metadataGeneration.current !== generation) {
                     return;
                 }
                 if (ok) {
@@ -367,6 +343,29 @@ export default function TracesHeader() {
         });
     }
 
+    const applyTableSelection = (datasource: any, database: string, table: string, timeField?: string) => {
+        metadataGeneration.current += 1;
+        requestedFieldsKey.current = '';
+        requestedIndexesKey.current = '';
+        setTableFields([]);
+        setTimeFields([]);
+        setIndexes([]);
+        setCurrentIndex([]);
+        setCurrentTable(table);
+        setDiscoverCurrent(prev => ({ ...prev, database, table, timeField: '' }));
+        if (table) {
+            getFields({ value: table }, { datasource, database, preferredTimeField: timeField ?? '' });
+            getIndexes({ value: table }, { datasource, database });
+        }
+    };
+
+    const { selectDatasource, selectDatabase, databasesLoading, tablesLoading } = useDatabaseTableSelection({
+        setDatabases,
+        setTables,
+        onDatabaseChange: database => setDiscoverCurrent(prev => ({ ...prev, database, table: '', timeField: '' })),
+        onTableChange: applyTableSelection,
+    });
+
     async function initHeaderData() {
         const urlSearchParams =
             loc?.searchParams instanceof URLSearchParams
@@ -399,7 +398,7 @@ export default function TracesHeader() {
             requestedDatasourceUid && allowedDatasourceUids.has(requestedDatasourceUid)
                 ? requestedDatasourceUid
                 : allowedDatasources[0]?.uid || '';
-        const defaultDatabase = persistedDatabase || logsConfig.database || '';
+        const defaultDatabase = persistedDatabase || configuredLogsConfig?.database || '';
         const defaultTraceTable = persistedTable || logsConfig.targetTraceTable || logsConfig.logsTable || '';
 
         if (urlTimeRawFrom && urlTimeRawTo) {
@@ -432,63 +431,20 @@ export default function TracesHeader() {
             return;
         }
 
-        if (!defaultDatasourceUid || !defaultDatabase) {
+        if (!defaultDatasourceUid) {
             hasInitializedUrlSyncRef.current = true;
             return;
         }
 
         try {
-            const ds =
-                selectedDatasource?.uid === defaultDatasourceUid
-                    ? selectedDatasource
-                    : allowedDatasources.find(datasource => datasource.uid === defaultDatasourceUid) ??
-                        await getDataSourceSrv().get({ uid: defaultDatasourceUid });
+            const ds = allowedDatasources.find(datasource => datasource.uid === defaultDatasourceUid) ??
+                await getDataSourceSrv().get({ uid: defaultDatasourceUid });
 
             if (!ds) {
                 return;
             }
-            if (selectedDatasource?.uid !== defaultDatasourceUid) {
-                setSelectedDatasource(ds as any);
-            }
-            fetchDatabases(ds);
-
-            getTablesService({
-                selectdbDS: ds,
-                database: defaultDatabase,
-            }).subscribe({
-                next: (resp: any) => {
-                    const { data, ok } = resp;
-                    if (ok) {
-                        const frame = toDataFrame(data.results.getTables.frames[0]);
-                        const values = Array.from(frame.fields[0].values);
-                        const options = values.map((item: string) => ({ label: item, value: item }));
-                        const targetTable =
-                            options.find(option => option.value === defaultTraceTable)?.value || options[0]?.value || '';
-
-                        setTables(options);
-                        setCurrentTable(targetTable);
-                        setDiscoverCurrent(prev => ({
-                            ...prev,
-                            database: defaultDatabase,
-                            table: targetTable,
-                        }));
-
-                        if (targetTable) {
-                            getFields(
-                                { value: targetTable },
-                                {
-                                    datasource: ds,
-                                    database: defaultDatabase,
-                                    preferredTimeField: persistedTimeField,
-                                },
-                            );
-                            getIndexes({ value: targetTable }, { datasource: ds, database: defaultDatabase });
-                        }
-                    }
-                },
-                error: (err: any) => logError(toError(err), { source: 'TracesHeader', action: 'getTables' }),
-            });
-
+            setSelectedDatasource(ds as any);
+            selectDatasource(ds, { database: defaultDatabase, table: defaultTraceTable, timeField: persistedTimeField });
         } catch (error) {
             logError(toError(error), { source: 'TracesHeader', action: 'initHeaderData' });
         } finally {
@@ -578,12 +534,8 @@ export default function TracesHeader() {
                             if (!allowedDatasourceUids.has(item.uid)) {
                                 return;
                             }
-                            requestedFieldsKey.current = '';
-                            requestedIndexesKey.current = '';
                             setSelectedDatasource(item);
-                            updateShareParams({
-                                datasource: item?.uid || item?.name || '',
-                            });
+                            selectDatasource(item);
                         }}
                     />
                 </Field>
@@ -593,31 +545,10 @@ export default function TracesHeader() {
                         width={15}
                         options={databases}
                         value={discoverCurrent.database}
+                        disabled={databasesLoading || !selectedDatasource || databases.length === 0}
+                        isLoading={databasesLoading}
                         onChange={(selectedDatabase: any) => {
-                            requestedFieldsKey.current = '';
-                            requestedIndexesKey.current = '';
-                            setDiscoverCurrent({
-                                ...discoverCurrent,
-                                database: selectedDatabase.value,
-                            });
-                            updateShareParams({
-                                database: selectedDatabase.value,
-                            });
-                            getTablesService({
-                                selectdbDS,
-                                database: selectedDatabase.value,
-                            }).subscribe({
-                                next: (resp: any) => {
-                                    const { data, ok } = resp;
-                                    if (ok) {
-                                        const frame = toDataFrame(data.results.getTables.frames[0]);
-                                        const values = Array.from(frame.fields[0].values);
-                                        const options = values.map((item: string) => ({ label: item, value: item }));
-                                        setTables(options);
-                                    }
-                                },
-                                error: (err: any) => logError(toError(err), { source: 'TracesHeader', action: 'getTables' }),
-                            });
+                            selectDatabase(selectdbDS, selectedDatabase.value);
                         }}
                     ></Select>
                 </Field>
@@ -627,17 +558,10 @@ export default function TracesHeader() {
                         options={tables}
                         width={15}
                         value={currentTable}
+                        disabled={databasesLoading || tablesLoading || !discoverCurrent.database || tables.length === 0}
+                        isLoading={tablesLoading}
                         onChange={(selectedTable: any) => {
-                            setDiscoverCurrent({
-                                ...discoverCurrent,
-                                table: selectedTable.value,
-                            });
-                            setCurrentTable(selectedTable.value);
-                            updateShareParams({
-                                table: selectedTable.value,
-                            });
-                            getFields(selectedTable);
-                            getIndexes(selectedTable);
+                            applyTableSelection(selectdbDS, discoverCurrent.database, selectedTable.value);
                         }}
                     />
                 </Field>

@@ -1,11 +1,11 @@
 import React, { ChangeEvent, useState, useEffect } from 'react';
-import { lastValueFrom, Subscription } from 'rxjs';
+import { lastValueFrom } from 'rxjs';
 import { css } from '@emotion/css';
-import { AppPluginMeta, GrafanaTheme2, PluginConfigPageProps, PluginMeta, SelectableValue, toDataFrame } from '@grafana/data';
+import { AppPluginMeta, GrafanaTheme2, PluginConfigPageProps, PluginMeta, SelectableValue } from '@grafana/data';
 import { getBackendSrv, DataSourcePicker, getDataSourceSrv, logError } from '@grafana/runtime';
 import { Button, Field, FieldSet, Input, SecretInput, useStyles2, Select, MultiSelect } from '@grafana/ui';
 import { useAtom } from 'jotai';
-import { getDatabases, getTablesService } from 'services/metaservice';
+import { useDatabaseTableSelection } from 'hooks/useDatabaseTableSelection';
 import { testIds } from '../testIds';
 import { settingDatabasesAtom, settingTablesAtom } from 'store/discover';
 import {
@@ -61,7 +61,7 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
         .getList()
         .find(item => item.uid === ds || item.name === ds);
     }
-    return ds;
+    return getDataSourceSrv().getList().find(item => item.uid === ds.uid) ?? ds;
   }, []);
   const datasourceOptions = React.useMemo<Array<SelectableValue<string>>>(() => {
     try {
@@ -110,50 +110,18 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
     setTeamDatasourcePermissions(current => current.filter((_, permissionIndex) => permissionIndex !== index));
   }, []);
 
-  const fetchDatabases = React.useCallback((ds: any) => {
-    const datasourceRef = resolveDatasource(ds);
-    if (!datasourceRef) {
-      return undefined;
-    }
-
-    return getDatabases(datasourceRef).subscribe({
-      next: (resp: any) => {
-        const { data, ok } = resp;
-        if (ok) {
-          const frame = toDataFrame(data.results.getDatabases.frames[0]);
-          const values = Array.from(frame.fields[0].values);
-          const options = values.map((item: string) => ({ label: item, value: item }));
-          setDatabases(options);
-        }
-      },
-      error: (err: any) => logError(toError(err), { source: 'AppConfig', action: 'fetchDatabases' }),
-    });
-  }, [setDatabases, resolveDatasource]);
-
-  const fetchTables = React.useCallback((db: string) => {
-    const datasourceRef = resolveDatasource(currentLogsConfig.datasource);
-    if (!db) {
-      return undefined;
-    }
-    if (!datasourceRef) {
-      return undefined;
-    }
-    return getTablesService({
-      selectdbDS: datasourceRef,
-      database: db,
-    }).subscribe({
-      next: (resp: any) => {
-        const { data, ok } = resp;
-        if (ok) {
-          const frame = toDataFrame(data.results.getTables.frames[0]);
-          const values = Array.from(frame.fields[0].values);
-          const options = values.map((item: string) => ({ label: item, value: item }));
-          setTables(options);
-        }
-      },
-      error: (err: any) => logError(toError(err), { source: 'AppConfig', action: 'fetchTables' }),
-    });
-  }, [setTables, currentLogsConfig.datasource, resolveDatasource])
+  const initialLogsConfig = React.useRef({ ...logsConfig, database: jsonData?.logsConfig?.database });
+  const preferredTraceTable = React.useRef(logsConfig.targetTraceTable);
+  const { selectDatasource, selectDatabase, databasesLoading, tablesLoading } = useDatabaseTableSelection({
+    setDatabases,
+    setTables: options => {
+      setTables(options);
+      const targetTraceTable = options.find(option => option.value === preferredTraceTable.current)?.value || options[0]?.value || '';
+      setCurrentLogsConfig(prev => ({ ...prev, targetTraceTable }));
+    },
+    onDatabaseChange: database => setCurrentLogsConfig(prev => ({ ...prev, database, logsTable: '', targetTraceTable: '' })),
+    onTableChange: (_datasource, _database, logsTable) => setCurrentLogsConfig(prev => ({ ...prev, logsTable })),
+  });
 
   const onResetApiKey = () =>
     setState({
@@ -221,33 +189,11 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
   }, []);
 
   useEffect(() => {
-    const datasourceRef = resolveDatasource(currentLogsConfig.datasource);
-    if (datasourceRef && datasourceRef !== currentLogsConfig.datasource) {
-      setCurrentLogsConfig(prev => ({
-        ...prev,
-        datasource: datasourceRef,
-      }));
-    }
-  }, [currentLogsConfig.datasource, resolveDatasource]);
-
-  useEffect(() => {
-    if (!currentLogsConfig.datasource) {
-      return;
-    }
-
-    const subscription: Subscription | undefined = fetchDatabases(currentLogsConfig.datasource);
-
-    return () => subscription?.unsubscribe();
-  }, [currentLogsConfig.datasource, fetchDatabases]);
-
-  useEffect(() => {
-    if (!currentLogsConfig.database) {
-      return;
-    }
-    const subscription: Subscription | undefined = fetchTables(currentLogsConfig.database);
-
-    return () => subscription?.unsubscribe(); 
-  }, [currentLogsConfig.database, fetchTables])
+    const initial = initialLogsConfig.current;
+    const datasource = resolveDatasource(initial.datasource);
+    setCurrentLogsConfig(prev => ({ ...prev, datasource: datasource || '' }));
+    selectDatasource(datasource, { database: initial.database, table: initial.logsTable });
+  }, [resolveDatasource, selectDatasource]);
 
   return (
     <>
@@ -297,9 +243,9 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
               noDefault
               filter={ds => isSupportedDatasourceType(ds.type)}
               onChange={item => {
-                setCurrentLogsConfig({ ...currentLogsConfig, datasource: item });
-                // Always fetch databases even if the same datasource is selected
-                fetchDatabases(item);
+                preferredTraceTable.current = '';
+                setCurrentLogsConfig(prev => ({ ...prev, datasource: item }));
+                selectDatasource(item);
               }}
             />
           </Field>
@@ -308,15 +254,19 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
               width={60}
               options={databases}
               value={currentLogsConfig.database}
+              disabled={databasesLoading || !currentLogsConfig.datasource || databases.length === 0}
+              isLoading={databasesLoading}
               onChange={(selectedDatabase: any) => {
-                setCurrentLogsConfig({ ...currentLogsConfig, database: selectedDatabase.value })
-                fetchTables(selectedDatabase.value)
+                preferredTraceTable.current = '';
+                selectDatabase(resolveDatasource(currentLogsConfig.datasource), selectedDatabase.value);
               }}
             ></Select>
           </Field>
           <Field label="Default Logs Table">
             <Select
               options={tables}
+              disabled={databasesLoading || tablesLoading || !currentLogsConfig.database || tables.length === 0}
+              isLoading={tablesLoading}
               width={60}
               value={currentLogsConfig.logsTable}
               onChange={(selectedTable: any) => {
@@ -330,6 +280,8 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
           <Field label="Default Trace Table">
             <Select
               options={tables}
+              disabled={databasesLoading || tablesLoading || !currentLogsConfig.database || tables.length === 0}
+              isLoading={tablesLoading}
               width={60}
               value={currentLogsConfig.targetTraceTable}
               onChange={(selectedTable: any) => {
