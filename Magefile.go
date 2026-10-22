@@ -10,7 +10,7 @@ import (
 	"github.com/magefile/mage/sh"
 )
 
-// Build compiles the Grafana backend where Grafana discovers the nested datasource.
+// Build compiles both the App backend and the nested Doris datasource backend.
 func Build() error {
 	if err := os.MkdirAll("dist/datasource", 0o755); err != nil {
 		return err
@@ -42,11 +42,22 @@ func BuildAll() error {
 }
 
 func buildFor(goos, goarch string) error {
-	name := "dist/datasource/velodb-doris-datasource_" + goos + "_" + goarch
-	cmd := exec.Command("go", "build", "-mod=vendor", "-o", name, "./pkg")
-	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS="+goos, "GOARCH="+goarch)
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	return cmd.Run()
+	for _, target := range []struct{ path, name, source string }{
+		{"dist/datasource/", "velodb-doris-datasource", "./pkg"},
+		{"dist/", "velodb-doris-app", "./pkg/app"},
+	} {
+		name := target.path + target.name + "_" + goos + "_" + goarch
+		if goos == "windows" {
+			name += ".exe"
+		}
+		cmd := exec.Command("go", "build", "-mod=vendor", "-o", name, target.source)
+		cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS="+goos, "GOARCH="+goarch)
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Test runs all Go backend tests.

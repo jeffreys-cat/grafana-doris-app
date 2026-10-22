@@ -111,5 +111,11 @@ export function useDatabaseTableSelection(callbacks: Callbacks) {
         }));
     }, [cancel, loadTables]);
 
-    return { selectDatasource, selectDatabase, databasesLoading, tablesLoading };
+    const cancelSelection = useCallback(() => {
+        cancel();
+        setDatabasesLoading(false);
+        setTablesLoading(false);
+    }, [cancel]);
+
+    return { selectDatasource, selectDatabase, databasesLoading, tablesLoading, cancelSelection };
 }

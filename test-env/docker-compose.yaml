@@ -103,8 +103,10 @@ services:
       VELODB_DORIS_SSO_ALLOW_INSECURE_HTTP: "true"
       # Grafana 12.4+ filters the host environment inherited by plugin processes.
       # Forward these deployment-only Profile variables to this trusted datasource.
-      GF_PLUGINS_FORWARD_HOST_ENV_VARS: velodb-doris-datasource
+      GF_PLUGINS_FORWARD_HOST_ENV_VARS: velodb-doris-datasource,velodb-doris-app
+      DORIS_APP_STORAGE_PATH: /var/lib/grafana/doris-app/saved-queries.db
     volumes:
+      - saved-queries:/var/lib/grafana/doris-app
       - ../dist:/var/lib/grafana/plugins/velodb-doris-app:ro
       - ./provisioning:/etc/grafana/provisioning:ro
       - ./doris-sso-signing-key.pem:/run/secrets/doris-sso-signing-key.pem:ro
@@ -152,5 +154,6 @@ services:
     restart: "no"
 
 volumes:
+  saved-queries:
   doris-fe-meta-4-1-3:
   doris-be-storage-4-1-3:

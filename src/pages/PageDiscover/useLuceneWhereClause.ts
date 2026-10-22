@@ -17,6 +17,7 @@ import {
     variantPathFrequenciesAtom,
     variantSamplingWarningAtom,
 } from 'store/discover';
+import { discoverRestoreEpochAtom } from 'store/discover-snapshot';
 import { getWhereSQLViaLucene } from 'services/lucene';
 import { getFieldsService, getIndexesService, getVariantPathSampleService } from 'services/metaservice';
 import { formatSqlTime } from 'utils/time';
@@ -61,12 +62,13 @@ export function useLuceneWhereClause() {
             if ((mode !== 'Lucene' && !options.refreshMetadata) || !datasource || !database || !table) {
                 return Promise.resolve('');
             }
+            const epoch = store.get(discoverRestoreEpochAtom);
             const key = JSON.stringify([datasource.uid, database, table]);
-            const requestKey = JSON.stringify([key, query, store.get(currentDateAtom).map(date => date.valueOf()), options]);
+            const requestKey = JSON.stringify([key, epoch, query, store.get(currentDateAtom).map(date => date.valueOf()), options]);
             if (inFlight.current?.key === requestKey) {
                 return inFlight.current.promise;
             }
-            const isCurrent = () => key === JSON.stringify([store.get(selectedDatasourceAtom)?.uid, store.get(currentDatabaseAtom), store.get(currentTableAtom)]);
+            const isCurrent = () => epoch === store.get(discoverRestoreEpochAtom) && key === JSON.stringify([store.get(selectedDatasourceAtom)?.uid, store.get(currentDatabaseAtom), store.get(currentTableAtom)]);
             const promise = (async () => {
                 let meta = store.get(tableMetadataAtom)[key];
                 if (options.refreshMetadata || !meta?.fields || !meta?.indexes) {
@@ -88,10 +90,10 @@ export function useLuceneWhereClause() {
                             : meta.indexes,
                     ]);
                     meta = { fields, indexes };
-                    store.set(tableMetadataAtom, previous => ({ ...previous, [key]: meta! }));
                     if (!isCurrent()) {
                         throw new Error('Search table changed while loading metadata');
                     }
+                    store.set(tableMetadataAtom, previous => ({ ...previous, [key]: meta! }));
                     store.set(tableFieldsAtom, fields);
                     store.set(indexesAtom, indexes);
                 }
@@ -117,12 +119,14 @@ export function useLuceneWhereClause() {
                         const samples = rowsFromResponse(response, 'sampleVariantPaths').map(row =>
                             Object.fromEntries(columns.map((column, index) => [column, row[`c${index + 1}`]])),
                         );
+                        if (!isCurrent()) {throw new Error('Search table changed while sampling attributes');}
                         rememberVariantSamples(store, key, columns, samples);
                         store.set(variantSamplingWarningAtom, previous => ({ ...previous, [key]: '' }));
                         if (isCurrent()) {
                             sampledContext.current = key;
                         }
                     } catch {
+                        if (!isCurrent()) {throw new Error('Search table changed while sampling attributes');}
                         store.set(variantSamplingWarningAtom, previous => ({
                             ...previous,
                             [key]: 'Attribute path sampling failed. Free-text search uses cached paths and may miss attribute values.',

@@ -50,12 +50,17 @@ import { createDiscoverQueryError } from 'utils/query-error';
 import { DiscoverQuerySource, DiscoverSort } from 'types/discover';
 import { resolveQuerySortField } from 'services/sql';
 import { deriveVariantFields, flattenVariantLeaves, mergeVariantFields } from 'utils/variant-fields';
+import { discoverRestoreEpochAtom } from 'store/discover-snapshot';
 import { enrichStructuredFilterTypes } from 'utils/sql-filter';
 
 type RefreshOptions = {
     skipPageReset?: boolean;
     forceRefresh?: boolean;
 };
+
+function restorePaused(store: ReturnType<typeof useStore>) {
+    return store.get(discoverRestoreEpochAtom) > 0 && !store.get(discoverShareReadyAtom);
+}
 
 function measureDiscoverPhase(requestId: number, source: string, phase: string, startTime: number) {
     if (typeof performance === 'undefined') {
@@ -76,6 +81,7 @@ export function useDiscoverData() {
     const suppressNextPageEffectRef = useRef(false);
     const [page, setPage] = useAtom(pageAtom);
     const shareReady = useAtomValue(discoverShareReadyAtom);
+    const restoreEpoch = useAtomValue(discoverRestoreEpochAtom);
     const topNEnabled = useAtomValue(topNEnabledAtom);
     const topNConfig = useAtomValue(topNConfigAtom);
     const topNRunRequest = useAtomValue(topNRunRequestAtom);
@@ -115,10 +121,14 @@ export function useDiscoverData() {
     const buildLuceneWhereClause = useLuceneWhereClause();
     const sortContextKey = `${selectdbDS?.uid || ''}\u0000${currentDatabase}\u0000${currentTable}\u0000${currentTimeField}`;
     const sortContextRef = useRef(sortContextKey);
-    const requestContextRef = useRef(sortContextKey);
-    if (requestContextRef.current !== sortContextKey) {
-        requestContextRef.current = sortContextKey;
+    const requestContextKey = `${sortContextKey}\u0000${restoreEpoch}`;
+    const requestContextRef = useRef(requestContextKey);
+    if (requestContextRef.current !== requestContextKey) {
+        requestContextRef.current = requestContextKey;
         requestGenerationRef.current += 1;
+        if (restorePaused(store) && page !== 1) {
+            suppressNextPageEffectRef.current = true;
+        }
     }
     useEffect(() => () => { requestGenerationRef.current += 1; }, []);
     useEffect(() => {
@@ -143,7 +153,7 @@ export function useDiscoverData() {
 
     const addAuxiliaryError = useCallback(
         (requestId: number, source: DiscoverQuerySource, error: any) => {
-            if (requestGenerationRef.current !== requestId) {
+            if (requestGenerationRef.current !== requestId || restorePaused(store)) {
                 return;
             }
             const queryError = createDiscoverQueryError(error, { source, searchType, searchValue });
@@ -152,7 +162,7 @@ export function useDiscoverData() {
                 auxiliaryErrors: [...previous.auxiliaryErrors.filter(item => item.source !== source), queryError],
             }));
         },
-        [searchType, searchValue, setQueryState],
+        [searchType, searchValue, setQueryState, store],
     );
 
     const getTableData = useCallback(
@@ -206,14 +216,17 @@ export function useDiscoverData() {
             if (searchType === 'Lucene') {
                 try {
                     const luceneWhere = options?.luceneWhere ?? await buildLuceneWhereClause();
-                    if (requestGenerationRef.current !== requestId) {
+                    if (requestGenerationRef.current !== requestId || restorePaused(store)) {
                         return;
                     }
                     payload.lucene_where = luceneWhere;
                 } catch (error) {
+                    if (requestGenerationRef.current !== requestId || restorePaused(store)) {
+                        return;
+                    }
                     setLoading(prev => ({ ...prev, getTableData: false }));
                     setTableData([]);
-                    if (requestGenerationRef.current === requestId) {
+                    if (requestGenerationRef.current === requestId && !restorePaused(store)) {
                         setQueryState({
                             status: 'error',
                             rowCount: 0,
@@ -244,7 +257,7 @@ export function useDiscoverData() {
             }
             resultRequest.subscribe({
                 next: async ({ data }: any) => {
-                    if (requestGenerationRef.current !== requestId) {
+                    if (requestGenerationRef.current !== requestId || restorePaused(store)) {
                         return;
                     }
                     const processingStartedAt = performance.now();
@@ -288,7 +301,7 @@ export function useDiscoverData() {
                     );
 
                     const rowsDataWithUid = await generateTableDataUID(resData);
-                    if (requestGenerationRef.current !== requestId) {
+                    if (requestGenerationRef.current !== requestId || restorePaused(store)) {
                         return;
                     }
                     setTableData(rowsDataWithUid);
@@ -301,7 +314,7 @@ export function useDiscoverData() {
                     measureDiscoverPhase(requestId, 'results', 'processing', processingStartedAt);
                 },
                 error: (err: any) => {
-                    if (requestGenerationRef.current !== requestId) {
+                    if (requestGenerationRef.current !== requestId || restorePaused(store)) {
                         return;
                     }
                     setLoading(prev => ({ ...prev, getTableData: false }));
@@ -318,6 +331,7 @@ export function useDiscoverData() {
             });
         },
         [
+            store,
             buildLuceneWhereClause,
             beginQuery,
             currentCatalog,
@@ -382,11 +396,14 @@ export function useDiscoverData() {
             if (searchType === 'Lucene') {
                 try {
                     const luceneWhere = sharedLuceneWhere;
-                    if (requestGenerationRef.current !== requestId) {
+                    if (requestGenerationRef.current !== requestId || restorePaused(store)) {
                         return;
                     }
                     payload.lucene_where = luceneWhere;
                 } catch (error) {
+                    if (requestGenerationRef.current !== requestId || restorePaused(store)) {
+                        return;
+                    }
                     setLoading(prev => ({ ...prev, getTableDataCharts: false }));
                     setTableDataCharts([]);
                     logError(toError(error), { source: 'useDiscoverData', action: 'buildLuceneWhereClause' });
@@ -406,7 +423,7 @@ export function useDiscoverData() {
                 { showBackendError: false },
             ).subscribe({
                 next: ({ data }: any) => {
-                    if (requestGenerationRef.current !== requestId) {
+                    if (requestGenerationRef.current !== requestId || restorePaused(store)) {
                         return;
                     }
                     const processingStartedAt = performance.now();
@@ -430,7 +447,7 @@ export function useDiscoverData() {
                     measureDiscoverPhase(requestId, 'histogram', 'processing', processingStartedAt);
                 },
                 error: (err: any) => {
-                    if (requestGenerationRef.current !== requestId) {
+                    if (requestGenerationRef.current !== requestId || restorePaused(store)) {
                         return;
                     }
                     setLoading(prev => ({ ...prev, getTableDataCharts: false }));
@@ -441,6 +458,7 @@ export function useDiscoverData() {
             });
         },
         [
+            store,
             addAuxiliaryError,
             currentDate,
             currentDatabase,
@@ -494,11 +512,14 @@ export function useDiscoverData() {
             if (searchType === 'Lucene') {
                 try {
                     const luceneWhere = sharedLuceneWhere;
-                    if (requestGenerationRef.current !== requestId) {
+                    if (requestGenerationRef.current !== requestId || restorePaused(store)) {
                         return;
                     }
                     payload.lucene_where = luceneWhere;
                 } catch (error) {
+                    if (requestGenerationRef.current !== requestId || restorePaused(store)) {
+                        return;
+                    }
                     logError(toError(error), { source: 'useDiscoverData', action: 'buildLuceneWhereClause' });
                     setTopData([]);
                     return;
@@ -507,7 +528,7 @@ export function useDiscoverData() {
 
             getTopDataService({ selectdbDS, ...payload }, { showBackendError: false }).subscribe({
                 next: ({ data }: any) => {
-                    if (requestGenerationRef.current !== requestId) {
+                    if (requestGenerationRef.current !== requestId || restorePaused(store)) {
                         return;
                     }
                     const processingStartedAt = performance.now();
@@ -525,7 +546,7 @@ export function useDiscoverData() {
                     measureDiscoverPhase(requestId, 'top-data', 'processing', processingStartedAt);
                 },
                 error: (err: any) => {
-                    if (requestGenerationRef.current !== requestId) {
+                    if (requestGenerationRef.current !== requestId || restorePaused(store)) {
                         return;
                     }
                     logError(toError(err), { source: 'useDiscoverData', action: 'getTopData' });
@@ -586,11 +607,14 @@ export function useDiscoverData() {
             if (searchType === 'Lucene') {
                 try {
                     const luceneWhere = sharedLuceneWhere;
-                    if (requestGenerationRef.current !== requestId) {
+                    if (requestGenerationRef.current !== requestId || restorePaused(store)) {
                         return;
                     }
                     payload.lucene_where = luceneWhere;
                 } catch (error) {
+                    if (requestGenerationRef.current !== requestId || restorePaused(store)) {
+                        return;
+                    }
                     logError(toError(error), { source: 'useDiscoverData', action: 'buildLuceneWhereClause' });
                     setTableTotalCount(0);
                     return;
@@ -609,7 +633,7 @@ export function useDiscoverData() {
                 { showBackendError: false },
             ).subscribe({
                 next: ({ data }: any) => {
-                    if (requestGenerationRef.current !== requestId) {
+                    if (requestGenerationRef.current !== requestId || restorePaused(store)) {
                         return;
                     }
                     const processingStartedAt = performance.now();
@@ -622,7 +646,7 @@ export function useDiscoverData() {
                     measureDiscoverPhase(requestId, 'count', 'processing', processingStartedAt);
                 },
                 error: (err: any) => {
-                    if (requestGenerationRef.current !== requestId) {
+                    if (requestGenerationRef.current !== requestId || restorePaused(store)) {
                         return;
                     }
                     setTableTotalCount(0);
@@ -632,6 +656,7 @@ export function useDiscoverData() {
             });
         },
         [
+            store,
             addAuxiliaryError,
             currentDate,
             currentDatabase,
@@ -734,6 +759,7 @@ export function useDiscoverData() {
 
     const refreshData = useCallback(
         async ({ skipPageReset = false, forceRefresh = false }: RefreshOptions = {}) => {
+            if (restorePaused(store)) {return;}
             if (!selectdbDS || !currentDatabase || !currentTable || !currentTimeField) {
                 clearData();
                 return;
@@ -747,7 +773,7 @@ export function useDiscoverData() {
             setLoading(previous => ({ ...previous, getTableData: true, getTableDataCharts: true }));
             try {
                 const luceneWhere = await buildLuceneWhereClause({ refreshMetadata: forceRefresh, refreshPaths: forceRefresh });
-                if (requestGenerationRef.current !== requestId) {
+                if (requestGenerationRef.current !== requestId || restorePaused(store)) {
                     return;
                 }
                 void getTableDataCharts(requestId, luceneWhere);
@@ -757,7 +783,7 @@ export function useDiscoverData() {
                     void getTopData(requestId, nextPage, luceneWhere);
                 }
             } catch (error) {
-                if (requestGenerationRef.current !== requestId) {
+                if (requestGenerationRef.current !== requestId || restorePaused(store)) {
                     return;
                 }
                 setTableData([]);
@@ -769,7 +795,7 @@ export function useDiscoverData() {
                 setLoading(previous => ({ ...previous, getTableData: false, getTableDataCharts: false }));
             }
         },
-        [beginQuery, clearData, currentDatabase, currentTable, currentTimeField, getTableData, getTableDataCharts, getTableDataCount, getTopData, page, selectdbDS, setPage, topNEnabled, buildLuceneWhereClause, searchType, searchValue, setQueryState, setLoading, setTableData, setTableDataCharts, setTableTotalCount, setTopData, setTopNRows],
+        [store, beginQuery, clearData, currentDatabase, currentTable, currentTimeField, getTableData, getTableDataCharts, getTableDataCount, getTopData, page, selectdbDS, setPage, topNEnabled, buildLuceneWhereClause, searchType, searchValue, setQueryState, setLoading, setTableData, setTableDataCharts, setTableTotalCount, setTopData, setTopNRows],
     );
 
     const handleQuerying = useCallback(() => {
@@ -811,18 +837,19 @@ export function useDiscoverData() {
 
     useEffect(() => {
         sortContextRef.current = sortContextKey;
+        if (restorePaused(store)) {return;}
         if (shareReady && sort.field) {
             return;
         }
         setSort({ field: currentTimeField, direction: 'DESC' });
-    }, [currentTimeField, setSort, shareReady, sort.field, sortContextKey]);
+    }, [currentTimeField, setSort, shareReady, sort.field, sortContextKey, store]);
 
     useEffect(() => {
         if (!didRunPageEffect.current) {
             didRunPageEffect.current = true;
             return;
         }
-        if (!currentTimeField) {
+        if (!currentTimeField || restorePaused(store)) {
             return;
         }
         if (suppressNextPageEffectRef.current) {

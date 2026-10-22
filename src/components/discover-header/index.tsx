@@ -1,7 +1,7 @@
 'use client';
 import React, { PropsWithChildren, useEffect } from 'react';
 import dayjs from 'dayjs';
-import { DiscoverHeaderControls, DiscoverHeaderSearch } from './discover-header.style';
+import { DiscoverHeaderControls, DiscoverHeaderSearch, DiscoverHeaderField, DiscoverHeaderActions } from './discover-header.style';
 import SearchType from './search-type';
 import SQLSearch from './sql-search';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
@@ -40,7 +40,7 @@ import {
     selectedFieldsAtom,
 } from 'store/discover';
 import { DISCOVER_SHORTCUTS, getLatestTime, isValidTimeFieldType } from 'utils/data';
-import { Select, Field, Button, Icon, Tooltip, useTheme2, TimeRangeInput } from '@grafana/ui';
+import { Select, Button, Icon, Tooltip, useTheme2, TimeRangeInput } from '@grafana/ui';
 import { getApplicationValuesService, getFieldsService, getIndexesService, getVariantFieldsService } from 'services/metaservice';
 import { SUPPORTED_DATASOURCE_TYPES, isSupportedDatasourceType } from 'services/grafana-permissions';
 import { useDatabaseTableSelection } from 'hooks/useDatabaseTableSelection';
@@ -51,7 +51,10 @@ import { useDatasourcePermissions } from 'hooks/useDatasourcePermissions';
 import { formatSqlTime, formatShareTime, buildAbsoluteTimeRange, buildRelativeTimeRange, normalizeTimeZone, parseTimeInZone, toDayjsRange } from 'utils/time';
 import { APPLICATION_FILTER_ID, applyApplicationFilter, getCommittedApplication, getConfiguredApplicationAttributeKey } from './application-filter';
 import { deriveVariantFields, deriveVariantFieldsFromMetadata } from 'utils/variant-fields';
-import { DiscoverShareState, readDiscoverShareState } from 'utils/discover-share-state';
+import { readDiscoverShareState } from 'utils/discover-share-state';
+import SavedQueries from 'components/saved-queries';
+import { useDiscoverRestore } from 'hooks/useDiscoverRestore';
+import { discoverSnapshotAtom, discoverRestoreEpochAtom, discoverRestoreErrorAtom, discoverRestoreWarningAtom } from 'store/discover-snapshot';
 import { timeRangeFieldClass } from 'components/time-range-input/time-range-input.styles';
 
 function getStoredValue<T>(key: string): T | undefined {
@@ -196,8 +199,11 @@ export default function DiscoverHeader(
     const setSelectedFields = useSetAtom(selectedFieldsAtom);
     const setSharedColumnOrder = useSetAtom(discoverSharedColumnOrderAtom);
     const setShareSort = useSetAtom(discoverSortAtom);
-    const [, setDiscoverShareReady] = useAtom(discoverShareReadyAtom);
-    const pendingShareStateRef = React.useRef<DiscoverShareState | undefined>(undefined);
+    const [shareReady, setDiscoverShareReady] = useAtom(discoverShareReadyAtom);
+    const snapshot = useAtomValue(discoverSnapshotAtom);
+    const [restoreError, setRestoreError] = useAtom(discoverRestoreErrorAtom);
+    const restoreWarning = useAtomValue(discoverRestoreWarningAtom);
+    const setRestoreEpoch = useSetAtom(discoverRestoreEpochAtom);
     const [applicationDraft, setApplicationDraft] = React.useState('');
     const [applicationOptions, setApplicationOptions] = React.useState<Array<SelectableValue<string>>>([]);
     const [applicationOptionsLoading, setApplicationOptionsLoading] = React.useState(false);
@@ -262,13 +268,14 @@ export default function DiscoverHeader(
     }, [setDataFilter]);
 
     const commitApplicationAndQuery = React.useCallback(() => {
+        if (!shareReady) {return;}
         const result = applyApplicationFilter(dataFilter, applicationDraft, applicationAttributeKey);
         if (!result.changed) {
             onQuerying();
             return;
         }
         setDataFilter(result.filters);
-    }, [applicationAttributeKey, applicationDraft, dataFilter, onQuerying, setDataFilter]);
+    }, [applicationAttributeKey, applicationDraft, dataFilter, onQuerying, setDataFilter, shareReady]);
 
     const applyAbsoluteTimeRange = React.useCallback(
         (start: dayjs.Dayjs, end: dayjs.Dayjs) => {
@@ -358,18 +365,6 @@ export default function DiscoverHeader(
                     setVariantMetadataFields([]);
                     setResolvedFieldsContext(`${effectiveDatasource.uid || ''}\u0000${effectiveDatabase}\u0000${selectedTable.value}`);
 
-                    const sharedState = pendingShareStateRef.current;
-                    if (sharedState) {
-                        const fieldsByName = new Map(tableFields.map(field => [field.Field, field]));
-                        const restoredFields = sharedState.selectedFields
-                            .map(field => fieldsByName.get(field.Field))
-                            .filter(Boolean);
-                        const restoredFilters = sharedState.filters.filter(filter => fieldsByName.has(filter.fieldName));
-                        setSelectedFields(restoredFields);
-                        setDataFilter(restoredFilters);
-                        setSharedColumnOrder(sharedState.columnOrder);
-                    }
-
                     getVariantFieldsService({ selectdbDS: effectiveDatasource, database: effectiveDatabase, table: selectedTable.value }).subscribe({
                         next: ({ data, ok }: any) => {
                             if (requestedFieldsKey.current !== metadataKey || metadataGeneration.current !== generation) {
@@ -388,11 +383,6 @@ export default function DiscoverHeader(
                             );
                             setVariantMetadataFields(variantMetadata);
                             setVariantFields(variantMetadata);
-                            if (sharedState) {
-                                const fieldsByName = new Map([...tableFields, ...variantMetadata].map(field => [field.Field, field]));
-                                setSelectedFields(sharedState.selectedFields.map(field => fieldsByName.get(field.Field)).filter(Boolean));
-                                setDataFilter(sharedState.filters.filter(filter => fieldsByName.has(filter.fieldName)));
-                            }
                         },
                         error: () => {
                             // Extended DESC is optional. Sampling remains available below.
@@ -421,10 +411,6 @@ export default function DiscoverHeader(
                             timeField: targetTimeField,
                         }));
                         setTimeFields(options);
-                        if (sharedState) {
-                            setShareSort(sharedState.sort);
-                            pendingShareStateRef.current = undefined;
-                        }
                         initOptions?.onResolved?.(targetTimeField);
                         // Enable Discover's initial query after datasource, table, and time field
                         // have been resolved, including links that use the individual URL params.
@@ -507,6 +493,8 @@ export default function DiscoverHeader(
     }
 
     const applyTableSelection = (datasource: any, database: string, table: string, timeField?: string) => {
+        setRestoreEpoch(n => n + 1);
+        setRestoreError('');
         metadataGeneration.current += 1;
         requestedFieldsKey.current = '';
         requestedIndexesKey.current = '';
@@ -530,33 +518,58 @@ export default function DiscoverHeader(
         }
     };
 
-    const { selectDatasource, selectDatabase, databasesLoading, tablesLoading } = useDatabaseTableSelection({
+    const { selectDatasource, selectDatabase, databasesLoading, tablesLoading, cancelSelection } = useDatabaseTableSelection({
         setDatabases,
         setTables,
         onDatabaseChange: database => setDiscoverCurrent(prev => ({ ...prev, database, table: '', timeField: '' })),
         onTableChange: applyTableSelection,
     });
 
+    const invalidateMetadata = React.useCallback(() => {
+        metadataGeneration.current += 1;
+        requestedFieldsKey.current = '';
+        requestedIndexesKey.current = '';
+
+        cancelSelection();
+    }, [cancelSelection]);
+    const restoreSnapshot = useDiscoverRestore(allowedDatasources, invalidateMetadata);
+    const restore = React.useCallback(async (state: Parameters<typeof restoreSnapshot>[0], strict = true) => {
+        const applied = await restoreSnapshot(state, strict);
+        if (applied) {
+            const datasource = allowedDatasources.find(ds => ds.uid === state.datasource || ds.name === state.datasource);
+            setResolvedFieldsContext(`${datasource?.uid || ''}\u0000${state.database}\u0000${state.table}`);
+        }
+        return applied;
+    }, [allowedDatasources, restoreSnapshot]);
+
     async function initHeaderData() {
         const urlSearchParams = new URLSearchParams(locSearch);
         const sharedState = readDiscoverShareState(urlSearchParams);
-        pendingShareStateRef.current = sharedState;
+        if (sharedState) {
+            hasInitializedUrlSyncRef.current = true;
+            await restore({ ...sharedState,
+                datasource: sharedState.datasource || resolveDatasourceUid(logsConfig.datasource, allowedDatasources),
+                database: sharedState.database || logsConfig.database,
+                table: sharedState.table || logsConfig.logsTable,
+            }, false);
+            return;
+        }
         setDiscoverShareReady(false);
         const persistedDatasourceStorage = getStoredValue<{ uid?: string }>('discover-selected-datasource');
         const persistedDiscoverCurrentStorage = getStoredValue<{ database?: string; table?: string; timeField?: string }>('discover-current');
         const persistedTableStorage = getStoredValue<string>('discover-current-table');
-        const urlDatasource = resolveDatasourceFromParam(sharedState?.datasource ?? urlSearchParams.get('datasource'), allowedDatasources);
-        const urlDatabase = sharedState?.database?.trim() || urlSearchParams.get('database')?.trim() || '';
-        const urlTable = sharedState?.table?.trim() || urlSearchParams.get('table')?.trim() || '';
-        const urlMode = sharedState?.mode ?? normalizeMode(urlSearchParams.get('mode'));
-        const urlSearchValue = sharedState?.query ?? urlSearchParams.get('query') ?? urlSearchParams.get('searchValue') ?? '';
-        const urlTimeZone = normalizeTimeZone(sharedState?.timeZone ?? urlSearchParams.get('timeZone'));
+        const urlDatasource = resolveDatasourceFromParam(urlSearchParams.get('datasource'), allowedDatasources);
+        const urlDatabase = urlSearchParams.get('database')?.trim() || '';
+        const urlTable = urlSearchParams.get('table')?.trim() || '';
+        const urlMode = normalizeMode(urlSearchParams.get('mode'));
+        const urlSearchValue = urlSearchParams.get('query') ?? urlSearchParams.get('searchValue') ?? '';
+        const urlTimeZone = normalizeTimeZone(urlSearchParams.get('timeZone'));
         const effectiveTimeZone = urlTimeZone || timeZone;
-        const urlTimeField = sharedState?.timeField?.trim() || urlSearchParams.get('timeField')?.trim() || '';
-        const urlStartTime = parseTimeInZone(sharedState?.startTime ?? urlSearchParams.get('startTime'), effectiveTimeZone);
-        const urlEndTime = parseTimeInZone(sharedState?.endTime ?? urlSearchParams.get('endTime'), effectiveTimeZone);
-        const urlTimeRawFrom = sharedState?.timeRawFrom?.trim() || urlSearchParams.get('timeRawFrom')?.trim() || '';
-        const urlTimeRawTo = sharedState?.timeRawTo?.trim() || urlSearchParams.get('timeRawTo')?.trim() || '';
+        const urlTimeField = urlSearchParams.get('timeField')?.trim() || '';
+        const urlStartTime = parseTimeInZone(urlSearchParams.get('startTime'), effectiveTimeZone);
+        const urlEndTime = parseTimeInZone(urlSearchParams.get('endTime'), effectiveTimeZone);
+        const urlTimeRawFrom = urlSearchParams.get('timeRawFrom')?.trim() || '';
+        const urlTimeRawTo = urlSearchParams.get('timeRawTo')?.trim() || '';
         const matchedShortcut = findShortcutByRaw(urlTimeRawFrom, urlTimeRawTo);
 
         const configuredDatasourceUid = resolveDatasourceUid(logsConfig.datasource, allowedDatasources);
@@ -663,7 +676,7 @@ export default function DiscoverHeader(
     }, [datasourcePermissionsLoading]);
 
     useEffect(() => {
-        if (!hasInitializedUrlSyncRef.current) {
+        if (!hasInitializedUrlSyncRef.current || !shareReady) {
             return;
         }
 
@@ -716,6 +729,7 @@ export default function DiscoverHeader(
         timeRange?.raw,
         timeZone,
         updateShareParams,
+        shareReady,
     ]);
 
     useEffect(() => {
@@ -774,17 +788,22 @@ export default function DiscoverHeader(
 
     return (
         <div
+            data-testid="discover-header"
             className={css`
-                padding: 1rem;
+                padding: 12px;
                 background-color: ${theme.isDark ? 'rgb(24, 27, 31)' : '#FFF'};
                 display: flex;
                 flex-direction: column;
-                gap: 12px;
+                gap: 8px;
                 border-radius: 0.25rem 0.25rem 0 0;
             `}
         >
-            <DiscoverHeaderControls>
-                <Field label="Datasource" description={datasourcePermissionsError ? 'Failed to load team datasource permissions' : undefined}>
+            {restoreError && <div role="alert" style={{ color: theme.colors.error.text }}>
+                {restoreError}. Automatic querying is paused. <Button variant="secondary" size="sm" onClick={() => { setRestoreError(''); setDiscoverShareReady(true); }}>Keep current query</Button>
+            </div>}
+            {restoreWarning && <div role="status" style={{ color: theme.colors.warning.text }}>{restoreWarning}</div>}
+            <DiscoverHeaderControls data-testid="discover-header-controls">
+                <DiscoverHeaderField label="Datasource" description={datasourcePermissionsError ? 'Failed to load team datasource permissions' : undefined}>
                     {/* filter 这个版本无效 */}
                     <DataSourcePicker
                         width={15}
@@ -799,14 +818,14 @@ export default function DiscoverHeader(
                             if (!allowedDatasourceUids.has(item.uid)) {
                                 return;
                             }
-                            pendingShareStateRef.current = undefined;
+
                             setSelectedDatasource(item);
                             selectDatasource(item);
                         }}
                     />
-                </Field>
+                </DiscoverHeaderField>
                 {/* 需要从数据源中获取库表信息 */}
-                <Field label="Database">
+                <DiscoverHeaderField label="Database">
                     <Select
                         width={15}
                         options={databases}
@@ -814,13 +833,13 @@ export default function DiscoverHeader(
                         disabled={databasesLoading || !selectedDatasource || databases.length === 0}
                         isLoading={databasesLoading}
                         onChange={(selectedDatabase: any) => {
-                            pendingShareStateRef.current = undefined;
+
                             selectDatabase(selectdbDS, selectedDatabase.value);
                         }}
                     ></Select>
-                </Field>
+                </DiscoverHeaderField>
 
-                <Field label="Table">
+                <DiscoverHeaderField label="Table">
                     <Select
                         options={tables}
                         width={15}
@@ -828,13 +847,13 @@ export default function DiscoverHeader(
                         disabled={databasesLoading || tablesLoading || !discoverCurrent.database || tables.length === 0}
                         isLoading={tablesLoading}
                         onChange={(selectedTable: any) => {
-                            pendingShareStateRef.current = undefined;
+
                             applyTableSelection(selectdbDS, discoverCurrent.database, selectedTable.value);
                         }}
                     />
-                </Field>
+                </DiscoverHeaderField>
                 {isApplicationFilterConfigured ? (
-                    <Field label="Application">
+                    <DiscoverHeaderField label="Application">
                         <Select
                             options={visibleApplicationOptions}
                             width={14}
@@ -847,13 +866,14 @@ export default function DiscoverHeader(
                                 setApplicationDraft(selectedApplication?.value || '');
                             }}
                         />
-                    </Field>
+                    </DiscoverHeaderField>
                 ) : null}
                 {!searchFocus && (
                     <>
-                        <Field label="Time Field" style={{ width: 120 }}>
+                        <DiscoverHeaderField label="Time Field">
                             <Select
                                 value={currentTimeField}
+                                width={15}
                                 options={timeFields}
                                 onChange={(selectdbTimeFiled: any) => {
                                     setDiscoverCurrent({
@@ -871,8 +891,8 @@ export default function DiscoverHeader(
                                 }}
                                 placeholder={'Time Field'}
                             />
-                        </Field>
-                        <Field label="Time Range" className={timeRangeFieldClass} style={{ marginLeft: 'auto' }}>
+                        </DiscoverHeaderField>
+                        <DiscoverHeaderField label="Time Range" className={timeRangeFieldClass} style={{ marginLeft: 'auto' }}>
                             <TimeRangeInput
                                 hideTimeZone={false}
                                 isReversed={false}
@@ -920,87 +940,90 @@ export default function DiscoverHeader(
                                 timeZone={timeZone}
                                 value={timeRange}
                             />
-                        </Field>
+                        </DiscoverHeaderField>
                     </>
                 )}
             </DiscoverHeaderControls>
-            <DiscoverHeaderSearch>
-                <Field label="Mode" style={{ flex: '0 0 80px' }}>
+            <DiscoverHeaderSearch data-testid="discover-header-search">
+                <DiscoverHeaderField label="Mode" style={{ flex: '0 0 auto' }}>
                     <SearchType />
-                </Field>
+                </DiscoverHeaderField>
                 {searchType === 'Lucene' ? (
-                    <Field label="Lucene" style={{ flex: '1 1 0', minWidth: 0 }}>
+                    <DiscoverHeaderField label="Lucene" style={{ flex: '1 1 240px', minWidth: 0 }}>
                         <Lucene onQuerying={commitApplicationAndQuery} />
-                    </Field>
+                    </DiscoverHeaderField>
                 ) : (
-                    <Field label={searchMode ? 'Search' : 'SQL'} style={{ flex: '1 1 0', minWidth: 0 }}>
+                    <DiscoverHeaderField label={searchMode ? 'Search' : 'SQL'} style={{ flex: '1 1 240px', minWidth: 0 }}>
                         <SQLSearch style={{ minWidth: 0, width: '100%' }} onQuerying={commitApplicationAndQuery} />
-                    </Field>
+                    </DiscoverHeaderField>
                 )}
-                <Field label="">
-                    <div style={{ alignItems: 'center', display: 'flex', gap: theme.spacing(1) }}>
-                        {fieldsWithoutInvertedIndex.length > 0 ? (
-                            <Tooltip
-                                content={
-                                    <span>
-                                        {warningFields}
-                                        {remainingWarningFieldCount > 0 ? ` 等 ${fieldsWithoutInvertedIndex.length} 个字段` : ''} 未配置倒排索引，Lucene 查询可能较慢。
-                                        {jsonFieldsWithoutInvertedIndex.length > 0 ? ' JSON 子路径使用 JSON 函数过滤，通常会扫描数据。' : ''}
-                                    </span>
-                                }
-                                placement="top"
-                            >
-                                <span aria-label="Lucene 倒排索引告警" style={{ color: theme.colors.warning.text, cursor: 'help', display: 'inline-flex' }}>
-                                    <Icon name="exclamation-triangle" size="sm" />
+                <DiscoverHeaderActions>
+                    {fieldsWithoutInvertedIndex.length > 0 ? (
+                        <Tooltip
+                            content={
+                                <span>
+                                    {warningFields}
+                                    {remainingWarningFieldCount > 0 ? ` 等 ${fieldsWithoutInvertedIndex.length} 个字段` : ''} 未配置倒排索引，Lucene 查询可能较慢。
+                                    {jsonFieldsWithoutInvertedIndex.length > 0 ? ' JSON 子路径使用 JSON 函数过滤，通常会扫描数据。' : ''}
                                 </span>
-                            </Tooltip>
-                        ) : null}
-                        <Tooltip content="Refresh table metadata and sampled attribute paths">
-                            <Button aria-label="Refresh search metadata" variant="secondary" icon="sync" disabled={loading || !currentTimeField} onClick={onRefresh} />
-                        </Tooltip>
-                        <Button
-                            onClick={() => {
-                                const latestTime = getLatestTime(activeItem?.key as string, timeZone);
-                                if (latestTime) {
-                                    const [latestStartTime, latestEndTime] = latestTime;
-                                    const currentShortcut = DISCOVER_SHORTCUTS.find(shortcut => shortcut.key === activeItem?.key);
-                                    const rawFrom = normalizeRawTimeValue(currentShortcut?.raw?.from);
-                                    const rawTo = normalizeRawTimeValue(currentShortcut?.raw?.to);
-                                    setLoc(prev => {
-                                        const searchParams = new URLSearchParams(prev?.searchParams?.toString() ?? '');
-                                        searchParams?.delete('startTime');
-                                        searchParams?.delete('endTime');
-                                        if (rawFrom && rawTo) {
-                                            searchParams?.set('timeRawFrom', rawFrom);
-                                            searchParams?.set('timeRawTo', rawTo);
-                                        } else {
-                                            searchParams?.delete('timeRawFrom');
-                                            searchParams?.delete('timeRawTo');
-                                        }
-                                        return {
-                                            ...prev,
-                                            searchParams,
-                                        };
-                                    });
-                                    setCurrentDate([dayjs(latestStartTime), dayjs(latestEndTime)]);
-                                    setTimeRange((prev: any) => ({
-                                        ...prev,
-                                        from: dateTime(dayjs(latestStartTime).toDate()),
-                                        to: dateTime(dayjs(latestEndTime).toDate()),
-                                        raw: rawFrom && rawTo ? { from: rawFrom, to: rawTo } : buildAbsoluteTimeRange(dayjs(latestStartTime), dayjs(latestEndTime)).raw,
-                                    }));
-                                }
-                                commitApplicationAndQuery();
-                            }}
-                            variant="primary"
-                            className="h-8"
-                            icon={loading ? 'fa fa-spinner' : 'sync'}
-                            disabled={!currentTimeField}
+                            }
+                            placement="top"
                         >
-                            {`Query`}
-                        </Button>
-                    </div>
-                </Field>
+                            <span aria-label="Lucene 倒排索引告警" style={{ color: theme.colors.warning.text, cursor: 'help', display: 'inline-flex' }}>
+                                <Icon name="exclamation-triangle" size="sm" />
+                            </span>
+                        </Tooltip>
+                    ) : null}
+                    <Tooltip content="Refresh table metadata and sampled attribute paths">
+                        <Button aria-label="Refresh search metadata" variant="secondary" icon="sync" disabled={loading || !currentTimeField} onClick={onRefresh} />
+                    </Tooltip>
+                    <Button
+                        onClick={() => {
+                            const latestTime = getLatestTime(activeItem?.key as string, timeZone);
+                            if (latestTime) {
+                                const [latestStartTime, latestEndTime] = latestTime;
+                                const currentShortcut = DISCOVER_SHORTCUTS.find(shortcut => shortcut.key === activeItem?.key);
+                                const rawFrom = normalizeRawTimeValue(currentShortcut?.raw?.from);
+                                const rawTo = normalizeRawTimeValue(currentShortcut?.raw?.to);
+                                setLoc(prev => {
+                                    const searchParams = new URLSearchParams(prev?.searchParams?.toString() ?? '');
+                                    searchParams?.delete('startTime');
+                                    searchParams?.delete('endTime');
+                                    if (rawFrom && rawTo) {
+                                        searchParams?.set('timeRawFrom', rawFrom);
+                                        searchParams?.set('timeRawTo', rawTo);
+                                    } else {
+                                        searchParams?.delete('timeRawFrom');
+                                        searchParams?.delete('timeRawTo');
+                                    }
+                                    return {
+                                        ...prev,
+                                        searchParams,
+                                    };
+                                });
+                                setCurrentDate([dayjs(latestStartTime), dayjs(latestEndTime)]);
+                                setTimeRange((prev: any) => ({
+                                    ...prev,
+                                    from: dateTime(dayjs(latestStartTime).toDate()),
+                                    to: dateTime(dayjs(latestEndTime).toDate()),
+                                    raw: rawFrom && rawTo ? { from: rawFrom, to: rawTo } : buildAbsoluteTimeRange(dayjs(latestStartTime), dayjs(latestEndTime)).raw,
+                                }));
+                            }
+                            commitApplicationAndQuery();
+                        }}
+                        variant="primary"
+                        className="h-8"
+                        icon={loading ? 'fa fa-spinner' : 'sync'}
+                        disabled={!currentTimeField || !shareReady}
+                    >
+                        {`Query`}
+                    </Button>
+                    <SavedQueries
+                        snapshot={{ ...snapshot, filters: applicationAttributeKey ? applyApplicationFilter(dataFilter, applicationDraft, applicationAttributeKey).filters : dataFilter }}
+                        ready={shareReady}
+                        restore={restore}
+                    />
+                </DiscoverHeaderActions>
             </DiscoverHeaderSearch>
         </div>
     );

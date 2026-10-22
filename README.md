@@ -10,7 +10,13 @@ App plugins can let you create a custom out-of-the-box monitoring experience by 
 
 ### Backend
 
-This plugin is frontend-only and does not include a Go backend.
+The plugin includes an App backend for organization-shared Discover Saved Queries
+and a nested Doris datasource backend. Run `mage buildAll` after building the
+frontend to package both backends for the current host and Linux amd64/arm64.
+Saved Queries requires a writable persistent storage directory, configured with
+`DORIS_APP_STORAGE_PATH` (default: `/var/lib/grafana/doris-app/saved-queries.db`).
+See [Discover Saved Queries](docs/discover-saved-queries-zh.md) for usage,
+permissions, deployment, and backup instructions.
 
 ### Frontend
 

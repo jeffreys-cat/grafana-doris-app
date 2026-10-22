@@ -141,7 +141,7 @@ export default function DiscoverQueryEditor({ mode, onQuerying }: Props) {
                 language={mode === 'sql' ? 'sql' : 'plaintext'}
                 value={searchValue}
                 width="100%"
-                height="32px"
+                height="30px"
                 showMiniMap={false}
                 showLineNumbers={false}
                 containerStyles={css(singleLineEditorStyle, {
