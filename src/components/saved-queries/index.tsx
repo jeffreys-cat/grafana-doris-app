@@ -1,12 +1,32 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Button, ConfigProvider, Drawer, Empty, Input, List, Modal, Pagination, Radio, Space, Tag, Typography, theme as antdTheme } from 'antd';
-import { Button as GrafanaButton, Tooltip, useTheme2 } from '@grafana/ui';
+import {
+    Alert as GrafanaAlert,
+    Button as GrafanaButton,
+    Card,
+    Drawer,
+    EmptySearchResult,
+    Field,
+    Icon,
+    IconButton,
+    Input as GrafanaInput,
+    LoadingPlaceholder,
+    Modal as GrafanaModal,
+    Pagination,
+    RadioButtonGroup,
+    Tag,
+    TextArea,
+    Tooltip,
+    useStyles2,
+    useTheme2,
+} from '@grafana/ui';
+import { css } from '@emotion/css';
 import { config } from '@grafana/runtime';
 import { useStore } from 'jotai';
 import { SavedQuery, savedQueries } from 'services/saved-queries';
 import { DiscoverShareState } from 'utils/discover-share-state';
 import { snapshotKey, validateSavedQueryState } from 'utils/saved-query-state';
 import { discoverSnapshotAtom } from 'store/discover-snapshot';
+import { getSavedQueriesStyles } from './saved-queries.styles';
 
 type Props = { snapshot: DiscoverShareState; ready: boolean; restore: (state: DiscoverShareState) => Promise<boolean> };
 type Editor = {
@@ -18,11 +38,12 @@ type Editor = {
     snapshot?: DiscoverShareState;
     snapshotChanged?: boolean;
 };
+type Confirmation = { kind: 'load' | 'delete'; target: SavedQuery };
 
 export default function SavedQueries({ snapshot, ready, restore }: Props) {
     const store = useStore();
     const theme = useTheme2();
-    const [modal, modalContext] = Modal.useModal();
+    const styles = useStyles2(getSavedQueriesStyles);
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
@@ -34,10 +55,41 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
     const [error, setError] = useState('');
     const [editorError, setEditorError] = useState('');
     const [editor, setEditor] = useState<Editor>();
+    const [confirmation, setConfirmation] = useState<Confirmation>();
+    const nameInput = useRef<HTMLInputElement>(null);
+    const searchInput = useRef<HTMLInputElement>(null);
+    const confirmationCancel = useRef<HTMLButtonElement>(null);
+    const editorTrigger = useRef<HTMLElement | null>(null);
+    const isEditing = Boolean(editor);
+    const isDialogOpen = isEditing || Boolean(confirmation);
     const [active, setActive] = useState<SavedQuery>();
     const [baseline, setBaseline] = useState('');
     const [reload, setReload] = useState(0);
     const initial = useRef<string | undefined>(undefined);
+    useEffect(() => {
+        // Let the modal capture the trigger before moving focus into the form.
+        if (isEditing) {
+            nameInput.current?.focus();
+        } else if (isDialogOpen) {
+            confirmationCancel.current?.focus();
+        } else if (editorTrigger.current) {
+            // Restore focus after the tooltip/drawer and modal finish updating.
+            const frame = window.requestAnimationFrame(() => {
+                if (editorTrigger.current?.isConnected) {
+                    editorTrigger.current.focus();
+                } else {
+                    searchInput.current?.focus();
+                }
+            });
+            return () => window.cancelAnimationFrame(frame);
+        }
+        return undefined;
+    }, [isEditing, isDialogOpen]);
+    useEffect(() => {
+        if (open) {
+            searchInput.current?.focus();
+        }
+    }, [open]);
     if (ready && initial.current === undefined) {
         initial.current = snapshotKey(snapshot);
     }
@@ -202,59 +254,63 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
 
     const confirmLoad = (item: SavedQuery) => {
         if (dirty) {
-            modal.confirm({
-                title: 'Discard unsaved query changes?',
-                content: 'Loading this query replaces the current query and display settings.',
-                okText: 'Discard and load',
-                onOk: () => load(item),
-            });
+            setConfirmation({ kind: 'load', target: item });
         } else {
             void load(item);
         }
     };
 
-    const remove = (item: SavedQuery) =>
-        modal.confirm({
-            title: `Delete “${item.name}”?`,
-            content: 'This removes the saved query for everyone in this organization.',
-            okText: 'Delete',
-            okButtonProps: { danger: true },
-            onOk: async () => {
-                setBusy(true);
-                try {
-                    await savedQueries.delete(item.id, item.revision);
-                    if (!mounted.current) {
-                        return;
-                    }
-                    if (active?.id === item.id) {
-                        setActive(undefined);
-                        setBaseline('');
-                        initial.current = snapshotKey(snapshot);
-                    }
-                    setReload(n => n + 1);
-                } catch (error) {
-                    if (mounted.current) {
-                        setError((error as Error).message);
-                    }
-                } finally {
-                    if (mounted.current) {
-                        setBusy(false);
-                    }
-                }
-            },
-        });
+    const remove = async (item: SavedQuery) => {
+        setBusy(true);
+        try {
+            await savedQueries.delete(item.id, item.revision);
+            if (!mounted.current) {
+                return;
+            }
+            if (active?.id === item.id) {
+                setActive(undefined);
+                setBaseline('');
+                initial.current = snapshotKey(snapshot);
+            }
+            setReload(n => n + 1);
+        } catch (error) {
+            if (mounted.current) {
+                setError((error as Error).message);
+            }
+        } finally {
+            if (mounted.current) {
+                setBusy(false);
+            }
+        }
+    };
+
+    const confirm = async () => {
+        if (!confirmation || busy) {
+            return;
+        }
+        if (confirmation.kind === 'load') {
+            await load(confirmation.target);
+        } else {
+            await remove(confirmation.target);
+        }
+        if (mounted.current) {
+            setConfirmation(undefined);
+        }
+    };
 
     return (
-        <ConfigProvider theme={{ algorithm: theme.isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm, token: { colorPrimary: theme.colors.primary.main } }}>
-            {modalContext}
+        <>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                <Tooltip content={active ? `Save query: ${active.name}${dirty ? ' (Modified)' : ''}` : 'Save query'}>
+                <Tooltip content={active ? `Save query: ${active.name}${dirty ? ' (Modified)' : ''}` : 'Save query'} show={isDialogOpen ? false : undefined}>
                     <span style={{ display: 'inline-flex', position: 'relative' }}>
                         <GrafanaButton
                             aria-label="Save query"
                             variant="secondary"
                             icon="save"
-                            onClick={() => beginSave(active?.canEdit ? 'update' : 'create')}
+                            onClick={event => {
+                                editorTrigger.current = event.currentTarget;
+                                beginSave(active?.canEdit ? 'update' : 'create');
+                            }}
                             disabled={(!canCreate && !active?.canEdit) || !ready || busy}
                         />
                         {dirty && (
@@ -275,141 +331,260 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
                         )}
                     </span>
                 </Tooltip>
-                <Tooltip content="Saved queries">
+                <Tooltip content="Saved queries" show={open ? false : undefined}>
                     <GrafanaButton aria-label="Saved queries" variant="secondary" icon="folder-open" onClick={() => setOpen(true)} />
                 </Tooltip>
             </div>
-            <Drawer title="Saved queries" open={open} onClose={() => setOpen(false)} width={560}>
-                <Space direction="vertical" style={{ width: '100%' }} size="middle">
-                    <Typography.Text type="secondary">Shared with members of this Grafana organization. Data access uses your own permissions.</Typography.Text>
-                    <Input.Search
-                        aria-label="Search saved queries"
-                        placeholder="Search by name"
-                        allowClear
-                        value={search}
-                        onChange={event => {
-                            setSearch(event.target.value);
-                            setPage(1);
-                        }}
-                    />
-                    {error && (
-                        <Alert
-                            type="error"
-                            showIcon
-                            message={error}
-                            action={
-                                <Button size="small" onClick={() => setReload(n => n + 1)}>
+            {open && (
+                <Drawer
+                    title="Saved queries"
+                    subtitle="Shared with members of this Grafana organization. Data access uses your own permissions."
+                    size="md"
+                    onClose={() => {
+                        if (!isDialogOpen) {
+                            setOpen(false);
+                        }
+                    }}
+                >
+                    <div className={styles.drawerBody}>
+                        <GrafanaInput
+                            ref={searchInput}
+                            type="search"
+                            aria-label="Search saved queries"
+                            placeholder="Search by name"
+                            prefix={<Icon name="search" />}
+                            suffix={
+                                search ? (
+                                    <IconButton
+                                        name="times"
+                                        aria-label="Clear search"
+                                        onClick={() => {
+                                            setSearch('');
+                                            setPage(1);
+                                            searchInput.current?.focus();
+                                        }}
+                                    />
+                                ) : undefined
+                            }
+                            value={search}
+                            onChange={event => {
+                                setSearch(event.currentTarget.value);
+                                setPage(1);
+                            }}
+                        />
+                        {error && (
+                            <GrafanaAlert severity="error" title={error} bottomSpacing={0}>
+                                <GrafanaButton variant="secondary" size="sm" onClick={() => setReload(n => n + 1)}>
                                     Retry
-                                </Button>
-                            }
-                        />
-                    )}
-                    <List
-                        loading={loading}
-                        dataSource={items}
-                        locale={{ emptyText: <Empty description="No saved queries" /> }}
-                        renderItem={item => (
-                            <List.Item>
-                                <div style={{ width: '100%' }}>
-                                    <Button
-                                        type="link"
-                                        style={{ padding: 0, maxWidth: '100%', height: 'auto', whiteSpace: 'normal', textAlign: 'left' }}
-                                        disabled={busy}
-                                        onClick={() => confirmLoad(item)}
-                                    >
-                                        {item.name}
-                                    </Button>
-                                    {item.description && (
-                                        <Typography.Paragraph type="secondary" ellipsis={{ rows: 2 }}>
-                                            {item.description}
-                                        </Typography.Paragraph>
-                                    )}
-                                    <div>
-                                        <Tag>{item.state?.mode}</Tag>
-                                        <Typography.Text type="secondary">
-                                            {item.state?.database}.{item.state?.table}
-                                        </Typography.Text>
-                                    </div>
-                                    <Typography.Text type="secondary">
-                                        {item.author} · {new Date(item.updatedAt).toLocaleString()}
-                                    </Typography.Text>
-                                    <div>
-                                        <Space>
-                                            {item.canEdit && (
-                                                <Button
-                                                    size="small"
-                                                    disabled={busy}
-                                                    onClick={() => {
-                                                        setEditorError('');
-                                                        setEditor({ kind: 'rename', name: item.name, description: item.description, target: item });
-                                                    }}
-                                                >
-                                                    Rename
-                                                </Button>
-                                            )}
-                                            {item.canDelete && (
-                                                <Button size="small" danger disabled={busy} onClick={() => remove(item)}>
-                                                    Delete
-                                                </Button>
-                                            )}
-                                        </Space>
-                                    </div>
-                                </div>
-                            </List.Item>
+                                </GrafanaButton>
+                            </GrafanaAlert>
                         )}
-                    />
-                    <Pagination current={page} pageSize={20} total={total} showSizeChanger={false} onChange={setPage} />
-                </Space>
-            </Drawer>
-            <Modal
-                title={editor?.kind === 'rename' ? 'Rename saved query' : 'Save query'}
-                open={Boolean(editor)}
-                onCancel={() => {
-                    if (!busy) {
-                        setEditor(undefined);
-                    }
-                }}
-                onOk={() => {
-                    void save();
-                }}
-                okText="Save"
-                confirmLoading={busy}
-                okButtonProps={{ disabled: !editor?.name.trim() || unchanged }}
-            >
-                <Space direction="vertical" style={{ width: '100%' }}>
-                    {editor?.kind !== 'rename' && editor?.source?.canEdit && canCreate && (
-                        <Radio.Group
-                            aria-label="Save query action"
-                            value={editor.kind}
-                            onChange={event =>
-                                setEditor(previous => previous && { ...previous, kind: event.target.value, target: event.target.value === 'update' ? previous.source : undefined })
-                            }
+                        {loading ? (
+                            <div role="status">
+                                <LoadingPlaceholder text="Loading saved queries…" />
+                            </div>
+                        ) : (
+                            <>
+                                {!error && items.length === 0 && (
+                                    <div className={styles.empty}>
+                                        <EmptySearchResult>
+                                            {search ? 'No saved queries match your search.' : 'No saved queries yet. Use Save query to save your current query.'}
+                                        </EmptySearchResult>
+                                    </div>
+                                )}
+                                {items.length > 0 && (
+                                    <>
+                                        <div className={styles.listSummary}>
+                                            <span>
+                                                {total} saved {total === 1 ? 'query' : 'queries'}
+                                            </span>
+                                            <span>Updated most recently</span>
+                                        </div>
+                                        <ul aria-label="Saved queries results" className={styles.list}>
+                                            {items.map(item => (
+                                                <li key={item.id}>
+                                                    <Card
+                                                        className={styles.card}
+                                                        disabled={busy}
+                                                        onClick={event => {
+                                                            editorTrigger.current = event.currentTarget;
+                                                            confirmLoad(item);
+                                                        }}
+                                                    >
+                                                        <Card.Heading className={styles.heading}>{item.name}</Card.Heading>
+                                                        <Card.Tags className={styles.tags}>
+                                                            <Tag name={item.state?.mode || 'Unknown mode'} />
+                                                        </Card.Tags>
+                                                        {item.description && <Card.Description className={styles.description}>{item.description}</Card.Description>}
+                                                        <Card.Meta className={styles.metadata}>
+                                                            <span>
+                                                                {item.state?.database}.{item.state?.table}
+                                                            </span>
+                                                            <span>{item.author}</span>
+                                                            <time dateTime={item.updatedAt}>{new Date(item.updatedAt).toLocaleString()}</time>
+                                                        </Card.Meta>
+                                                        {(item.canEdit || item.canDelete) && (
+                                                            <Card.Actions className={styles.actions}>
+                                                                {item.canEdit && (
+                                                                    <GrafanaButton
+                                                                        variant="secondary"
+                                                                        size="sm"
+                                                                        icon="pen"
+                                                                        disabled={busy}
+                                                                        onClick={event => {
+                                                                            editorTrigger.current = event.currentTarget;
+                                                                            setEditorError('');
+                                                                            setEditor({ kind: 'rename', name: item.name, description: item.description, target: item });
+                                                                        }}
+                                                                    >
+                                                                        Rename
+                                                                    </GrafanaButton>
+                                                                )}
+                                                                {item.canDelete && (
+                                                                    <GrafanaButton
+                                                                        variant="destructive"
+                                                                        fill="outline"
+                                                                        size="sm"
+                                                                        icon="trash-alt"
+                                                                        disabled={busy}
+                                                                        onClick={event => {
+                                                                            editorTrigger.current = event.currentTarget;
+                                                                            setConfirmation({ kind: 'delete', target: item });
+                                                                        }}
+                                                                    >
+                                                                        Delete
+                                                                    </GrafanaButton>
+                                                                )}
+                                                            </Card.Actions>
+                                                        )}
+                                                    </Card>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        <nav aria-label="Saved queries pagination">
+                                            <Pagination
+                                                currentPage={page}
+                                                numberOfPages={Math.max(1, Math.ceil(total / 20))}
+                                                onNavigate={setPage}
+                                                hideWhenSinglePage
+                                                showSmallVersion
+                                            />
+                                        </nav>
+                                    </>
+                                )}
+                            </>
+                        )}
+                    </div>
+                </Drawer>
+            )}
+            {confirmation && (
+                <GrafanaModal
+                    title={confirmation.kind === 'delete' ? `Delete “${confirmation.target.name}”?` : 'Discard unsaved query changes?'}
+                    isOpen
+                    trapFocus
+                    className={styles.modal}
+                    closeOnEscape={!busy}
+                    closeOnBackdropClick={!busy}
+                    onDismiss={() => {
+                        if (!busy) {
+                            setConfirmation(undefined);
+                        }
+                    }}
+                >
+                    <p>
+                        {confirmation.kind === 'delete'
+                            ? 'This removes the saved query for everyone in this organization.'
+                            : 'Loading this query replaces the current query and display settings.'}
+                    </p>
+                    <GrafanaModal.ButtonRow>
+                        <GrafanaButton ref={confirmationCancel} variant="secondary" disabled={busy} onClick={() => setConfirmation(undefined)}>
+                            Cancel
+                        </GrafanaButton>
+                        <GrafanaButton
+                            variant={confirmation.kind === 'delete' ? 'destructive' : 'primary'}
+                            disabled={busy}
+                            icon={busy ? 'spinner' : undefined}
+                            onClick={() => void confirm()}
                         >
-                            <Radio value="update">Update current query</Radio>
-                            <Radio value="create">Save as new query</Radio>
-                        </Radio.Group>
-                    )}
-                    <label>
-                        Name
-                        <Input
-                            aria-label="Saved query name"
-                            value={editor?.name || ''}
-                            maxLength={120}
-                            onChange={event => setEditor(previous => previous && { ...previous, name: event.target.value })}
-                        />
-                    </label>
-                    <label>
-                        Description
-                        <Input.TextArea
-                            aria-label="Saved query description"
-                            value={editor?.description || ''}
-                            maxLength={2000}
-                            onChange={event => setEditor(previous => previous && { ...previous, description: event.target.value })}
-                        />
-                    </label>
-                    {editorError && <Alert type="error" showIcon message={editorError} />}
-                </Space>
-            </Modal>
-        </ConfigProvider>
+                            {confirmation.kind === 'delete' ? (busy ? 'Deleting…' : 'Delete') : busy ? 'Loading…' : 'Discard and load'}
+                        </GrafanaButton>
+                    </GrafanaModal.ButtonRow>
+                </GrafanaModal>
+            )}
+            {editor && (
+                <GrafanaModal
+                    title={editor.kind === 'rename' ? 'Rename saved query' : 'Save query'}
+                    isOpen
+                    trapFocus
+                    className={styles.modal}
+                    closeOnEscape={!busy}
+                    closeOnBackdropClick={!busy}
+                    onDismiss={() => {
+                        if (!busy) {
+                            setEditor(undefined);
+                        }
+                    }}
+                >
+                    <form
+                        aria-label="Saved query details"
+                        aria-busy={busy}
+                        onSubmit={event => {
+                            event.preventDefault();
+                            void save();
+                        }}
+                    >
+                        <p className={css({ color: theme.colors.text.secondary, marginBottom: theme.spacing(3) })}>
+                            Shared with members of this Grafana organization. Data access uses your own permissions.
+                        </p>
+                        {editor.kind !== 'rename' && editor.source?.canEdit && canCreate && (
+                            <Field label="Save action" disabled={busy}>
+                                <RadioButtonGroup<'update' | 'create'>
+                                    aria-label="Save query action"
+                                    value={editor.kind}
+                                    options={[
+                                        { label: 'Update current query', value: 'update' },
+                                        { label: 'Save as new query', value: 'create' },
+                                    ]}
+                                    className={css({ flexWrap: 'wrap' })}
+                                    onChange={kind => setEditor(previous => previous && { ...previous, kind, target: kind === 'update' ? previous.source : undefined })}
+                                />
+                            </Field>
+                        )}
+                        <Field label="Name" required disabled={busy}>
+                            <GrafanaInput
+                                ref={nameInput}
+                                id="saved-query-name"
+                                aria-label="Saved query name"
+                                required
+                                value={editor.name}
+                                placeholder="Name your query"
+                                maxLength={120}
+                                onChange={({ currentTarget: { value } }) => setEditor(previous => previous && { ...previous, name: value })}
+                            />
+                        </Field>
+                        <Field label="Description (optional)" disabled={busy}>
+                            <TextArea
+                                id="saved-query-description"
+                                aria-label="Saved query description"
+                                value={editor.description}
+                                placeholder="Describe when to use this query"
+                                rows={4}
+                                maxLength={2000}
+                                onChange={({ currentTarget: { value } }) => setEditor(previous => previous && { ...previous, description: value })}
+                            />
+                        </Field>
+                        {editorError && <GrafanaAlert severity="error" title={editorError} />}
+                        <GrafanaModal.ButtonRow>
+                            <GrafanaButton type="button" variant="secondary" disabled={busy} onClick={() => setEditor(undefined)}>
+                                Cancel
+                            </GrafanaButton>
+                            <GrafanaButton type="submit" disabled={busy || !editor.name.trim() || unchanged} icon={busy ? 'spinner' : undefined}>
+                                {busy ? 'Saving…' : 'Save'}
+                            </GrafanaButton>
+                        </GrafanaModal.ButtonRow>
+                    </form>
+                </GrafanaModal>
+            )}
+        </>
     );
 }

@@ -1,12 +1,18 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { Modal } from 'antd';
 import { Provider, createStore } from 'jotai';
 import SavedQueries from './index';
 import { SavedQuery, savedQueries } from 'services/saved-queries';
 import { DiscoverShareState } from 'utils/discover-share-state';
 
 jest.mock('@grafana/ui', () => ({ ...jest.requireActual('@grafana/ui'), Tooltip: ({ children }: any) => <>{children}</> }));
+// Grafana's Drawer uses useId; the test harness runs React 17 while Grafana
+// provides a newer React at runtime.
+jest.mock('react', () => {
+    const actual = jest.requireActual('react');
+    let nextId = 0;
+    return { ...actual, useId: () => actual.useRef(`saved-queries-test-${nextId++}`).current };
+});
 jest.mock('@grafana/runtime', () => ({ config: { bootData: { user: { orgRole: 'Editor' } } } }));
 jest.mock('services/saved-queries', () => ({ savedQueries: { list: jest.fn(), get: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() } }));
 const state: DiscoverShareState = {
@@ -47,7 +53,6 @@ beforeAll(() => {
 });
 afterEach(async () => {
     await act(async () => {
-        Modal.destroyAll();
         await new Promise(resolve => setTimeout(resolve, 0));
     });
 });
@@ -63,10 +68,14 @@ beforeEach(() => {
 function setup(snapshot = state) {
     const restore = jest.fn().mockResolvedValue(true),
         store = createStore();
+    const container = document.createElement('div');
+    container.className = 'main-view';
+    document.body.appendChild(container);
     const view = render(
         <Provider store={store}>
             <SavedQueries snapshot={snapshot} ready restore={restore} />
         </Provider>,
+        { container },
     );
     return {
         ...view,
@@ -178,7 +187,7 @@ it('does not let a rename overwrite another user’s newer query state', async (
     fireEvent.change(screen.getByLabelText('Saved query name'), { target: { value: 'Renamed' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(savedQueries.update).toHaveBeenCalledWith('q1', expect.objectContaining({ revision: 2, name: 'Renamed' })));
-    await waitFor(() => expect(screen.getByLabelText('Saved query name')).not.toBeVisible());
+    await waitFor(() => expect(screen.queryByLabelText('Saved query name')).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save query' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -230,4 +239,92 @@ it('only offers save as new for a query owned by another Editor', async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(savedQueries.create).toHaveBeenCalledTimes(1));
     expect(savedQueries.update).not.toHaveBeenCalled();
+});
+
+it('submits the dialog form and prevents dismissal or editing while saving', async () => {
+    let finishSave!: (value: SavedQuery) => void;
+    (savedQueries.create as jest.Mock).mockReturnValue(new Promise<SavedQuery>(resolve => (finishSave = resolve)));
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Save query' }));
+    const dialog = screen.getByRole('dialog', { name: 'Save query' });
+    fireEvent.change(within(dialog).getByLabelText('Saved query name'), { target: { value: 'My query' } });
+    fireEvent.submit(within(dialog).getByRole('form', { name: 'Saved query details' }));
+
+    expect(savedQueries.create).toHaveBeenCalledWith({ name: 'My query', description: '', state });
+    expect(within(dialog).getByLabelText('Saved query name')).toBeDisabled();
+    expect(within(dialog).getByLabelText('Saved query description')).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'Saving…' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape' });
+    expect(dialog).toBeInTheDocument();
+
+    await act(async () => finishSave(query));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+});
+
+it('dismisses with Escape without saving the draft', async () => {
+    setup();
+    const trigger = screen.getByRole('button', { name: 'Save query' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole('dialog', { name: 'Save query' });
+    expect(within(dialog).getByLabelText('Saved query name')).toHaveFocus();
+    fireEvent.change(within(dialog).getByLabelText('Saved query name'), { target: { value: 'Unsaved draft' } });
+    fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(savedQueries.create).not.toHaveBeenCalled();
+});
+
+it('navigates pages and resets pagination when searching or clearing the search', async () => {
+    (savedQueries.list as jest.Mock).mockImplementation(async (_search: string, page: number) => ({
+        items: [{ ...query, id: `q${page}`, name: `Page ${page}` }],
+        total: 41,
+        canCreate: true,
+    }));
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Saved queries' }));
+    await screen.findByRole('button', { name: 'Page 1' });
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    await screen.findByRole('button', { name: 'Page 2' });
+    expect(savedQueries.list).toHaveBeenLastCalledWith('', 2);
+
+    fireEvent.change(screen.getByLabelText('Search saved queries'), { target: { value: 'Errors' } });
+    await screen.findByRole('button', { name: 'Page 1' });
+    expect(savedQueries.list).toHaveBeenLastCalledWith('Errors', 1);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    await waitFor(() => expect(savedQueries.list).toHaveBeenLastCalledWith('', 1));
+    expect(screen.getByLabelText('Search saved queries')).toHaveValue('');
+});
+
+it('keeps search input on a list failure and can retry into the empty state', async () => {
+    (savedQueries.list as jest.Mock).mockRejectedValue(new Error('Storage is unavailable'));
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Saved queries' }));
+    fireEvent.change(screen.getByLabelText('Search saved queries'), { target: { value: 'Missing query' } });
+    await screen.findByText('Storage is unavailable');
+    expect(screen.queryByText('No saved queries match your search.')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Search saved queries')).toHaveValue('Missing query');
+
+    (savedQueries.list as jest.Mock).mockResolvedValue({ items: [], total: 0, canCreate: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await screen.findByText('No saved queries match your search.');
+    expect(screen.queryByText('Storage is unavailable')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    await screen.findByText('No saved queries yet. Use Save query to save your current query.');
+});
+
+it('keeps the saved query in the list when a confirmed delete conflicts', async () => {
+    (savedQueries.delete as jest.Mock).mockRejectedValue(new Error('This query changed. Reload it before trying again.'));
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Saved queries' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete “Errors”?' });
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await screen.findByText('This query changed. Reload it before trying again.');
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Errors' })).toBeInTheDocument();
+    expect(savedQueries.delete).toHaveBeenCalledWith('q1', 1);
 });

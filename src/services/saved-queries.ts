@@ -33,7 +33,16 @@ async function request<T>(method: string, path = '', data?: SavedQueryInput): Pr
         throw new Error('Saved query exceeds 1 MiB');
     }
     try {
-        const response = await lastValueFrom(getBackendSrv().fetch<T>({ url: base + path, method, data, showErrorAlert: false }));
+        const response = await lastValueFrom(
+            getBackendSrv().fetch<T>({
+                url: base + path,
+                method,
+                data,
+                // Grafana does not default DELETE bodies to JSON.
+                headers: data ? { 'Content-Type': 'application/json' } : undefined,
+                showErrorAlert: false,
+            }),
+        );
         return response.data;
     } catch (error: any) {
         throw new Error(
