@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { PluginPage } from '@grafana/runtime';
-import { Alert, IconButton, LoadingBar, useTheme2 } from '@grafana/ui';
+import { Alert, IconButton, LoadingBar, Tooltip, useTheme2 } from '@grafana/ui';
 
 import DiscoverFilter from 'components/discover-filter';
 import DiscoverSidebar from 'components/discover-sidebar';
@@ -13,15 +13,7 @@ import { useDiscoverData } from './PageDiscover/useDiscoverData';
 import DiscoverQueryFeedback from 'components/discover-query-feedback';
 import FieldStatistics from 'components/field-statistics';
 import { useAtom, useAtomValue } from 'jotai';
-import {
-    currentDatabaseAtom,
-    currentTableAtom,
-    discoverShareReadyAtom,
-    locationAtom,
-    searchTypeAtom,
-    selectedDatasourceAtom,
-    variantSamplingWarningAtom,
-} from 'store/discover';
+import { currentDatabaseAtom, currentTableAtom, discoverShareReadyAtom, locationAtom, searchTypeAtom, selectedDatasourceAtom, variantSamplingWarningAtom } from 'store/discover';
 import { DISCOVER_SHARE_STATE_PARAM, encodeDiscoverShareState } from 'utils/discover-share-state';
 import { discoverSnapshotAtom } from 'store/discover-snapshot';
 import {
@@ -99,6 +91,7 @@ export default function PageDiscover() {
     const beginResize = useCallback(
         (direction: 'sidebar' | 'chart', event: React.PointerEvent<HTMLDivElement>) => {
             event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
             const startPosition = direction === 'sidebar' ? event.clientX : event.clientY;
             const startSize = direction === 'sidebar' ? layout.sidebarWidth : chartHeight;
             const sectionLeft = sectionRef.current?.getBoundingClientRect().left || 0;
@@ -118,9 +111,11 @@ export default function PageDiscover() {
                 document.body.style.userSelect = previousUserSelect;
                 document.removeEventListener('pointermove', onPointerMove);
                 document.removeEventListener('pointerup', onPointerUp);
+                document.removeEventListener('pointercancel', onPointerUp);
             };
             document.addEventListener('pointermove', onPointerMove);
             document.addEventListener('pointerup', onPointerUp, { once: true });
+            document.addEventListener('pointercancel', onPointerUp, { once: true });
         },
         [chartHeight, chartMaxHeight, layout.sidebarWidth, updateLayout],
     );
@@ -175,7 +170,11 @@ export default function PageDiscover() {
                 >
                     <div data-testid={testIds.pageTwo.container} style={{ flex: 'none' }}>
                         <DiscoverHeader onRefresh={onRefresh} onQuerying={onQuerying} loading={loading.getTableData || loading.getTableDataCharts} />
-                        {searchType === 'Lucene' && samplingWarning && <Alert title="Attribute search coverage" severity="warning">{samplingWarning}</Alert>}
+                        {searchType === 'Lucene' && samplingWarning && (
+                            <Alert title="Attribute search coverage" severity="warning">
+                                {samplingWarning}
+                            </Alert>
+                        )}
                         <DiscoverFilter />
                         <DiscoverQueryFeedback queryState={queryState} searchType={searchType} database={currentDatabase} table={currentTable} />
                     </div>
@@ -299,6 +298,7 @@ export default function PageDiscover() {
                         >
                             <div style={{ position: 'absolute', top: 0, width: '100%' }}>{loading.getTableDataCharts && <LoadingBar width={100} />}</div>
                             <div
+                                data-testid="discover-chart-panel"
                                 className={css`
                                     flex: none;
                                 `}
@@ -309,39 +309,68 @@ export default function PageDiscover() {
                                     onToggleCollapsed={() => updateLayout(current => ({ ...current, chartCollapsed: !current.chartCollapsed }))}
                                 />
                                 {!layout.chartCollapsed && (
-                                    <div
-                                        role="separator"
-                                        tabIndex={0}
-                                        aria-label="Resize chart"
-                                        aria-orientation="horizontal"
-                                        aria-valuemin={DISCOVER_CHART_MIN_HEIGHT}
-                                        aria-valuemax={chartMaxHeight}
-                                        aria-valuenow={chartHeight}
-                                        onPointerDown={event => beginResize('chart', event)}
-                                        onKeyDown={event => handleResizeKeyDown('chart', event)}
-                                        className={css`
-                                            height: 8px;
-                                            cursor: row-resize;
-                                            flex: none;
-                                            outline: none;
-                                            position: relative;
-                                            &:hover::after,
-                                            &:focus::after {
-                                                background: ${theme.colors.primary.main};
-                                            }
-                                            &::after {
-                                                content: '';
-                                                position: absolute;
-                                                inset: 3px 16px;
-                                                background: transparent;
-                                            }
-                                        `}
-                                    />
+                                    <Tooltip content={`Drag to resize chart and table · Chart height: ${Math.round(chartHeight)} px · ↑ / ↓ to adjust`} placement="top">
+                                        <div
+                                            role="separator"
+                                            tabIndex={0}
+                                            data-testid="discover-chart-resizer"
+                                            aria-label="Resize chart"
+                                            aria-orientation="horizontal"
+                                            aria-valuemin={DISCOVER_CHART_MIN_HEIGHT}
+                                            aria-valuemax={chartMaxHeight}
+                                            aria-valuenow={chartHeight}
+                                            aria-valuetext={`Chart height: ${Math.round(chartHeight)} pixels`}
+                                            onPointerDownCapture={event => beginResize('chart', event)}
+                                            onKeyDownCapture={event => handleResizeKeyDown('chart', event)}
+                                            className={css`
+                                                height: ${theme.spacing(2)};
+                                                cursor: row-resize;
+                                                touch-action: none;
+                                                flex: none;
+                                                position: relative;
+                                                outline: none;
+                                                &::before,
+                                                &::after {
+                                                    content: '';
+                                                    position: absolute;
+                                                    top: 50%;
+                                                    transition: ${theme.transitions.create('background-color')};
+                                                }
+                                                &::before {
+                                                    height: 1px;
+                                                    left: 16px;
+                                                    right: 16px;
+                                                    background: ${theme.colors.border.weak};
+                                                }
+                                                &::after {
+                                                    left: 50%;
+                                                    transform: translate(-50%, -50%);
+                                                    height: 4px;
+                                                    width: min(200px, 40%);
+                                                    border-radius: ${theme.shape.radius.pill};
+                                                    background: ${theme.colors.emphasize(theme.colors.background.secondary, 0.15)};
+                                                }
+                                                &:hover::before,
+                                                &:hover::after,
+                                                &:active::before,
+                                                &:active::after,
+                                                &:focus-visible::before,
+                                                &:focus-visible::after {
+                                                    background: ${theme.colors.primary.border};
+                                                }
+                                                &:focus-visible {
+                                                    outline: 2px solid ${theme.colors.primary.border};
+                                                    outline-offset: -2px;
+                                                }
+                                            `}
+                                        />
+                                    </Tooltip>
                                 )}
                             </div>
                             <div
+                                data-testid="discover-table-panel"
                                 className={css`
-                                    margin-top: 16px;
+                                    margin-top: ${layout.chartCollapsed ? 16 : 0}px;
                                     flex: none;
                                 `}
                             >
