@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.20 (2026-10-20)
+
+### 🐛 Bug Fixes
+
+* retain password input when SSO is disabled so new passwords and replacements after Reset can be edited and saved correctly
+
+## 1.1.19 (2026-10-19)
+
+### 🐛 Bug Fixes
+
+* cascade datasource and database changes through database, table, and time-field selections in Discover, Traces, and plugin settings; discard stale metadata responses when switching selections
+* use the datasource default database as a fallback while preserving explicit page and plugin preferences, and load current datasource settings instead of persisted configuration copies
+* hide the datasource Default control and Default database input while retaining saved configuration values
+
 ## 1.1.18 (2026-10-15)
 
 ### 🐛 Bug Fixes

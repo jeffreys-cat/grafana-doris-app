@@ -185,7 +185,7 @@ export function ConfigEditor(props: Props) {
                         <SecretInput
                             isConfigured={Boolean(props.options.secureJsonFields?.password)}
                             placeholder="Doris password"
-                            value=""
+                            value={props.options.secureJsonData?.password ?? ''}
                             onChange={event => updatePassword(event.currentTarget.value)}
                             onReset={resetPassword}
                         />
