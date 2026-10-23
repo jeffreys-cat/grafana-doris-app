@@ -1,3 +1,4 @@
+jest.mock('@grafana/runtime', () => ({ config: { bootData: { user: { language: 'en-US' } } } }));
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import FieldItem from './field-item';
@@ -11,7 +12,7 @@ jest.mock('@grafana/ui', () => ({
 jest.mock('./top-data/top-data', () => ({
     TopData: ({ field, onFieldStatistics, canShowStatistics }: any) => <div data-testid="field-top-data">
         {field.Field}
-        {canShowStatistics && <button onClick={() => onFieldStatistics(field)}>字段统计</button>}
+        {canShowStatistics && <button onClick={() => onFieldStatistics(field)}>Field statistics</button>}
     </div>,
 }));
 
@@ -57,7 +58,7 @@ describe('VARIANT sidebar field item', () => {
 
         expect(screen.getByText('0')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Expand' }));
-        expect(screen.getByText('暂无可发现的内部字段')).toBeInTheDocument();
+        expect(screen.getByText('No discoverable nested fields')).toBeInTheDocument();
     });
 });
 
@@ -70,10 +71,10 @@ describe('Discover field statistics entry point', () => {
         const onAdd = jest.fn();
         render(<FieldItem type="add" field={leafField} onFieldStatistics={onFieldStatistics} onAdd={onAdd} />);
         expect(screen.queryByRole('button', { name: 'Field statistics' })).not.toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: '字段统计' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Field statistics' })).not.toBeInTheDocument();
         fireEvent.pointerEnter(screen.getByTestId('field-item-row'));
         act(() => { jest.advanceTimersByTime(200); });
-        fireEvent.click(screen.getByRole('button', { name: '字段统计' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Field statistics' }));
         expect(onFieldStatistics).toHaveBeenCalledWith(leafField);
         expect(onAdd).not.toHaveBeenCalled();
         expect(screen.queryByTestId('field-top-data')).not.toBeInTheDocument();

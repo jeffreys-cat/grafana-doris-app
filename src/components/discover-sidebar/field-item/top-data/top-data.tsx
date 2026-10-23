@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { css } from '@emotion/css';
 import { Button, IconButton, useTheme2 } from '@grafana/ui';
 import { useAtom, useAtomValue } from 'jotai';
@@ -98,7 +99,7 @@ function DistributionRows({ field, rows, total, onFilter }: { field: any; rows: 
                                     >
                                         {value}
                                     </span>
-                                    <span title={total !== undefined ? `${count.toLocaleString()} / ${total.toLocaleString()} 条记录` : String(count)}>
+                                    <span title={total !== undefined ? t('{{count}} / {{total}} records', { count: count.toLocaleString(), total: total.toLocaleString() }) : String(count)}>
                                         {total !== undefined ? `${+percent.toFixed(1)}%` : count.toLocaleString()}
                                     </span>
                                 </div>
@@ -133,7 +134,7 @@ function DistributionRows({ field, rows, total, onFilter }: { field: any; rows: 
                                 >
                                     <IconButton
                                         name="plus-circle"
-                                        tooltip="Include value"
+                                        tooltip={t('Include value')}
                                         onClick={event => {
                                             event.stopPropagation();
                                             onFilter(rawValue, '=');
@@ -141,7 +142,7 @@ function DistributionRows({ field, rows, total, onFilter }: { field: any; rows: 
                                     />
                                     <IconButton
                                         name="minus-circle"
-                                        tooltip="Exclude value"
+                                        tooltip={t('Exclude value')}
                                         onClick={event => {
                                             event.stopPropagation();
                                             onFilter(rawValue, '!=');
@@ -158,7 +159,7 @@ function DistributionRows({ field, rows, total, onFilter }: { field: any; rows: 
                         color: ${theme.colors.text.secondary};
                     `}
                 >
-                    暂无非空字段值
+                    {t('No non-null field values')}
                 </div>
             )}
         </div>
@@ -203,7 +204,7 @@ export function TopData({ field, onTopN, canRunTopN = true, canShowStatistics = 
     return (
         <div
             role="region"
-            aria-label={`${field.Field} 字段卡片`}
+            aria-label={t('{{field}} field card', { field: field.Field })}
             onPointerEnter={onPointerEnter}
             onPointerLeave={onPointerLeave}
             className={css`
@@ -224,17 +225,17 @@ export function TopData({ field, onTopN, canRunTopN = true, canShowStatistics = 
             >
                 <strong>{field.Field}</strong> <span className={description}>({field.Type})</span>
             </div>
-            <section aria-label="当前查询结果">
+            <section aria-label={t('Current query results')}>
                 <div className={sectionHeader}>
-                    <strong>当前查询结果</strong>
-                    <small>{topData.length.toLocaleString()} 条样本</small>
+                    <strong>{t('Current query results')}</strong>
+                    <small>{t('{{count}} samples', { count: topData.length })}</small>
                 </div>
-                <div className={description}>基于当前查询返回的最多 500 条记录，展示前 5 个常见值；比例以样本记录数为基准。</div>
+                <div className={description}>{t('Based on up to 500 records returned by the current query. Shows the top 5 values; percentages use the sample record count.')}</div>
                 <DistributionRows field={field} rows={sampleRows} total={topData.length} onFilter={addFilter} />
             </section>
             {(canRunTopN || canShowStatistics) && (
                 <section
-                    aria-label="全部匹配数据"
+                    aria-label={t('All matching data')}
                     className={css`
                         margin-top: 16px;
                         padding-top: 16px;
@@ -242,10 +243,10 @@ export function TopData({ field, onTopN, canRunTopN = true, canShowStatistics = 
                     `}
                 >
                     <div className={sectionHeader}>
-                        <strong>全部匹配数据</strong>
-                        <small>{tableTotalCount.toLocaleString()} 条匹配记录</small>
+                        <strong>{t('All matching data')}</strong>
+                        <small>{t('{{count}} matching records', { count: tableTotalCount })}</small>
                     </div>
-                    <div className={description}>统计当前时间范围与查询条件下的全部匹配记录，不受 500 条样本限制。</div>
+                    <div className={description}>{t('Statistics cover all matching records in the current time range and query, without the 500-record sample limit.')}</div>
                     <div
                         className={css`
                             display: flex;
@@ -256,16 +257,16 @@ export function TopData({ field, onTopN, canRunTopN = true, canShowStatistics = 
                     >
                         {canShowStatistics && (
                             <Button size="sm" variant="secondary" icon="info-circle" onClick={() => onFieldStatistics?.(field)}>
-                                字段统计
+                                {t('Field statistics')}
                             </Button>
                         )}
                         {canRunTopN && (
-                            <Button size="sm" variant="secondary" onClick={() => onTopN?.(field)} title="配置数量、聚合方式和排序，对全部匹配记录执行统计">
-                                Top N 配置
+                            <Button size="sm" variant="secondary" onClick={() => onTopN?.(field)} title={t('Configure count, aggregation, and sort order for all matching records')}>
+                                {t('Top N configuration')}
                             </Button>
                         )}
                     </div>
-                    {canShowStatistics && <div className={description}>点击“字段统计”打开侧边栏，查看非空值、去重数及分布。</div>}
+                    {canShowStatistics && <div className={description}>{t('Click “Field statistics” to view non-null values, unique counts, and distributions in the sidebar.')}</div>}
                 </section>
             )}
         </div>

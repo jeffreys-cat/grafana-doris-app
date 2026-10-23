@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { useAtom, useAtomValue } from 'jotai';
 import React, { useMemo, useState } from 'react';
 import FieldItem from './field-item/field-item';
@@ -101,7 +102,7 @@ export default function DiscoverSidebar() {
             >
                 <Icon name="search" />
                 <Input
-                    placeholder={`Search`}
+                    placeholder={t('Search')}
                     className={css`
                         border: none;
                     `}
@@ -129,7 +130,8 @@ export default function DiscoverSidebar() {
                         margin-left: 4px;
                         font-size: 14px;
                         line-height: 32px;
-                    `}>Selected fields</span>} isOpen={true}>
+                    `}>{t('Selected fields')}
+                                           </span>} isOpen={true}>
                     <div
                         className={css`
                             width: 100%;
@@ -171,7 +173,8 @@ export default function DiscoverSidebar() {
                         margin-left: 4px;
                         font-size: 14px;
                         line-height: 32px;
-                    `}>Available fields</span>}  isOpen={true}>
+                    `}>{t('Available fields')}
+                                           </span>}  isOpen={true}>
                     <div
                         className={css`
                             width: 100%;

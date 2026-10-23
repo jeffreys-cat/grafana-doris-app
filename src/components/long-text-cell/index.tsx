@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import React, { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { css, cx } from '@emotion/css';
 import { Button, ClipboardButton, Toggletip, useTheme2 } from '@grafana/ui';
@@ -58,7 +59,7 @@ export function LongTextCell({ children, copyText, className, maxLines }: LongTe
     const preview = (
         <div
             role="dialog"
-            aria-label="Full cell content"
+            aria-label={t('Full cell content')}
             className={css`
                 width: min(560px, calc(100vw - 64px));
                 box-sizing: border-box;
@@ -66,7 +67,7 @@ export function LongTextCell({ children, copyText, className, maxLines }: LongTe
         >
             <div
                 tabIndex={0}
-                aria-label="Cell value"
+                aria-label={t('Cell value')}
                 className={css`
                     max-height: min(400px, 60vh);
                     overflow: auto;
@@ -79,7 +80,7 @@ export function LongTextCell({ children, copyText, className, maxLines }: LongTe
             </div>
             <ClipboardButton
                 type="button"
-                aria-label="Copy full cell content"
+                aria-label={t('Copy full cell content')}
                 variant="secondary"
                 size="sm"
                 icon="copy"
@@ -90,11 +91,11 @@ export function LongTextCell({ children, copyText, className, maxLines }: LongTe
                     margin-top: 12px;
                 `}
             >
-                复制完整内容
+                {t('Copy full cell content')}
             </ClipboardButton>
             {copyFailed && (
                 <span role="alert" style={{ color: theme.colors.error.text }}>
-                    Copy failed
+                    {t('Copy failed')}
                 </span>
             )}
         </div>
@@ -167,11 +168,11 @@ export function LongTextCell({ children, copyText, className, maxLines }: LongTe
                 >
                     {copyFailed && !previewOpen && (
                         <span role="alert" style={{ color: theme.colors.error.text, padding: '0 4px', fontSize: theme.typography.bodySmall.fontSize }}>
-                            Copy failed
+                            {t('Copy failed')}
                         </span>
                     )}
                     <Toggletip
-                        title="完整内容"
+                        title={t('Full content')}
                         content={preview}
                         placement="bottom-start"
                         show={previewOpen}
@@ -181,10 +182,10 @@ export function LongTextCell({ children, copyText, className, maxLines }: LongTe
                     >
                         <Button
                             type="button"
-                            aria-label="View full cell content"
+                            aria-label={t('View full cell content')}
                             aria-expanded={previewOpen}
                             aria-haspopup="dialog"
-                            title="查看完整内容"
+                            title={t('View full cell content')}
                             variant="secondary"
                             size="sm"
                             icon="eye"
@@ -192,8 +193,8 @@ export function LongTextCell({ children, copyText, className, maxLines }: LongTe
                     </Toggletip>
                     <ClipboardButton
                         type="button"
-                        aria-label="Copy full cell content"
-                        title="Copy full cell content"
+                        aria-label={t('Copy full cell content')}
+                        title={t('Copy full cell content')}
                         variant="secondary"
                         size="sm"
                         icon="copy"

@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import React, { useState } from 'react';
 import { css } from '@emotion/css';
 import { Button, Drawer, Field, Icon, Input, RadioButtonGroup, Select, useTheme2 } from '@grafana/ui';
@@ -40,7 +41,7 @@ function ConfigurationForm({ field, onClose, preferences }: { field: FieldStatis
     const unavailableField = !fields.some(item => item.Field === field.Field);
 
     return (
-        <Drawer title={`Top N 统计：${field.Field}`} width="min(640px, calc(100vw - 32px))" onClose={onClose}>
+        <Drawer title={t('Top N statistics: {{field}}', { field: field.Field })} width="min(640px, calc(100vw - 32px))" onClose={onClose}>
             <div
                 data-testid="top-n-sidebar"
                 className={css`
@@ -71,7 +72,7 @@ function ConfigurationForm({ field, onClose, preferences }: { field: FieldStatis
                             line-height: 1.6;
                         `}
                     >
-                        统计当前时间范围与查询条件下的全部匹配记录，按 {field.Field} 分组。
+                        {t('Aggregate all matching records in the current time range and query, grouped by {{field}}.', { field: field.Field })}
                     </p>
                     <div
                         className={css`
@@ -81,16 +82,16 @@ function ConfigurationForm({ field, onClose, preferences }: { field: FieldStatis
                     >
                         <Field
                             className={fieldStyle}
-                            label="返回分组数量（N）"
+                            label={t('Number of groups (N)')}
                             htmlFor="top-n-limit"
-                            description="输入 1–10,000 的整数，或选择常用数量。"
+                            description={t('Enter an integer from 1–10,000, or choose a preset.')}
                             invalid={invalidLimit}
-                            error={invalidLimit ? 'N 必须是 1–10,000 的整数' : undefined}
+                            error={invalidLimit ? t('N must be an integer from 1–10,000') : undefined}
                         >
                             <Input
                                 id="top-n-limit"
                                 autoFocus
-                                aria-label="返回分组数量（N）"
+                                aria-label={t('Number of groups (N)')}
                                 type="number"
                                 min={1}
                                 max={10000}
@@ -101,7 +102,7 @@ function ConfigurationForm({ field, onClose, preferences }: { field: FieldStatis
                             />
                         </Field>
                         <RadioButtonGroup
-                            aria-label="常用 Top N 数量"
+                            aria-label={t('Common Top N counts')}
                             value={invalidLimitText === null ? config.limit : undefined}
                             options={[5, 10, 20, 50, 100].map(value => ({ label: String(value), ariaLabel: `Top ${value}`, value }))}
                             onChange={value => setLimitText(String(value))}
@@ -109,17 +110,17 @@ function ConfigurationForm({ field, onClose, preferences }: { field: FieldStatis
                             size="sm"
                         />
                     </div>
-                    <Field label="聚合方式" htmlFor="top-n-metric" className={fieldStyle}>
-                        <Select
+                    <Field label={t('Aggregation')} htmlFor="top-n-metric" className={fieldStyle}>
+                        <Select placeholder={t('Choose')}
                             inputId="top-n-metric"
-                            aria-label="聚合方式"
+                            aria-label={t('Aggregation')}
                             value={metric}
                             options={[
-                                { label: '记录数（COUNT）', value: 'COUNT' },
-                                { label: '求和（SUM）', value: 'SUM', isDisabled: !numericFields.length },
-                                { label: '平均值（AVG）', value: 'AVG', isDisabled: !numericFields.length },
-                                { label: '最小值（MIN）', value: 'MIN', isDisabled: !numericFields.length },
-                                { label: '最大值（MAX）', value: 'MAX', isDisabled: !numericFields.length },
+                                { label: t('Count (COUNT)'), value: 'COUNT' },
+                                { label: t('Sum (SUM)'), value: 'SUM', isDisabled: !numericFields.length },
+                                { label: t('Average (AVG)'), value: 'AVG', isDisabled: !numericFields.length },
+                                { label: t('Minimum (MIN)'), value: 'MIN', isDisabled: !numericFields.length },
+                                { label: t('Maximum (MAX)'), value: 'MAX', isDisabled: !numericFields.length },
                             ]}
                             onChange={option => {
                                 if (option.value) {
@@ -131,29 +132,29 @@ function ConfigurationForm({ field, onClose, preferences }: { field: FieldStatis
                     </Field>
                     {metric !== 'COUNT' && (
                         <Field
-                            label="指标字段"
+                            label={t('Metric field')}
                             htmlFor="top-n-metric-field"
                             className={fieldStyle}
                             invalid={invalidMetricField}
-                            error={invalidMetricField ? '请选择可用的数值字段' : undefined}
+                            error={invalidMetricField ? t('Select an available numeric field') : undefined}
                         >
-                            <Select
+                            <Select placeholder={t('Choose')}
                                 inputId="top-n-metric-field"
-                                aria-label="指标字段"
+                                aria-label={t('Metric field')}
                                 value={metricField}
                                 options={numericFields.map(item => ({ label: item.Field, value: item.Field }))}
                                 onChange={option => update({ metricField: option.value || '' })}
                             />
                         </Field>
                     )}
-                    <Field label="排序方向" htmlFor="top-n-direction" className={fieldStyle}>
-                        <Select
+                    <Field label={t('Sort direction')} htmlFor="top-n-direction" className={fieldStyle}>
+                        <Select placeholder={t('Choose')}
                             inputId="top-n-direction"
-                            aria-label="排序方向"
+                            aria-label={t('Sort direction')}
                             value={direction}
                             options={[
-                                { label: '从高到低（Top）', value: 'DESC' },
-                                { label: '从低到高（Bottom）', value: 'ASC' },
+                                { label: t('Highest to lowest (Top)'), value: 'DESC' },
+                                { label: t('Lowest to highest (Bottom)'), value: 'ASC' },
                             ]}
                             onChange={option => {
                                 if (option.value === 'ASC' || option.value === 'DESC') {
@@ -162,7 +163,7 @@ function ConfigurationForm({ field, onClose, preferences }: { field: FieldStatis
                             }}
                         />
                     </Field>
-                    {unavailableField && <p role="alert">该分组字段已不可用，请关闭配置后重新选择字段。</p>}
+                    {unavailableField && <p role="alert">{t('This grouping field is no longer available. Close the configuration and select a field again.')}</p>}
                     <div
                         className={css`
                             display: grid;
@@ -178,10 +179,10 @@ function ConfigurationForm({ field, onClose, preferences }: { field: FieldStatis
                             `}
                         >
                             <Button type="submit" icon="play" disabled={invalidLimit || invalidMetricField || unavailableField || resultState.loading}>
-                                {resultState.loading ? '统计中…' : '运行聚合'}
+                                {resultState.loading ? t('Running…') : t('Run aggregation')}
                             </Button>
                             <Button type="button" variant="secondary" onClick={onClose}>
-                                关闭
+                                {t('Close')}
                             </Button>
                         </div>
                         <span
@@ -193,7 +194,7 @@ function ConfigurationForm({ field, onClose, preferences }: { field: FieldStatis
                                 font-size: ${theme.typography.bodySmall.fontSize};
                             `}
                         >
-                            <Icon name="check" size="sm" /> 配置自动保存，刷新后保留
+                            <Icon name="check" size="sm" /> {t('Settings are saved automatically and retained after refresh')}
                         </span>
                     </div>
                 </form>

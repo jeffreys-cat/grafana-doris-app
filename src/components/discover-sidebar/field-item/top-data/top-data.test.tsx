@@ -27,17 +27,17 @@ it('separates the returned sample from all matches and uses the sample size for 
     const onTopN = jest.fn();
     setup(store, { onFieldStatistics, onTopN });
 
-    const sample = within(screen.getByRole('region', { name: '当前查询结果' }));
-    expect(sample.getByText('500 条样本')).toBeInTheDocument();
+    const sample = within(screen.getByRole('region', { name: 'Current query results' }));
+    expect(sample.getByText('500 samples')).toBeInTheDocument();
     expect(sample.getByText('60%')).toBeInTheDocument();
     expect(sample.getByText('40%')).toBeInTheDocument();
-    expect(sample.queryByRole('button', { name: '字段统计' })).not.toBeInTheDocument();
+    expect(sample.queryByRole('button', { name: 'Field statistics' })).not.toBeInTheDocument();
 
-    const allMatches = within(screen.getByRole('region', { name: '全部匹配数据' }));
-    expect(allMatches.getByText('20,000 条匹配记录')).toBeInTheDocument();
-    fireEvent.click(allMatches.getByRole('button', { name: '字段统计' }));
+    const allMatches = within(screen.getByRole('region', { name: 'All matching data' }));
+    expect(allMatches.getByText('20,000 matching records')).toBeInTheDocument();
+    fireEvent.click(allMatches.getByRole('button', { name: 'Field statistics' }));
     expect(onFieldStatistics).toHaveBeenCalledWith(field);
-    fireEvent.click(allMatches.getByRole('button', { name: 'Top N 配置' }));
+    fireEvent.click(allMatches.getByRole('button', { name: 'Top N configuration' }));
     expect(onTopN).toHaveBeenCalledWith(field);
 });
 
@@ -51,8 +51,8 @@ it('keeps the query sample visible without displaying sidebar aggregation result
     store.set(topNRowsAtom, [{ service_name: 'api', __top_n_value: 650 }]);
     setup(store);
 
-    expect(within(screen.getByRole('region', { name: '当前查询结果' })).getByText('100%')).toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: '全部匹配数据' })).queryByText('65%')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Current query results' })).getByText('100%')).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'All matching data' })).queryByText('65%')).not.toBeInTheDocument();
 });
 
 it('counts nested values correctly, skips missing keys, and preserves the nested filter metadata', () => {
@@ -61,8 +61,8 @@ it('counts nested values correctly, skips missing keys, and preserves the nested
     store.set(topDataAtom, [{ attributes: { status: 200 } }, { attributes: {} }, { attributes: { status: null } }]);
     setup(store, { field: nestedField, canRunTopN: false });
 
-    const sample = within(screen.getByRole('region', { name: '当前查询结果' }));
-    expect(sample.getByText('3 条样本')).toBeInTheDocument();
+    const sample = within(screen.getByRole('region', { name: 'Current query results' }));
+    expect(sample.getByText('3 samples')).toBeInTheDocument();
     expect(sample.getByText('33.3%')).toBeInTheDocument();
     expect(sample.getAllByRole('listitem')).toHaveLength(1);
     fireEvent.click(sample.getByRole('button', { name: 'Include value' }));
@@ -75,6 +75,6 @@ it('shows an empty sample without changing into an aggregation mode', () => {
     const store = createStore();
     store.set(topNEnabledAtom, true);
     setup(store);
-    expect(within(screen.getByRole('region', { name: '当前查询结果' })).getByText('暂无非空字段值')).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Current query results' })).getByText('No non-null field values')).toBeInTheDocument();
     expect(screen.queryByText('NaN%')).not.toBeInTheDocument();
 });

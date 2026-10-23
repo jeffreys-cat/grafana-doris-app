@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { defer, lastValueFrom } from 'rxjs';
 import SqlString from 'sqlstring';
 import { convertColumnToRow } from 'utils/data';
@@ -52,7 +53,7 @@ export function getTableDataTraceService(payload: any, options?: TraceServiceOpt
 function traceRows(response: any, refId: string): Array<Record<string, any>> {
     const result = response?.data?.results?.[refId];
     if (!response?.ok || result?.error || result?.status >= 400) {
-        throw new Error(result?.error || response?.statusText || 'Trace query failed');
+        throw new Error(result?.error || response?.statusText || t('Trace query failed'));
     }
     return result?.frames?.length ? result.frames.flatMap((frame: any) => convertColumnToRow(frame)) : [];
 }

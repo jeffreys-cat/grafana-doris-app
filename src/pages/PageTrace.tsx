@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import React from 'react';
 import { SearchSidebar } from 'components/traces/search-sidebar';
 import { TraceView } from 'components/traces/traces-viewer';
@@ -57,7 +58,7 @@ function getErrorText(error: any) {
         error?.response?.data?.message ||
         error?.statusText ||
         error?.message ||
-        'Request failed'
+        t('Request failed')
     );
 }
 
@@ -118,26 +119,26 @@ export default function PageTrace() {
 
     const showTraceSetupError = React.useCallback((action: string) => {
         if (!selectdbDS) {
-            showTraceError(`Cannot ${action}: no Doris datasource is selected. Select a datasource first.`);
+            showTraceError(t('Cannot {{action}}: no Doris datasource is selected. Select a datasource first.', { action: action }));
             return true;
         }
 
         if (!currentDatabase) {
-            showTraceError(`Cannot ${action}: no database is selected. Select a database first.`);
+            showTraceError(t('Cannot {{action}}: no database is selected. Select a database first.', { action: action }));
             return true;
         }
 
         if (!currentTable) {
             showTraceError(
                 hasExplicitTraceTableConfig
-                    ? `Cannot ${action}: the configured trace table "${configuredTraceTable}" is not selected. Switch to that table before querying.`
-                    : `Cannot ${action}: no trace table is selected. Select a trace table, or configure a default trace table in app settings.`,
+                    ? t('Cannot {{action}}: the configured trace table "{{table}}" is not selected. Switch to that table before querying.', { action: action, table: configuredTraceTable })
+                    : t('Cannot {{action}}: no trace table is selected. Select a trace table, or configure a default trace table in app settings.', { action: action }),
             );
             return true;
         }
 
         if (!currentTimeField) {
-            showTraceError(`Cannot ${action}: no time field is selected. Select a time field first.`);
+            showTraceError(t('Cannot {{action}}: no time field is selected. Select a time field first.', { action: action }));
             return true;
         }
 
@@ -145,13 +146,13 @@ export default function PageTrace() {
     }, [configuredTraceTable, currentDatabase, currentTable, currentTimeField, hasExplicitTraceTableConfig, selectdbDS, showTraceError]);
 
     const showTraceQueryError = React.useCallback((err: any, requestKind: TraceRequestKind) => {
-        if (showTraceSetupError(requestKind === 'traces' ? 'query traces' : `load trace ${requestKind}`)) {
+        if (showTraceSetupError(requestKind === 'traces' ? t('query traces') : requestKind === 'services' ? t('load trace services') : t('load trace operations'))) {
             return;
         }
 
         if (hasExplicitTraceTableConfig && currentTable !== configuredTraceTable) {
             showTraceError(
-                `Cannot query traces from "${currentTable}": the configured trace table is "${configuredTraceTable}". Switch to the configured trace table and try again.`,
+                t('Cannot query traces from "{{table}}": the configured trace table is "{{configuredTable}}". Switch to the configured trace table and try again.', { table: currentTable, configuredTable: configuredTraceTable }),
             );
             return;
         }
@@ -160,23 +161,23 @@ export default function PageTrace() {
         const tableContext = `"${currentDatabase}.${currentTable}"`;
 
         if (requestKind === 'services') {
-            showTraceError(`Failed to load trace services from ${tableContext}. Verify the table, time field, and Doris permissions. Backend: ${backendMessage}`);
+            showTraceError(t('Failed to load trace services from {{table}}. Verify the table, time field, and Doris permissions. Backend: {{message}}', { table: tableContext, message: backendMessage }));
             return;
         }
 
         if (requestKind === 'operations') {
-            showTraceError(`Failed to load trace operations from ${tableContext}. Verify the table, time field, service filter, and Doris permissions. Backend: ${backendMessage}`);
+            showTraceError(t('Failed to load trace operations from {{table}}. Verify the table, time field, service filter, and Doris permissions. Backend: {{message}}', { table: tableContext, message: backendMessage }));
             return;
         }
 
         showTraceError(
-            `Trace query failed for ${tableContext}. Verify the trace schema includes required columns such as trace_id, span_id, parent_span_id, span_name, service_name, timestamp, duration, and status_code. Backend: ${backendMessage}`,
+            t('Trace query failed for {{table}}. Verify the trace schema includes required columns such as trace_id, span_id, parent_span_id, span_name, service_name, timestamp, duration, and status_code. Backend: {{message}}', { table: tableContext, message: backendMessage }),
             6,
         );
     }, [configuredTraceTable, currentDatabase, currentTable, hasExplicitTraceTableConfig, showTraceError, showTraceSetupError]);
 
     const getTraces = React.useCallback((nextPage = page, nextSort = sort) => {
-        if (showTraceSetupError('query traces')) {
+        if (showTraceSetupError(t('query traces'))) {
             return;
         }
         const requestId = ++traceGeneration.current;
@@ -433,7 +434,7 @@ export default function PageTrace() {
                         </div>
                         <button
                             type="button"
-                            aria-label="Close trace error"
+                            aria-label={t('Close trace error')}
                             onClick={() => setTraceError('')}
                             className={css`
                                 display: inline-flex;

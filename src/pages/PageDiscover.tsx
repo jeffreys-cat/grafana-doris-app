@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { PluginPage } from '@grafana/runtime';
@@ -172,7 +173,7 @@ export default function PageDiscover() {
                     <div data-testid={testIds.pageTwo.container} style={{ flex: 'none' }}>
                         <DiscoverHeader onRefresh={onRefresh} onQuerying={onQuerying} loading={loading.getTableData || loading.getTableDataCharts} />
                         {searchType === 'Lucene' && samplingWarning && (
-                            <Alert title="Attribute search coverage" severity="warning">
+                            <Alert title={t('Attribute search coverage')} severity="warning">
                                 {samplingWarning}
                             </Alert>
                         )}
@@ -208,8 +209,8 @@ export default function PageDiscover() {
                             >
                                 <IconButton
                                     name="angle-right"
-                                    tooltip="Expand Column Panel"
-                                    aria-label="Expand Column Panel"
+                                    tooltip={t('Expand Column Panel')}
+                                    aria-label={t('Expand Column Panel')}
                                     onClick={() => updateLayout(current => ({ ...current, sidebarCollapsed: false }))}
                                 />
                                 <span
@@ -219,7 +220,7 @@ export default function PageDiscover() {
                                         font-size: 12px;
                                     `}
                                 >
-                                    Column Panel
+                                    {t('Column Panel')}
                                 </span>
                             </div>
                         ) : (
@@ -241,8 +242,8 @@ export default function PageDiscover() {
                                 </div>
                                 <IconButton
                                     name="angle-left"
-                                    tooltip="Collapse Column Panel"
-                                    aria-label="Collapse Column Panel"
+                                    tooltip={t('Collapse Column Panel')}
+                                    aria-label={t('Collapse Column Panel')}
                                     data-testid="discover-sidebar-toggle"
                                     onClick={() => updateLayout(current => ({ ...current, sidebarCollapsed: true }))}
                                     className={css`
@@ -258,7 +259,7 @@ export default function PageDiscover() {
                             <div
                                 role="separator"
                                 tabIndex={0}
-                                aria-label="Resize Column Panel"
+                                aria-label={t('Resize Column Panel')}
                                 aria-orientation="vertical"
                                 aria-valuemin={DISCOVER_SIDEBAR_MIN_WIDTH}
                                 aria-valuemax={DISCOVER_SIDEBAR_MAX_WIDTH}
@@ -310,17 +311,17 @@ export default function PageDiscover() {
                                     onToggleCollapsed={() => updateLayout(current => ({ ...current, chartCollapsed: !current.chartCollapsed }))}
                                 />
                                 {!layout.chartCollapsed && (
-                                    <Tooltip content={`Drag to resize chart and table · Chart height: ${Math.round(chartHeight)} px · ↑ / ↓ to adjust`} placement="top">
+                                    <Tooltip content={t('Drag to resize chart and table · Chart height: {{height}} px · ↑ / ↓ to adjust', { height: Math.round(chartHeight) })} placement="top">
                                         <div
                                             role="separator"
                                             tabIndex={0}
                                             data-testid="discover-chart-resizer"
-                                            aria-label="Resize chart"
+                                            aria-label={t('Resize chart')}
                                             aria-orientation="horizontal"
                                             aria-valuemin={DISCOVER_CHART_MIN_HEIGHT}
                                             aria-valuemax={chartMaxHeight}
                                             aria-valuenow={chartHeight}
-                                            aria-valuetext={`Chart height: ${Math.round(chartHeight)} pixels`}
+                                            aria-valuetext={t('Chart height: {{height}} pixels', { height: Math.round(chartHeight) })}
                                             onPointerDownCapture={event => beginResize('chart', event)}
                                             onKeyDownCapture={event => handleResizeKeyDown('chart', event)}
                                             className={css`

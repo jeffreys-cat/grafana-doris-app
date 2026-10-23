@@ -1,4 +1,5 @@
 'use client';
+import { t } from 'i18n';
 
 import { Row, ColumnDef } from '@tanstack/react-table';
 import React, { useEffect, useRef, useMemo, useState } from 'react';
@@ -52,6 +53,7 @@ export default function SurroundingLogs() {
     const currentTimeField = useAtomValue(currentTimeFieldAtom);
     const [selectedFields, setSelectedFields] = useAtom(selectedFieldsAtom);
     const dataFilter = useAtomValue(dataFilterAtom);
+    const [filterEnabled, setFilterEnabled] = useState(false);
     const hasSelectedFields = selectedFields.length > 0;
     const [fields, setFields] = useState<any[]>([]);
     const currentCluster = useAtomValue(currentClusterAtom);
@@ -66,14 +68,14 @@ export default function SurroundingLogs() {
     const [beforeTime, setBeforeTime] = useAtom(beforeTimeAtom);
     const [afterTime, setAfterTime] = useAtom(afterTimeAtom);
     const tableFields = useAtomValue(tableFieldsAtom);
-    const contextKey = JSON.stringify([selectdbDS?.uid, currentDatabase, currentTable, currentTimeField, selectedRow._uid, selectedRow.time, dataFilter]);
+    const contextKey = JSON.stringify([selectdbDS?.uid, currentDatabase, currentTable, currentTimeField, selectedRow._uid, selectedRow.time, filterEnabled, filterEnabled ? dataFilter : []]);
     const contextRef = useRef(contextKey);
     contextRef.current = contextKey;
     const requestSurrounding = (params: SurroundingParams) => lastValueFrom(getSurroundingDataService({ selectdbDS, ...params }))
         .then(response => ({ ...response, surroundingContext: contextKey }));
     const [state, updateState] = useState([
         {
-            label: 'Table',
+            label: t('Table'),
             value: 'Table',
             active: true,
         },
@@ -134,7 +136,7 @@ export default function SurroundingLogs() {
             cluster: currentCluster,
             theme: theme.isDark ? 'dark' : 'light',
         };
-        if (dataFilter.length > 0) {
+        if (filterEnabled && dataFilter.length > 0) {
             params.data_filters = dataFilter;
         }
         return params;
@@ -414,9 +416,9 @@ export default function SurroundingLogs() {
                         row.getCanExpand() && (
                             <div>
                                 {row.getIsExpanded() ? (
-                                    <IconButton onClick={row.getToggleExpandedHandler()} name="arrow-down" tooltip="Collapse" />
+                                    <IconButton onClick={row.getToggleExpandedHandler()} name="arrow-down" tooltip={t('Collapse')} />
                                 ) : (
-                                    <IconButton onClick={row.getToggleExpandedHandler()} name="arrow-right" tooltip="Expand" />
+                                    <IconButton onClick={row.getToggleExpandedHandler()} name="arrow-right" tooltip={t('Expand')} />
                                 )}
                                 <div className="ml-1">{getValue<string>()}</div>
                             </div>
@@ -426,7 +428,7 @@ export default function SurroundingLogs() {
             },
             {
                 id: '__time',
-                header: 'Time',
+                header: () => t('Time'),
                 accessorKey: 'time',
                 size: 240,
                 minSize: 80,
@@ -529,7 +531,7 @@ export default function SurroundingLogs() {
                                 <div>{field.Field}</div>
                                 <IconButton
                                     name="times"
-                                    tooltip="Remove"
+                                    tooltip={t('Remove')}
                                     style={{
                                         marginLeft: '8px',
                                         cursor: 'pointer',
@@ -584,7 +586,7 @@ export default function SurroundingLogs() {
 
     return (
         <div>
-            <SurroundingDiscoverFilter />
+            <SurroundingDiscoverFilter enabled={filterEnabled} onEnabledChange={setFilterEnabled} />
             <div className="h-[2px] bg-b1 dark:bg-black" />
             <div style={{ position: 'relative' }}>
                 <SurroundingLogsActions
@@ -594,7 +596,7 @@ export default function SurroundingLogs() {
                     type="before"
                     timeFieldPageSize={beforeTimeFieldPageSize}
                     setTimeFieldPageSize={setBeforeTimeFieldPageSize}
-                    tips="Old records"
+                    tips={t('Old records')}
                     count={beforeCount}
                 />
                 {renderBeforeLoadingBar()}
@@ -621,7 +623,7 @@ export default function SurroundingLogs() {
                     type="after"
                     timeFieldPageSize={afterTimeFieldPageSize}
                     setTimeFieldPageSize={setAfterTimeFieldPageSize}
-                    tips={`New records`}
+                    tips={t('New records')}
                     count={afterCount}
                 />
             </div>

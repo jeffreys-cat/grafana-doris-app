@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { Observable, throwError } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { message } from 'antd';
@@ -73,7 +74,7 @@ export function withErrorHandler<T>(
 ): Observable<T> {
     const {
         showBackendError = true,
-        defaultMessage = 'Request failed',
+        defaultMessage = t('Request failed'),
         generatedSql,
     } = options || {};
 

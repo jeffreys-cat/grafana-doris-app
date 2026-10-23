@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import SqlString from 'sqlstring';
 import dayjs from 'dayjs';
 import { parseDorisTime, histogramOrigin, formatSqlTime } from 'utils/time';
@@ -66,19 +67,19 @@ const NUMERIC_DORIS_TYPE = /(TINYINT|SMALLINT|MEDIUMINT|INT|BIGINT|LARGEINT|FLOA
 export function getTopNQuerySQL(params: TopNQueryParams, availableFields: Array<{ Field: string; Type?: string }>) {
     const limit = Number(params.limit);
     if (!Number.isInteger(limit) || limit < 1 || limit > 10000) {
-        throw new Error('Top N limit must be an integer between 1 and 10000');
+        throw new Error(t('Top N limit must be an integer between 1 and 10000'));
     }
     const group = availableFields.find(field => field.Field === params.groupField);
     if (!group) {
-        throw new Error('Top N group field is unavailable');
+        throw new Error(t('Top N group field is unavailable'));
     }
     const metric = params.metric || 'COUNT';
     if (!['COUNT', 'SUM', 'AVG', 'MIN', 'MAX'].includes(metric)) {
-        throw new Error('Top N aggregation is unsupported');
+        throw new Error(t('Top N aggregation is unsupported'));
     }
     const metricField = metric === 'COUNT' ? undefined : availableFields.find(field => field.Field === params.metricField);
     if (metric !== 'COUNT' && (!metricField || !NUMERIC_DORIS_TYPE.test(metricField.Type || ''))) {
-        throw new Error('Top N metric requires an available numeric field');
+        throw new Error(t('Top N metric requires an available numeric field'));
     }
     const groupExpression = transformFieldPath(group.Field);
     const metricExpression = metric === 'COUNT' ? 'COUNT(*)' : `${metric}(${transformFieldPath(metricField!.Field)})`;
@@ -207,7 +208,7 @@ export function getQueryTableResultCountSQL(params: QueryTableDataParams) {
 export function getSurroundingSQL(params: SurroundingParams) {
     const anchor = parseDorisTime(params.time);
     if (!anchor.isValid()) {
-        throw new Error('Invalid surrounding log anchor');
+        throw new Error(t('Invalid surrounding log anchor'));
     }
     const hours = [1, 6, 24].includes(params.windowHours || 1) ? params.windowHours || 1 : 1;
     const anchorLiteral = SqlString.escape(anchor.format('YYYY-MM-DD HH:mm:ss.SSS'));

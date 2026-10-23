@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import React, { ChangeEvent, useState, useEffect } from 'react';
 import { lastValueFrom } from 'rxjs';
 import { css } from '@emotion/css';
@@ -198,8 +199,8 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
   return (
     <>
       <form onSubmit={onSubmit}>
-        <FieldSet label="API Settings">
-          <Field label="API Key" description="A secret key for authenticating to our custom API">
+        <FieldSet label={t('API Settings')}>
+          <Field label={t('API Key')} description={t('A secret key for authenticating to our custom API')}>
             <SecretInput
               width={60}
               id="config-api-key"
@@ -207,39 +208,39 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
               name="apiKey"
               value={state.apiKey}
               isConfigured={state.isApiKeySet}
-              placeholder={'Your secret API key'}
+              placeholder={t('Your secret API key')}
               onChange={onChange}
               onReset={onResetApiKey}
             />
           </Field>
 
-          <Field label="API Url" description="" className={s.marginTop}>
+          <Field label={t('API Url')} description="" className={s.marginTop}>
             <Input
               width={60}
               name="apiUrl"
               id="config-api-url"
               data-testid={testIds.appConfig.apiUrl}
               value={state.apiUrl}
-              placeholder={`E.g.: http://mywebsite.com/api/v1`}
+              placeholder={t('E.g.: http://mywebsite.com/api/v1')}
               onChange={onChange}
             />
           </Field>
 
           <div className={s.marginTop}>
             <Button type="submit" data-testid={testIds.appConfig.submit} disabled={isSubmitDisabled}>
-              Save API settings
+              {t('Save API settings')}
             </Button>
           </div>
         </FieldSet>
       </form>
       <form className={s.marginTop} onSubmit={submitLogConfig}>
         <FieldSet>
-          <Field label="Default Datasource">
+          <Field label={t('Default Datasource')}>
             <DataSourcePicker
               width={20}
               type={SUPPORTED_DATASOURCE_TYPES}
               current={currentLogsConfig.datasource}
-              placeholder="Choose"
+              placeholder={t('Choose')}
               noDefault
               filter={ds => isSupportedDatasourceType(ds.type)}
               onChange={item => {
@@ -249,8 +250,8 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
               }}
             />
           </Field>
-          <Field label="Default Database">
-            <Select
+          <Field label={t('Default Database')}>
+            <Select placeholder={t('Choose')}
               width={60}
               options={databases}
               value={currentLogsConfig.database}
@@ -262,8 +263,8 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
               }}
             ></Select>
           </Field>
-          <Field label="Default Logs Table">
-            <Select
+          <Field label={t('Default Logs Table')}>
+            <Select placeholder={t('Choose')}
               options={tables}
               disabled={databasesLoading || tablesLoading || !currentLogsConfig.database || tables.length === 0}
               isLoading={tablesLoading}
@@ -277,8 +278,8 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
               }}
             />
           </Field>
-          <Field label="Default Trace Table">
-            <Select
+          <Field label={t('Default Trace Table')}>
+            <Select placeholder={t('Choose')}
               options={tables}
               disabled={databasesLoading || tablesLoading || !currentLogsConfig.database || tables.length === 0}
               isLoading={tablesLoading}
@@ -293,8 +294,8 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
             />
           </Field>
           <Field
-            label="Application resource attribute key"
-            description="Optional. Resource attribute used by the Discover Application filter, for example app or k8s.pod.label.app. Leave empty to disable the filter."
+            label={t('Application resource attribute key')}
+            description={t('Optional. Resource attribute used by the Discover Application filter, for example app or k8s.pod.label.app. Leave empty to disable the filter.')}
           >
             <Input
               width={60}
@@ -309,7 +310,7 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
               }}
             />
           </Field>
-          <Field label="Team Datasource Permissions" description="Users with no teams can view all MySQL datasources. Users in teams can only view datasources configured here.">
+          <Field label={t('Team Datasource Permissions')} description={t('Users with no teams can view all MySQL datasources. Users in teams can only view datasources configured here.')}>
             <div>
               {teamDatasourcePermissions.map((permission, index) => {
                 const selectedDatasourceOptions = datasourceOptions.filter(option =>
@@ -322,7 +323,7 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
                       width={30}
                       options={teamOptions}
                       value={permission.teamId || undefined}
-                      placeholder="Choose team"
+                      placeholder={t('Choose team')}
                       onChange={(selectedTeam: SelectableValue<number>) => {
                         updatePermission(index, {
                           teamId: selectedTeam.value ?? 0,
@@ -334,7 +335,7 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
                       width={45}
                       options={datasourceOptions}
                       value={selectedDatasourceOptions}
-                      placeholder="Choose datasources"
+                      placeholder={t('Choose datasources')}
                       onChange={(selectedDatasources: Array<SelectableValue<string>>) => {
                         updatePermission(index, {
                           datasourceUids: selectedDatasources
@@ -344,19 +345,19 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
                       }}
                     />
                     <Button type="button" variant="destructive" onClick={() => removePermission(index)}>
-                      Remove
+                      {t('Remove')}
                     </Button>
                   </div>
                 );
               })}
               <Button type="button" variant="secondary" onClick={addPermission}>
-                Add team permission
+                {t('Add team permission')}
               </Button>
             </div>
           </Field>
           <div className={s.marginTop}>
             <Button type='submit'>
-              Save plugin settings
+              {t('Save plugin settings')}
             </Button>
           </div>
         </FieldSet>

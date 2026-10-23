@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { DiscoverShareState, DISCOVER_SHARE_STATE_VERSION } from './discover-share-state';
 
 const record = (v: unknown): v is Record<string, any> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
@@ -6,24 +7,24 @@ const stringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every(x
 /** Unlike legacy URL decoding, saved snapshots must not silently lose filters. */
 export function validateSavedQueryState(value: unknown): DiscoverShareState {
     if (!record(value) || value.version !== DISCOVER_SHARE_STATE_VERSION) {
-        throw new Error('Unsupported Discover state version');
+        throw new Error(t('Unsupported Discover state version'));
     }
     for (const key of ['datasource', 'database', 'table', 'timeField', 'timeZone']) {
         if (typeof value[key] !== 'string' || !value[key].trim()) {
-            throw new Error(`A valid ${key} is required`);
+            throw new Error(t('A valid {{field}} is required', { field: key }));
         }
     }
     if (!['SQL', 'Search', 'Lucene'].includes(value.mode)) {
-        throw new Error('Invalid query mode');
+        throw new Error(t('Invalid query mode'));
     }
     for (const key of ['query', 'timeRawFrom', 'timeRawTo', 'startTime', 'endTime']) {
         if (value[key] !== undefined && typeof value[key] !== 'string') {
-            throw new Error(`Invalid ${key}`);
+            throw new Error(t('Invalid {{field}}', { field: key }));
         }
     }
     const relative = value.timeRawFrom?.startsWith('now') && value.timeRawTo?.startsWith('now');
     if (!relative && !(value.startTime && value.endTime)) {
-        throw new Error('A complete time range is required');
+        throw new Error(t('A complete time range is required'));
     }
     const operators = [
         '=',
@@ -56,16 +57,16 @@ export function validateSavedQueryState(value: unknown): DiscoverShareState {
                 optionalText(f, ['variantKey', 'variantRootType', 'fieldType', 'label']),
         )
     ) {
-        throw new Error('Invalid saved filters');
+        throw new Error(t('Invalid saved filters'));
     }
     if (
         !Array.isArray(value.selectedFields) ||
         !value.selectedFields.every(f => record(f) && typeof f.Field === 'string' && f.Field && optionalPath(f) && optionalText(f, ['Type', 'variantKey']))
     ) {
-        throw new Error('Invalid selected fields');
+        throw new Error(t('Invalid selected fields'));
     }
     if (!stringArray(value.columnOrder)) {
-        throw new Error('Invalid column order');
+        throw new Error(t('Invalid column order'));
     }
     if (
         !record(value.sort) ||
@@ -74,7 +75,7 @@ export function validateSavedQueryState(value: unknown): DiscoverShareState {
         !optionalPath(value.sort) ||
         !optionalText(value.sort, ['variantType'])
     ) {
-        throw new Error('Invalid saved sort');
+        throw new Error(t('Invalid saved sort'));
     }
     return value as DiscoverShareState;
 }

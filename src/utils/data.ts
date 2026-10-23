@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { formatDorisTime, getGrafanaUserTimeZone, histogramOrigin, nextHistogramBucket, parseDorisTime, HistogramInterval, buildRelativeTimeRange } from './time';
 import { getAutoInterval } from '../constants';
 import dayjs, { Dayjs, ManipulateType } from 'dayjs';
@@ -159,30 +160,30 @@ export enum AggregatableEnum {
 
 export const SEARCHABLE = [
     {
-        label: `Any`,
+        get label() { return t('Any'); },
         value: SearchableEnum.ANY,
     },
     {
-        label: 'Yes',
+        get label() { return t('Yes'); },
         value: SearchableEnum.YES,
     },
     {
-        label: 'No',
+        get label() { return t('No'); },
         value: SearchableEnum.NO,
     },
 ];
 
 export const AGGREGATABLE = [
     {
-        label: `Any`,
+        get label() { return t('Any'); },
         value: AggregatableEnum.ANY,
     },
     {
-        label: 'Yes',
+        get label() { return t('Yes'); },
         value: AggregatableEnum.YES,
     },
     {
-        label: 'No',
+        get label() { return t('No'); },
         value: AggregatableEnum.NO,
     },
 ];
@@ -260,8 +261,8 @@ export function getIndexesStatement(indexes: any[], allField: any[], keywords: s
 export const DISCOVER_SHORTCUTS = [
     {
         key: nanoid(),
-        text: `Last 5 Minutes`,
-        label: `Last 5 Minutes`,
+        get text() { return t('Last 5 Minutes'); },
+        get label() { return t('Last 5 Minutes'); },
         range: (now: dayjs.Dayjs = dayjs()) => [now.add(-5, 'minute').startOf('second'), now],
         format: 'HH:mm',
         raw: {
@@ -273,8 +274,8 @@ export const DISCOVER_SHORTCUTS = [
     },
     {
         key: nanoid(),
-        text: `Last 15 Minutes`,
-        label: `Last 15 Minutes`,
+        get text() { return t('Last 15 Minutes'); },
+        get label() { return t('Last 15 Minutes'); },
         raw: {
             from: 'now-15m',
             to: 'now',
@@ -286,8 +287,8 @@ export const DISCOVER_SHORTCUTS = [
     },
     {
         key: nanoid(),
-        text: `Last 1 Hour`,
-        label: `Last 1 Hour`,
+        get text() { return t('Last 1 Hour'); },
+        get label() { return t('Last 1 Hour'); },
         raw: {
             from: 'now-1h',
             to: 'now',
@@ -299,8 +300,8 @@ export const DISCOVER_SHORTCUTS = [
     },
     {
         key: nanoid(),
-        text: `Last 1 Day`,
-        label: `Last 1 Day`,
+        get text() { return t('Last 1 Day'); },
+        get label() { return t('Last 1 Day'); },
         raw: {
             from: 'now-1d',
             to: 'now',
@@ -312,8 +313,8 @@ export const DISCOVER_SHORTCUTS = [
     },
     {
         key: nanoid(),
-        text: `Last 7 Days`,
-        label: `Last 1 Days`,
+        get text() { return t('Last 7 Days'); },
+        get label() { return t('Last 1 Days'); },
         raw: {
             from: 'now-7d',
             to: 'now',
@@ -325,8 +326,8 @@ export const DISCOVER_SHORTCUTS = [
     },
     {
         key: nanoid(),
-        text: `Last 1 Month`,
-        label: `Last 1 Month`,
+        get text() { return t('Last 1 Month'); },
+        get label() { return t('Last 1 Month'); },
         raw: {
             from: 'now-1M',
             to: 'now',
@@ -338,8 +339,8 @@ export const DISCOVER_SHORTCUTS = [
     },
     {
         key: nanoid(),
-        text: `Last 3 Months`,
-        label: `Last 3 Months`,
+        get text() { return t('Last 3 Months'); },
+        get label() { return t('Last 3 Months'); },
         raw: {
             from: 'now-3M',
             to: 'now',
@@ -351,8 +352,8 @@ export const DISCOVER_SHORTCUTS = [
     },
     {
         key: nanoid(),
-        text: `Last 1 Year`,
-        label: `Last 1 Year`,
+        get text() { return t('Last 1 Year'); },
+        get label() { return t('Last 1 Year'); },
         raw: {
             from: 'now-1y',
             to: 'now',
@@ -390,35 +391,35 @@ export function getLatestTime(id: string, timeZone: TimeZone = getGrafanaUserTim
 export const TIME_INTERVALS = [
     {
         value: 'auto',
-        label: `Auto`,
+        get label() { return t('Auto'); },
     },
     {
         value: 'second',
-        label: `Second`,
+        get label() { return t('Second'); },
     },
     {
         value: 'minute',
-        label: `Minute`,
+        get label() { return t('Minute'); },
     },
     {
         value: 'hour',
-        label: `Hour`,
+        get label() { return t('Hour'); },
     },
     {
         value: 'day',
-        label: `Day`,
+        get label() { return t('Day'); },
     },
     {
         value: 'week',
-        label: `Week`,
+        get label() { return t('Week'); },
     },
     {
         value: 'month',
-        label: `Month`,
+        get label() { return t('Month'); },
     },
     {
         value: 'year',
-        label: `Year`,
+        get label() { return t('Year'); },
     },
 ];
 

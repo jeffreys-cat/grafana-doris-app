@@ -1,3 +1,4 @@
+jest.mock('@grafana/runtime', () => ({ config: { bootData: { user: { language: 'en-US' } } } }));
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { VariantValueViewer } from './variant-value-viewer';
@@ -13,16 +14,16 @@ describe('VariantValueViewer', () => {
     it('expands the JSON root by default while keeping nested VARIANT objects collapsed', () => {
         render(<VariantValueViewer value={'{"service":{"name":"api"},"ok":true}'} />);
 
-        expect(screen.getByRole('button', { name: '展开全部 VARIANT 字段' })).toHaveAttribute('title', '展开全部');
+        expect(screen.getByRole('button', { name: 'Expand all VARIANT fields' })).toHaveAttribute('title', 'Expand all');
         expect(screen.getByRole('button', { name: /VARIANT: Object \(2\)/ })).toHaveAttribute('aria-expanded', 'true');
         expect(screen.getByText('service:')).toBeInTheDocument();
         expect(screen.queryByText('name:')).not.toBeInTheDocument();
 
-        fireEvent.click(screen.getByRole('button', { name: '展开全部 VARIANT 字段' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Expand all VARIANT fields' }));
         expect(screen.getByText('name:')).toBeInTheDocument();
 
-        expect(screen.getByRole('button', { name: '收起全部 VARIANT 字段' })).toHaveAttribute('title', '收起全部');
-        fireEvent.click(screen.getByRole('button', { name: '收起全部 VARIANT 字段' }));
+        expect(screen.getByRole('button', { name: 'Collapse all VARIANT fields' })).toHaveAttribute('title', 'Collapse all');
+        fireEvent.click(screen.getByRole('button', { name: 'Collapse all VARIANT fields' }));
         expect(screen.queryByText('name:')).not.toBeInTheDocument();
     });
 
@@ -39,6 +40,6 @@ describe('VariantValueViewer', () => {
         render(<VariantValueViewer value={{ log_attributes: { source: 'nginx' } }} rootName="JSON" />);
 
         expect(screen.getByRole('button', { name: /JSON: Object \(1\)/ })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: '展开全部 JSON 字段' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Expand all JSON fields' })).toBeInTheDocument();
     });
 });

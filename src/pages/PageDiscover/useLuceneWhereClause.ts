@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { useCallback, useRef } from 'react';
 import { useStore } from 'jotai';
 import { lastValueFrom } from 'rxjs';
@@ -29,7 +30,7 @@ export type LuceneBuildOptions = { refreshMetadata?: boolean; refreshPaths?: boo
 function rowsFromResponse(response: any, refId: string): Array<Record<string, any>> {
     const result = response?.data?.results?.[refId];
     if (!response?.ok || result?.error) {
-        throw new Error(result?.error || 'Failed to load search metadata');
+        throw new Error(result?.error || t('Failed to load search metadata'));
     }
     const frame = result?.frames?.[0];
     if (!frame) {
@@ -91,14 +92,14 @@ export function useLuceneWhereClause() {
                     ]);
                     meta = { fields, indexes };
                     if (!isCurrent()) {
-                        throw new Error('Search table changed while loading metadata');
+                        throw new Error(t('Search table changed while loading metadata'));
                     }
                     store.set(tableMetadataAtom, previous => ({ ...previous, [key]: meta! }));
                     store.set(tableFieldsAtom, fields);
                     store.set(indexesAtom, indexes);
                 }
                 if (!isCurrent()) {
-                    throw new Error('Search table changed while loading metadata');
+                    throw new Error(t('Search table changed while loading metadata'));
                 }
                 const fields = meta.fields!;
                 const columns = fields.filter(field => /^VARIANT/i.test(field.Type || '')).map(field => String(field.Field));
@@ -119,14 +120,14 @@ export function useLuceneWhereClause() {
                         const samples = rowsFromResponse(response, 'sampleVariantPaths').map(row =>
                             Object.fromEntries(columns.map((column, index) => [column, row[`c${index + 1}`]])),
                         );
-                        if (!isCurrent()) {throw new Error('Search table changed while sampling attributes');}
+                        if (!isCurrent()) {throw new Error(t('Search table changed while sampling attributes'));}
                         rememberVariantSamples(store, key, columns, samples);
                         store.set(variantSamplingWarningAtom, previous => ({ ...previous, [key]: '' }));
                         if (isCurrent()) {
                             sampledContext.current = key;
                         }
                     } catch {
-                        if (!isCurrent()) {throw new Error('Search table changed while sampling attributes');}
+                        if (!isCurrent()) {throw new Error(t('Search table changed while sampling attributes'));}
                         store.set(variantSamplingWarningAtom, previous => ({
                             ...previous,
                             [key]: 'Attribute path sampling failed. Free-text search uses cached paths and may miss attribute values.',
@@ -134,7 +135,7 @@ export function useLuceneWhereClause() {
                     }
                 }
                 if (!isCurrent()) {
-                    throw new Error('Search table changed while sampling attributes');
+                    throw new Error(t('Search table changed while sampling attributes'));
                 }
                 const implicitFields = fields.filter(field => /^(?:CHAR|VARCHAR|TEXT|STRING|JSON)/i.test(field.Type || ''));
                 if (!query || mode !== 'Lucene') {
@@ -152,7 +153,7 @@ export function useLuceneWhereClause() {
                             .map(field => `coalesce(${SqlString.escapeId(field.Field)}, '')`)
                             .join(',\n') || undefined,
                     columnMeta: {
-                        columns: fields.map(field => ({ name: String(field.Field), type: String(field.Type || 'Unknown') })),
+                        columns: fields.map(field => ({ name: String(field.Field), type: String(field.Type || t('Unknown')) })),
                         invertedIndexColumns: meta.indexes!.filter(index => /inverted/i.test(index.type || '')).map(index => String(index.columnName)),
                     },
                     variantImplicitPaths: store.get(variantImplicitPathsAtom)[key] || {},

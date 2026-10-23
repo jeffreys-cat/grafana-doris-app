@@ -26,7 +26,7 @@ describe('DiscoverQueryFeedback', () => {
         );
 
         expect(screen.getByText('Query failed')).toBeInTheDocument();
-        expect(screen.getByText('observability.logs').parentElement).toHaveTextContent('SQL query on observability.logs did not complete.');
+        expect(screen.getByText('SQL query on observability.logs did not complete.')).toHaveTextContent('SQL query on observability.logs did not complete.');
         expect(screen.getByText(/Input location: line 1, column 8/)).toBeInTheDocument();
         expect(screen.getByText('Syntax error at line 1, column 42')).toBeVisible();
         expect(screen.getByText('Generated SQL')).toBeInTheDocument();

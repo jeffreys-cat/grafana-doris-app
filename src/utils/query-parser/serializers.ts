@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { normalizeColumnType } from './column-types';
 import * as lucene from '@hyperdx/lucene';
 import SqlString from './sqlstring-browser';
@@ -81,7 +82,7 @@ export class EnglishSerializer implements Serializer {
             case 'OR':
                 return 'OR';
             default:
-                throw new Error(`Unexpected operator. ${op}`);
+                throw new Error(t('Unexpected operator. {{operator}}', { operator: op }));
         }
     }
 
@@ -176,7 +177,7 @@ export abstract class SQLSerializer implements Serializer {
             case 'OR':
                 return 'OR';
             default:
-                throw new Error(`Unexpected operator. ${op}`);
+                throw new Error(t('Unexpected operator. {{operator}}', { operator: op }));
         }
     }
 
@@ -399,7 +400,7 @@ export abstract class SQLSerializer implements Serializer {
             return this.NOT_FOUND_QUERY;
         }
         if (!this.supportsJsonSearch) {
-            throw new Error('JSON array text search requires Doris JSON_SEARCH support.');
+            throw new Error(t('JSON array text search requires Doris JSON_SEARCH support.'));
         }
         const pattern = `${prefixWildcard ? '%' : '%'}${this.escapeLikePattern(term)}${suffixWildcard ? '%' : '%'}`;
         const scalar = `(${this.jsonType(json)} = 'string' AND lower(JSON_UNQUOTE(${json.extracted})) ${isNegatedField ? 'NOT ' : ''}LIKE lower(${SqlString.format('?', [pattern])}) ESCAPE '\\\\')`;
@@ -961,7 +962,7 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
         const prefixMatch = await this.fetchColumnMetadata(fieldPrefix);
 
         if (!prefixMatch && field.includes('__HDX_VARIANT_KEY_')) {
-            throw new Error(`Unknown column "${fieldPrefix}" in Lucene field "${fieldPath.join('.')}". Check the field name.`);
+            throw new Error(t('Unknown column "{{column}}" in Lucene field "{{field}}". Check the field name.', { column: fieldPrefix, field: fieldPath.join('.') }));
         }
 
         if (prefixMatch) {
@@ -1022,7 +1023,7 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
                 };
             }
 
-            throw new Error('Unsupported column type for prefix match');
+            throw new Error(t('Unsupported column type for prefix match'));
         }
 
         return {
@@ -1037,7 +1038,7 @@ export class CustomSchemaSQLSerializerV2 extends SQLSerializer {
     async getColumnForField(field: string) {
         if (field === IMPLICIT_FIELD) {
             if (!this.implicitColumnExpression && !Object.values(this.variantImplicitPaths).some(paths => paths.length > 0)) {
-                throw new Error('Can not search bare text without an implicit column set.');
+                throw new Error(t('Can not search bare text without an implicit column set.'));
             }
 
             const expressions = this.implicitColumnExpression ? splitAndTrimWithBracket(this.implicitColumnExpression) : [];

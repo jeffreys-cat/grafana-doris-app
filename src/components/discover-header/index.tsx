@@ -1,4 +1,5 @@
 'use client';
+import { t } from 'i18n';
 import React, { PropsWithChildren, useEffect } from 'react';
 import dayjs from 'dayjs';
 import { DiscoverHeaderControls, DiscoverHeaderSearch, DiscoverHeaderField, DiscoverHeaderActions } from './discover-header.style';
@@ -799,17 +800,17 @@ export default function DiscoverHeader(
             `}
         >
             {restoreError && <div role="alert" style={{ color: theme.colors.error.text }}>
-                {restoreError}. Automatic querying is paused. <Button variant="secondary" size="sm" onClick={() => { setRestoreError(''); setDiscoverShareReady(true); }}>Keep current query</Button>
+                {restoreError}{t('. Automatic querying is paused.')}<Button variant="secondary" size="sm" onClick={() => { setRestoreError(''); setDiscoverShareReady(true); }}>{t('Keep current query')}</Button>
             </div>}
             {restoreWarning && <div role="status" style={{ color: theme.colors.warning.text }}>{restoreWarning}</div>}
             <DiscoverHeaderControls data-testid="discover-header-controls">
-                <DiscoverHeaderField label="Datasource" description={datasourcePermissionsError ? 'Failed to load team datasource permissions' : undefined}>
+                <DiscoverHeaderField label={t('Datasource')} description={datasourcePermissionsError ? t('Failed to load team datasource permissions') : undefined}>
                     {/* filter 这个版本无效 */}
                     <DataSourcePicker
                         width={15}
                         type={SUPPORTED_DATASOURCE_TYPES}
                         current={selectedDatasource}
-                        placeholder="Choose"
+                        placeholder={t('Choose')}
                         noDefault
                         disabled={datasourcePermissionsLoading || allowedDatasources.length === 0}
                         isLoading={datasourcePermissionsLoading}
@@ -825,8 +826,8 @@ export default function DiscoverHeader(
                     />
                 </DiscoverHeaderField>
                 {/* 需要从数据源中获取库表信息 */}
-                <DiscoverHeaderField label="Database">
-                    <Select
+                <DiscoverHeaderField label={t('Database')}>
+                    <Select placeholder={t('Choose')}
                         width={15}
                         options={databases}
                         value={discoverCurrent.database}
@@ -839,8 +840,8 @@ export default function DiscoverHeader(
                     ></Select>
                 </DiscoverHeaderField>
 
-                <DiscoverHeaderField label="Table">
-                    <Select
+                <DiscoverHeaderField label={t('Table')}>
+                    <Select placeholder={t('Choose')}
                         options={tables}
                         width={15}
                         value={currentTable}
@@ -853,12 +854,12 @@ export default function DiscoverHeader(
                     />
                 </DiscoverHeaderField>
                 {isApplicationFilterConfigured ? (
-                    <DiscoverHeaderField label="Application">
+                    <DiscoverHeaderField label={t('Application')}>
                         <Select
                             options={visibleApplicationOptions}
                             width={14}
                             value={applicationDraft || undefined}
-                            placeholder={hasResourceAttributes ? 'All' : 'Unavailable'}
+                            placeholder={hasResourceAttributes ? t('All') : t('Unavailable')}
                             isClearable={true}
                             isLoading={applicationOptionsLoading}
                             disabled={!hasResourceAttributes}
@@ -870,7 +871,7 @@ export default function DiscoverHeader(
                 ) : null}
                 {!searchFocus && (
                     <>
-                        <DiscoverHeaderField label="Time Field">
+                        <DiscoverHeaderField label={t('Time Field')}>
                             <Select
                                 value={currentTimeField}
                                 width={15}
@@ -889,10 +890,10 @@ export default function DiscoverHeader(
                                         };
                                     });
                                 }}
-                                placeholder={'Time Field'}
+                                placeholder={t('Time Field')}
                             />
                         </DiscoverHeaderField>
-                        <DiscoverHeaderField label="Time Range" className={timeRangeFieldClass} style={{ marginLeft: 'auto' }}>
+                        <DiscoverHeaderField label={t('Time Range')} className={timeRangeFieldClass} style={{ marginLeft: 'auto' }}>
                             <TimeRangeInput
                                 hideTimeZone={false}
                                 isReversed={false}
@@ -945,7 +946,7 @@ export default function DiscoverHeader(
                 )}
             </DiscoverHeaderControls>
             <DiscoverHeaderSearch data-testid="discover-header-search">
-                <DiscoverHeaderField label="Mode" style={{ flex: '0 0 auto' }}>
+                <DiscoverHeaderField label={t('Mode')} style={{ flex: '0 0 auto' }}>
                     <SearchType />
                 </DiscoverHeaderField>
                 {searchType === 'Lucene' ? (
@@ -962,20 +963,19 @@ export default function DiscoverHeader(
                         <Tooltip
                             content={
                                 <span>
-                                    {warningFields}
-                                    {remainingWarningFieldCount > 0 ? ` 等 ${fieldsWithoutInvertedIndex.length} 个字段` : ''} 未配置倒排索引，Lucene 查询可能较慢。
-                                    {jsonFieldsWithoutInvertedIndex.length > 0 ? ' JSON 子路径使用 JSON 函数过滤，通常会扫描数据。' : ''}
+                                    {remainingWarningFieldCount > 0 ? t('{{fields}} and other fields ({{count}} total) have no inverted index. Lucene queries may be slow.', { fields: warningFields, count: fieldsWithoutInvertedIndex.length }) : t('{{fields}} have no inverted index. Lucene queries may be slow.', { fields: warningFields })}
+                                    {jsonFieldsWithoutInvertedIndex.length > 0 ? t(' JSON subpaths use JSON functions for filtering and usually scan data.') : ''}
                                 </span>
                             }
                             placement="top"
                         >
-                            <span aria-label="Lucene 倒排索引告警" style={{ color: theme.colors.warning.text, cursor: 'help', display: 'inline-flex' }}>
+                            <span aria-label={t('Lucene inverted index warning')} style={{ color: theme.colors.warning.text, cursor: 'help', display: 'inline-flex' }}>
                                 <Icon name="exclamation-triangle" size="sm" />
                             </span>
                         </Tooltip>
                     ) : null}
-                    <Tooltip content="Refresh table metadata and sampled attribute paths">
-                        <Button aria-label="Refresh search metadata" variant="secondary" icon="sync" disabled={loading || !currentTimeField} onClick={onRefresh} />
+                    <Tooltip content={t('Refresh table metadata and sampled attribute paths')}>
+                        <Button aria-label={t('Refresh search metadata')} variant="secondary" icon="sync" disabled={loading || !currentTimeField} onClick={onRefresh} />
                     </Tooltip>
                     <Button
                         onClick={() => {
@@ -1016,7 +1016,7 @@ export default function DiscoverHeader(
                         icon={loading ? 'fa fa-spinner' : 'sync'}
                         disabled={!currentTimeField || !shareReady}
                     >
-                        {`Query`}
+                        {t('Query')}
                     </Button>
                     <SavedQueries
                         snapshot={{ ...snapshot, filters: applicationAttributeKey ? applyApplicationFilter(dataFilter, applicationDraft, applicationAttributeKey).filters : dataFilter }}

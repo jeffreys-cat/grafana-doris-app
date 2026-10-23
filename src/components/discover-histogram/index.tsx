@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { buildAbsoluteTimeRange, formatTimeInZone } from 'utils/time';
 import ReactECharts from 'echarts-for-react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
@@ -59,7 +60,7 @@ export function DiscoverHistogram({ height = 300, collapsed = false, onToggleCol
 
     const options: any = {
         title: {
-            subtext: `${`Time Interval`}: ${timeInterval}`,
+            subtext: t('Time Interval: {{interval}}', { interval: timeInterval }),
             left: 'right',
             top: 12,
         },
@@ -96,7 +97,7 @@ export function DiscoverHistogram({ height = 300, collapsed = false, onToggleCol
             xAxisIndex: 0,
         },
         yAxis: {
-            name: `Count`,
+            name: t('Count'),
             nameTextStyle: {
                 align: 'right',
                 padding: [5, 0],
@@ -221,7 +222,8 @@ export function DiscoverHistogram({ height = 300, collapsed = false, onToggleCol
                         className={css`
                             font-size: 12px;
                         `}
-                    >{`hits`}</span>
+                    >{t('hits')}
+                    </span>
                 </div>
                 <div
                     className={css`
@@ -236,7 +238,7 @@ export function DiscoverHistogram({ height = 300, collapsed = false, onToggleCol
                         width: 160px;
                     `}
                 >
-                    <Select
+                    <Select placeholder={t('Choose')}
                         value={interval}
                         onChange={selectdbInterval => {
                             setInterval(selectdbInterval.value as any);
@@ -245,10 +247,10 @@ export function DiscoverHistogram({ height = 300, collapsed = false, onToggleCol
                     />
                 </div>
                 <IconButton
-                    aria-label={collapsed ? 'Expand chart' : 'Collapse chart'}
+                    aria-label={collapsed ? t('Expand chart') : t('Collapse chart')}
                     data-testid="discover-chart-toggle"
                     name={collapsed ? 'angle-down' : 'angle-up'}
-                    tooltip={collapsed ? 'Expand chart' : 'Collapse chart'}
+                    tooltip={collapsed ? t('Expand chart') : t('Collapse chart')}
                     onClick={onToggleCollapsed}
                 />
             </div>

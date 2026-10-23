@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import React from 'react';
 import type { DataSourcePluginOptionsEditorProps } from '@grafana/data';
 import { getBackendSrv } from '@grafana/runtime';
@@ -130,7 +131,7 @@ export function ConfigEditor(props: Props) {
             .fetch<SSOProfileStatus>({ url: `/api/datasources/uid/${datasourceUID}/resources/profile` })
             .subscribe({
                 next: response => setProfile(response.data),
-                error: error => setProfile({ configured: false, message: error?.message ?? 'Unable to read the deployment SSO Profile.' }),
+                error: error => setProfile({ configured: false, message: error?.message ?? t('Unable to read the deployment SSO Profile.') }),
             });
         return () => subscription.unsubscribe();
     }, [datasourceUID, ssoEnabled]);
@@ -151,40 +152,40 @@ export function ConfigEditor(props: Props) {
     return (
         <div data-doris-datasource-config>
             <style>{hiddenDefaultControls}</style>
-            <h2 style={sectionHeadingStyle}>Connection</h2>
-            <Field label="Doris host">
+            <h2 style={sectionHeadingStyle}>{t('Connection')}</h2>
+            <Field label={t('Doris host')}>
                 <Input value={data.host ?? ''} onChange={e => update(props, 'host', e.currentTarget.value)} />
             </Field>
-            <Field label="Doris MySQL port">
+            <Field label={t('Doris MySQL port')}>
                 <Input type="number" value={data.port ?? 9030} onChange={e => update(props, 'port', Number(e.currentTarget.value))} />
             </Field>
-            <Field label="Enable TLS" description={ssoEnabled ? 'TLS is required when SSO is enabled.' : 'Enable this when the Doris MySQL port is configured for TLS.'}>
+            <Field label={t('Enable TLS')} description={ssoEnabled ? t('TLS is required when SSO is enabled.') : t('Enable this when the Doris MySQL port is configured for TLS.')}>
                 <Switch value={tlsEnabled} disabled={ssoEnabled} onChange={event => update(props, 'tlsEnabled', event.currentTarget.checked)} />
             </Field>
             {tlsEnabled && (
                 <Field
-                    label="Verify Doris TLS certificate"
-                    description="When disabled, TLS remains encrypted, but the certificate's CA and host/IP are not verified (like MySQL ssl-mode=REQUIRED)."
+                    label={t('Verify Doris TLS certificate')}
+                    description={t('When disabled, TLS remains encrypted, but the certificate\'s CA and host/IP are not verified (like MySQL ssl-mode=REQUIRED).')}
                 >
                     <Switch
-                        aria-label="Verify Doris TLS certificate"
+                        aria-label={t('Verify Doris TLS certificate')}
                         value={!data.tlsSkipVerify}
                         onChange={event => update(props, 'tlsSkipVerify', !event.currentTarget.checked)}
                     />
                 </Field>
             )}
-            <Field label="Enable SSO" description="Automatically forwards the signed-in user's OAuth identity when enabled. When disabled, uses the configured shared Doris username and password.">
-                <Switch aria-label="Enable SSO" value={ssoEnabled} onChange={event => update(props, 'enableSso', event.currentTarget.checked)} />
+            <Field label={t('Enable SSO')} description={t('Automatically forwards the signed-in user\'s OAuth identity when enabled. When disabled, uses the configured shared Doris username and password.')}>
+                <Switch aria-label={t('Enable SSO')} value={ssoEnabled} onChange={event => update(props, 'enableSso', event.currentTarget.checked)} />
             </Field>
             {!ssoEnabled ? (
                 <>
-                    <Field label="Doris username">
+                    <Field label={t('Doris username')}>
                         <Input value={data.username ?? ''} onChange={e => update(props, 'username', e.currentTarget.value)} />
                     </Field>
-                    <Field label="Doris password">
+                    <Field label={t('Doris password')}>
                         <SecretInput
                             isConfigured={Boolean(props.options.secureJsonFields?.password)}
-                            placeholder="Doris password"
+                            placeholder={t('Doris password')}
                             value={props.options.secureJsonData?.password ?? ''}
                             onChange={event => updatePassword(event.currentTarget.value)}
                             onReset={resetPassword}
@@ -193,43 +194,41 @@ export function ConfigEditor(props: Props) {
                 </>
             ) : (
                 <>
-                    <h2 style={sectionHeadingStyle}>Identity and access</h2>
+                    <h2 style={sectionHeadingStyle}>{t('Identity and access')}</h2>
                     <p>
-                        Administrators can save SSO configuration without signing in through OIDC. Save &amp; test checks the configuration; without an OIDC
-                        ID token, SSO verification remains pending. An OIDC user with datasource query access can sign in and run a query in Explore or
-                        Doris App Discover to verify the connection. Datasource management permissions are not required.
+                        {t('Administrators can save SSO configuration without signing in through OIDC. Save & test checks the configuration; without an OIDC ID token, SSO verification remains pending. An OIDC user with datasource query access can sign in and run a query in Explore or Doris App Discover to verify the connection. Datasource management permissions are not required.')}
                     </p>
-                    <Field label="OIDC issuer" description="The issuer must expose /.well-known/openid-configuration.">
+                    <Field label={t('OIDC issuer')} description={t('The issuer must expose /.well-known/openid-configuration.')}>
                         <Input
                             placeholder="https://idp.example.com/realms/velodb"
                             value={data.oidcIssuer ?? ''}
                             onChange={e => update(props, 'oidcIssuer', e.currentTarget.value)}
                         />
                     </Field>
-                    <Field label="OIDC audience / Grafana OAuth Client ID">
+                    <Field label={t('OIDC audience / Grafana OAuth Client ID')}>
                         <Input value={data.oidcAudience ?? ''} onChange={e => update(props, 'oidcAudience', e.currentTarget.value)} />
                     </Field>
                     <Field
-                        label="Skip IDP TLS certificate verification"
-                        description="Disables certificate chain and hostname verification for IDP Discovery and JWKS requests. Disabled by default; enable only for testing."
+                        label={t('Skip IDP TLS certificate verification')}
+                        description={t('Disables certificate chain and hostname verification for IDP Discovery and JWKS requests. Disabled by default; enable only for testing.')}
                     >
                         <Switch
-                            aria-label="Skip IDP TLS certificate verification"
+                            aria-label={t('Skip IDP TLS certificate verification')}
                             value={data.idpTlsSkipVerify ?? false}
                             onChange={event => update(props, 'idpTlsSkipVerify', event.currentTarget.checked)}
                         />
                     </Field>
                     <Field
-                        label="IDP CA certificate"
+                        label={t('IDP CA certificate')}
                         description={
                             data.idpTlsSkipVerify
-                                ? 'Paste a PEM CA bundle. It will be used when certificate verification is enabled again.'
-                                : 'Optional PEM CA bundle added to the system trusted certificates for IDP Discovery and JWKS requests.'
+                                ? t('Paste a PEM CA bundle. It will be used when certificate verification is enabled again.')
+                                : t('Optional PEM CA bundle added to the system trusted certificates for IDP Discovery and JWKS requests.')
                         }
                     >
                         {props.options.secureJsonFields?.idpTlsCACert ? (
                             <div>
-                                <span>IDP CA certificate configured</span>{' '}
+                                <span>{t('IDP CA certificate configured')}</span>{' '}
                                 <Button
                                     variant="secondary"
                                     onClick={() =>
@@ -240,12 +239,12 @@ export function ConfigEditor(props: Props) {
                                         })
                                     }
                                 >
-                                    Reset IDP CA certificate
+                                    {t('Reset IDP CA certificate')}
                                 </Button>
                             </div>
                         ) : (
                             <TextArea
-                                aria-label="IDP CA certificate"
+                                aria-label={t('IDP CA certificate')}
                                 rows={6}
                                 placeholder="-----BEGIN CERTIFICATE-----"
                                 value={props.options.secureJsonData?.idpTlsCACert ?? ''}
@@ -258,24 +257,22 @@ export function ConfigEditor(props: Props) {
                             />
                         )}
                     </Field>
-                    <Field label="Resolved identity provider" description="Derived values are validated by Save & test; they are not independently editable.">
+                    <Field label={t('Resolved identity provider')} description={t('Derived values are validated by Save & test; they are not independently editable.')}>
                         <TextArea
                             readOnly
                             rows={4}
-                            value={`Issuer: ${data.oidcIssuer || '<not configured>'}\nJWKS: Resolved through OIDC Discovery when saved/tested\nAudience: ${
-                                data.oidcAudience || '<not configured>'
-                            }`}
+                            value={t('Issuer: {{issuer}}\nJWKS: Resolved through OIDC Discovery when saved/tested\nAudience: {{audience}}', { issuer: data.oidcIssuer || t('<not configured>'), audience: data.oidcAudience || t('<not configured>') })}
                         />
                     </Field>
                     <Field
-                        label="OIDC group to Doris role mappings"
-                        description="Match complete OIDC group paths exactly, for example /team/readers. These rules generate the Doris authorization SQL; the datasource forwards verified OIDC groups unchanged."
+                        label={t('OIDC group to Doris role mappings')}
+                        description={t('Match complete OIDC group paths exactly, for example /team/readers. These rules generate the Doris authorization SQL; the datasource forwards verified OIDC groups unchanged.')}
                     >
                         <div>
                             {mappings.map((mapping, index) => (
                                 <div key={index} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                                     <Input
-                                        aria-label={`OIDC group ${index + 1}`}
+                                        aria-label={t('OIDC group {{index}}', { index: index + 1 })}
                                         placeholder="/team/readers"
                                         value={mapping.oidcGroup ?? mapping.keycloakGroup ?? ''}
                                         onChange={e => {
@@ -285,7 +282,7 @@ export function ConfigEditor(props: Props) {
                                         }}
                                     />
                                     <Input
-                                        aria-label={`Doris role ${index + 1}`}
+                                        aria-label={t('Doris role {{index}}', { index: index + 1 })}
                                         placeholder="doris_reader"
                                         value={mapping.dorisRole}
                                         onChange={e => {
@@ -295,7 +292,7 @@ export function ConfigEditor(props: Props) {
                                         }}
                                     />
                                     <Button
-                                        aria-label={`Remove group mapping ${index + 1}`}
+                                        aria-label={t('Remove group mapping {{index}}', { index: index + 1 })}
                                         variant="secondary"
                                         onClick={() =>
                                             updateMappings(
@@ -304,38 +301,38 @@ export function ConfigEditor(props: Props) {
                                             )
                                         }
                                     >
-                                        Remove
+                                        {t('Remove')}
                                     </Button>
                                 </div>
                             ))}
                             <Button variant="secondary" onClick={() => updateMappings(props, [...mappings, { oidcGroup: '', dorisRole: '' }])}>
-                                Add group mapping
+                                {t('Add group mapping')}
                             </Button>
                         </div>
                     </Field>
-                    <h2 style={sectionHeadingStyle}>Doris SSO bootstrap</h2>
-                    {!datasourceUID ? <p>Save this datasource first to generate its Doris token audience and bootstrap SQL.</p> : null}
-                    {datasourceUID && !profile ? <p>Loading the deployment SSO Profile…</p> : null}
-                    {profile && !profile.configured ? <p>Doris SSO Profile is unavailable: {profile.message ?? 'Contact the Grafana deployment administrator.'}</p> : null}
+                    <h2 style={sectionHeadingStyle}>{t('Doris SSO bootstrap')}</h2>
+                    {!datasourceUID ? <p>{t('Save this datasource first to generate its Doris token audience and bootstrap SQL.')}</p> : null}
+                    {datasourceUID && !profile ? <p>{t('Loading the deployment SSO Profile…')}</p> : null}
+                    {profile && !profile.configured ? <p>{t('Doris SSO Profile is unavailable:')}{profile.message ?? t('Contact the Grafana deployment administrator.')}</p> : null}
                     {profile?.configured ? (
                         <div>
-                            <p>Doris SSO Profile: Configured ✓</p>
+                            <p>{t('Doris SSO Profile: Configured ✓')}</p>
                             <p>
-                                Issuer: {profile.issuer}
+                                {t('Issuer:')}{profile.issuer}
                                 <br />
-                                JWKS: {profile.jwksPublicUrl}
+                                {t('JWKS:')}{profile.jwksPublicUrl}
                                 <br />
-                                Audience: {profile.audience}
+                                {t('Audience:')}{profile.audience}
                                 <br />
-                                Signing key: configured ✓
+                                {t('Signing key: configured ✓')}
                             </p>
                         </div>
                     ) : null}
                     {profile?.configured ? (
                         <div style={{ marginTop: 32 }}>
                             <Field
-                                label="Doris bootstrap SQL"
-                                description="Run this once for this datasource as a Doris administrator after enabling FE TLS. Each datasource has its own integration and audience; the datasource never applies SQL automatically."
+                                label={t('Doris bootstrap SQL')}
+                                description={t('Run this once for this datasource as a Doris administrator after enabling FE TLS. Each datasource has its own integration and audience; the datasource never applies SQL automatically.')}
                             >
                                 <TextArea value={dorisSQL} readOnly rows={14} />
                             </Field>

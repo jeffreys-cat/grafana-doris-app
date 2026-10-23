@@ -51,7 +51,7 @@ it('configures a common N without running until the user submits', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Top 20' }));
     expect(store.get(topNConfigAtom).limit).toBe(5);
     expect(store.get(topNRunRequestAtom)).toBe(0);
-    fireEvent.click(screen.getByRole('button', { name: '运行聚合' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run aggregation' }));
     expect(store.get(topNConfigAtom)).toEqual({ groupField: 'service_name', metric: 'COUNT', metricField: '', direction: 'DESC', limit: 20 });
     expect(store.get(topNEnabledAtom)).toBe(true);
     expect(store.get(topNRunRequestAtom)).toBe(1);
@@ -60,9 +60,9 @@ it('configures a common N without running until the user submits', () => {
 
 it.each(['0', '1.5', '10001', ''])('rejects invalid custom N %s', value => {
     const store = setup();
-    fireEvent.change(screen.getByRole('spinbutton', { name: '返回分组数量（N）' }), { target: { value: '20' } });
-    fireEvent.change(screen.getByRole('spinbutton', { name: '返回分组数量（N）' }), { target: { value } });
-    expect(screen.getByRole('button', { name: '运行聚合' })).toBeDisabled();
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Number of groups (N)' }), { target: { value: '20' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Number of groups (N)' }), { target: { value } });
+    expect(screen.getByRole('button', { name: 'Run aggregation' })).toBeDisabled();
     expect(store.get(topNRunRequestAtom)).toBe(0);
     const saved = Object.values(JSON.parse(localStorage.getItem('discover-top-n-preferences-v1')!)) as Array<{ limit: number }>;
     expect(saved[0].limit).toBe(20);
@@ -70,13 +70,13 @@ it.each(['0', '1.5', '10001', ''])('rejects invalid custom N %s', value => {
 
 it('runs a custom N with a numeric metric and Bottom ordering', () => {
     const store = setup();
-    fireEvent.change(screen.getByRole('spinbutton', { name: '返回分组数量（N）' }), { target: { value: '37' } });
-    fireEvent.keyDown(screen.getByRole('combobox', { name: '聚合方式' }), { key: 'ArrowDown' });
-    fireEvent.click(screen.getByText('平均值（AVG）', { exact: true }));
-    expect(screen.getByRole('combobox', { name: '指标字段' })).toBeInTheDocument();
-    fireEvent.keyDown(screen.getByRole('combobox', { name: '排序方向' }), { key: 'ArrowDown' });
-    fireEvent.click(screen.getByText('从低到高（Bottom）', { exact: true }));
-    fireEvent.click(screen.getByRole('button', { name: '运行聚合' }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Number of groups (N)' }), { target: { value: '37' } });
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Aggregation' }), { key: 'ArrowDown' });
+    fireEvent.click(screen.getByText('Average (AVG)', { exact: true }));
+    expect(screen.getByRole('combobox', { name: 'Metric field' })).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Sort direction' }), { key: 'ArrowDown' });
+    fireEvent.click(screen.getByText('Lowest to highest (Bottom)', { exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run aggregation' }));
     expect(store.get(topNConfigAtom)).toEqual({ groupField: 'service_name', metric: 'AVG', metricField: 'duration_ms', direction: 'ASC', limit: 37 });
     expect(store.get(topNRunRequestAtom)).toBe(1);
 });
@@ -84,7 +84,7 @@ it('runs a custom N with a numeric metric and Bottom ordering', () => {
 it('closes without enabling or running aggregation', () => {
     const store = setup();
     fireEvent.click(screen.getByRole('radio', { name: 'Top 100' }));
-    fireEvent.click(screen.getByRole('button', { name: '关闭' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(store.get(topNConfigAtom).limit).toBe(5);
     expect(store.get(topNRunRequestAtom)).toBe(0);
     expect(store.get(topNEnabledAtom)).toBe(false);

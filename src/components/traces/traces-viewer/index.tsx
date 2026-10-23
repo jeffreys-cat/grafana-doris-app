@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { formatDorisTime } from 'utils/time';
 import React, { useMemo } from 'react';
 import { Select, useTheme2, Pagination } from '@grafana/ui';
@@ -49,10 +50,10 @@ export const TraceView: React.FC<any> = React.memo(({ traces: propTraces, total 
                         ">
                       <div style="padding-bottom: 4px; border-bottom: 1px solid ${theme.isLight ? '#DFDFE0' : '#3F3F45'};">${[params.name]}</div>
                       <div style="padding-top:4px;display: flex;justify-content: space-between;"><span>Durations：</span><span style="font-family:DIN Alternate;font-size:14;font-weight:500;">${[
-                          `${params.value} ms` || 'No Data',
+                          `${params.value} ms` || t('No Data'),
                       ]}</span></div>
                       <div style="padding-top:4px;display: flex;justify-content: space-between;"><span>Spans：</span><span style="font-family:DIN Alternate;font-size:14;font-weight:500;">${[
-                          params.data.spans || 'No Data',
+                          params.data.spans || t('No Data'),
                       ]}</span></div>
                   </div>`;
                     return html;
@@ -60,13 +61,13 @@ export const TraceView: React.FC<any> = React.memo(({ traces: propTraces, total 
             },
             xAxis: {
                 type: 'category',
-                name: 'Time',
+                name: t('Time'),
                 data: traces.map(s => formatDorisTime(Number(s.time) * 1000, timeZone)),
                 axisLabel: { color: theme.colors.text.primary },
             },
             yAxis: {
                 type: 'value',
-                name: 'Duration (ms)',
+                name: t('Duration (ms)'),
                 axisLabel: { color: theme.colors.text.primary },
                 axisLine: { lineStyle: { color: theme.colors.text.secondary } },
             },
@@ -122,14 +123,14 @@ export const TraceView: React.FC<any> = React.memo(({ traces: propTraces, total 
                         align-items: center;
                     `}
                 >
-                    <span>Sort:</span>
-                    <Select
+                    <span>{t('Sort:')}</span>
+                    <Select placeholder={t('Choose')}
                         options={[
-                            { label: 'Most Recent', value: 'most-recent' },
-                            { label: 'Longest Duration', value: 'longest-duration' },
-                            { label: 'Shortest Duration', value: 'shortest-duration' },
-                            { label: 'Most Spans', value: 'most-spans' },
-                            { label: 'Least Spans', value: 'least-spans' },
+                            { label: t('Most Recent'), value: 'most-recent' },
+                            { label: t('Longest Duration'), value: 'longest-duration' },
+                            { label: t('Shortest Duration'), value: 'shortest-duration' },
+                            { label: t('Most Spans'), value: 'most-spans' },
+                            { label: t('Least Spans'), value: 'least-spans' },
                         ]}
                         value={sort}
                         onChange={option => {
@@ -158,8 +159,8 @@ export const TraceView: React.FC<any> = React.memo(({ traces: propTraces, total 
                         gap: 8px;
                     `}
                 >
-                    <div>{traces.length} Traces, </div>
-                    <div>Total {total}</div>
+                    <div>{t('{{count}} traces', { count: traces.length })}</div>
+                    <div>{t('Total {{count}}', { count: total })}</div>
                 </h3>
                 <Pagination currentPage={page} numberOfPages={Math.ceil(total / pageSize) || 1} onNavigate={toPage => { setPage(toPage); onPageChange?.(toPage); }} />
             </div>

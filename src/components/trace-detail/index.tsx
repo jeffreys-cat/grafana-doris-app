@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { formatShareTime, buildAbsoluteTimeRange } from 'utils/time';
 import { FieldType, LoadingState, usePluginContext } from '@grafana/data';
 import { PanelRenderer, logError } from '@grafana/runtime';
@@ -114,7 +115,7 @@ export default function TraceDetail(props: { onClose?: () => void; open: boolean
             {
                 href,
                 content: 'Logs',
-                title: 'Logs for this span',
+                title: t('Logs for this span'),
                 type: 'log',
                 field: {
                     name: 'span_id',
@@ -175,7 +176,7 @@ export default function TraceDetail(props: { onClose?: () => void; open: boolean
             const end = finiteStarts.length ? Math.max(...Array.from(starts as number[]).map((value, index) => Number(value) + Number(durations[index] || 0))) : Date.now();
             return (
                 <PanelRenderer
-                    title="trace panel"
+                    title={t('Trace panel')}
                     width={200}
                     height={300}
                     pluginId="traces"
@@ -196,13 +197,13 @@ export default function TraceDetail(props: { onClose?: () => void; open: boolean
         <>
             {open && (
                 <Drawer
-                    title="Trace Panel"
+                    title={t('Trace Panel')}
                     onClose={() => {
                         props?.onClose?.();
                     }}
                     size="lg"
                 >
-                    {loading ? <LoadingPlaceholder text={`Loading`} /> : renderTracePanel()}
+                    {loading ? <LoadingPlaceholder text={t('Loading')} /> : renderTracePanel()}
                 </Drawer>
             )}
         </>

@@ -18,6 +18,26 @@ Saved Queries requires a writable persistent storage directory, configured with
 See [Discover Saved Queries](docs/discover-saved-queries-zh.md) for usage,
 permissions, deployment, and backup instructions.
 
+### Language
+
+The plugin follows the effective language in Grafana's user preferences. Choose
+English or Simplified Chinese in Grafana settings, save, and refresh the page.
+English is the default and the fallback for missing or unsupported languages and
+missing translations. The browser language does not override Grafana settings.
+
+Language support covers Discover, Traces, app configuration, and the Doris
+datasource configuration and query editor. SQL/Lucene syntax, field names, log
+content, saved query names, and original backend errors retain their original
+values. Grafana's own controls and static plugin navigation are managed by
+Grafana. Grafana 10.4 and later remain supported.
+
+Translations are bundled locally in `src/i18n/locales/en-US.json` and
+`src/i18n/locales/zh-CN.json`, using an isolated plugin translation instance.
+Keep both catalogs' keys and interpolation parameters in sync. Use `t` from
+`i18n` for plugin text and resolve option labels when used; do not translate
+persisted values or query syntax. The catalog tests check parity, fallback,
+interpolation, and plural forms.
+
 ### Frontend
 
 1. Install dependencies

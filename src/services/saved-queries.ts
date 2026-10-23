@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { getBackendSrv } from '@grafana/runtime';
 import { lastValueFrom } from 'rxjs';
 import { DiscoverShareState } from 'utils/discover-share-state';
@@ -24,13 +25,13 @@ async function request<T>(method: string, path = '', data?: SavedQueryInput): Pr
         validateSavedQueryState(data.state);
     }
     if (data?.name !== undefined && (!data.name.trim() || Array.from(data.name.trim()).length > 120)) {
-        throw new Error('Name must contain 1–120 characters');
+        throw new Error(t('Name must contain 1–120 characters'));
     }
     if (data?.description && Array.from(data.description.trim()).length > 2000) {
-        throw new Error('Description exceeds 2000 characters');
+        throw new Error(t('Description exceeds 2000 characters'));
     }
     if (data && new Blob([JSON.stringify(data)]).size > 1024 * 1024) {
-        throw new Error('Saved query exceeds 1 MiB');
+        throw new Error(t('Saved query exceeds 1 MiB'));
     }
     try {
         const response = await lastValueFrom(
@@ -47,8 +48,8 @@ async function request<T>(method: string, path = '', data?: SavedQueryInput): Pr
     } catch (error: any) {
         throw new Error(
             error?.status === 409
-                ? 'This query changed. Reload it before trying again; your changes have not been saved.'
-                : error?.data?.message || error?.message || 'Saved queries are unavailable',
+                ? t('This query changed. Reload it before trying again; your changes have not been saved.')
+                : error?.data?.message || error?.message || t('Saved queries are unavailable'),
         );
     }
 }

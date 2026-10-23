@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import React from 'react';
 import { useAtomValue } from 'jotai';
 import { Alert, useTheme2 } from '@grafana/ui';
@@ -9,20 +10,20 @@ export default function TopNResults({ loading, hasRun, error }: { loading: boole
     const rows = useAtomValue(topNRowsAtom);
     const config = useAtomValue(topNConfigAtom);
     const theme = useTheme2();
-    const metricLabel = config.metric === 'COUNT' ? '记录数' : `${config.metric}(${config.metricField})`;
+    const metricLabel = config.metric === 'COUNT' ? t('Record count') : `${config.metric}(${config.metricField})`;
     if (!hasRun) {
         return null;
     }
     if (error) {
         return (
-            <Alert title="Top N 统计失败" severity="error">
+            <Alert title={t('Top N statistics failed')} severity="error">
                 {error.message}
             </Alert>
         );
     }
     return (
         <section
-            aria-label="Top N 聚合结果"
+            aria-label={t('Top N aggregation results')}
             data-testid="discover-top-n-results"
             className={css`
                 margin: 0;
@@ -45,7 +46,7 @@ export default function TopNResults({ loading, hasRun, error }: { loading: boole
                         font-size: ${theme.typography.h5.fontSize};
                     `}
                 >
-                    聚合结果
+                    {t('Aggregation results')}
                 </h4>
                 <span
                     className={css`
@@ -53,7 +54,7 @@ export default function TopNResults({ loading, hasRun, error }: { loading: boole
                         font-size: ${theme.typography.bodySmall.fontSize};
                     `}
                 >
-                    {loading ? '统计中' : `${rows.length.toLocaleString()} 个分组`}
+                    {loading ? t('Calculating') : t('{{count}} groups', { count: rows.length })}
                 </span>
             </div>
             <div
@@ -65,7 +66,7 @@ export default function TopNResults({ loading, hasRun, error }: { loading: boole
                     overflow-wrap: anywhere;
                 `}
             >
-                {config.direction === 'ASC' ? 'Bottom' : 'Top'} {config.limit} · {config.groupField} · {metricLabel}
+                {config.direction === 'ASC' ? t('Bottom') : t('Top')} {config.limit} · {config.groupField} · {metricLabel}
             </div>
             <div
                 className={css`
@@ -141,7 +142,7 @@ export default function TopNResults({ loading, hasRun, error }: { loading: boole
                         font-size: 14px;
                     `}
                 >
-                    正在统计…
+                    {t('Calculating…')}
                 </div>
             ) : rows.length === 0 ? (
                 <div
@@ -150,7 +151,7 @@ export default function TopNResults({ loading, hasRun, error }: { loading: boole
                         font-size: 14px;
                     `}
                 >
-                    没有匹配的分组
+                    {t('No matching groups')}
                 </div>
             ) : null}
         </section>

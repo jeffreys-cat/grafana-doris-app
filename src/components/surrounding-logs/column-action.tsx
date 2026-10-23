@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { IconButton } from '@grafana/ui';
 import { useAtom, useAtomValue } from 'jotai';
 import React from 'react';
@@ -12,7 +13,7 @@ export function SurroundingColumnAction({ fieldName }: { fieldName: string }) {
     return (
         <IconButton
             name="plus"
-            tooltip={selected ? 'Remove From Table' : 'Add To Table'}
+            tooltip={selected ? t('Remove From Table') : t('Add To Table')}
             onClick={event => {
                 event.stopPropagation();
                 if (selected) {

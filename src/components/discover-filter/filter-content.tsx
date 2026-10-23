@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { useAtom, useAtomValue } from 'jotai';
 import React from 'react';
 import { nanoid } from 'nanoid';
@@ -238,12 +239,12 @@ export function FilterContent({ onHide, dataFilterValue }: { onHide: () => void;
             return (
                 <div className={rowStyle}>
                     <div className={colStyle}>
-                        <Field label="Min Value" invalid={!!errors.minValue} error={errors.minValue?.message}>
+                        <Field label={t('Min Value')} invalid={!!errors.minValue} error={errors.minValue?.message}>
                             <Input {...register('minValue', { required: 'Enter the minValue' })} />
                         </Field>
                     </div>
                     <div className={colStyle}>
-                        <Field label="Max Value" invalid={!!errors.maxValue} error={errors.maxValue?.message}>
+                        <Field label={t('Max Value')} invalid={!!errors.maxValue} error={errors.maxValue?.message}>
                             <Input {...register('maxValue', { required: 'Enter the maxValue' })} />
                         </Field>
                     </div>
@@ -262,16 +263,16 @@ export function FilterContent({ onHide, dataFilterValue }: { onHide: () => void;
         ) {
             return (
                 <>
-                    <Field label="Value" invalid={!!errors.value} error={(errors.value as any)?.message}>
+                    <Field label={t('Value')} invalid={!!errors.value} error={(errors.value as any)?.message}>
                         {/* Allow empty string as a valid value: treat undefined as missing but accept '' */}
-                        <Input {...register('value', { validate: (v: any) => v !== undefined || 'Enter the value' })} />
+                        <Input {...register('value', { validate: (v: any) => v !== undefined || t('Enter the value') })} />
                     </Field>
                 </>
             );
         }
         if (currentOperator === 'in' || currentOperator === 'not in') {
             return (
-                <Field label="Value" invalid={!!errors.value} error={(errors.value as any)?.message}>
+                <Field label={t('Value')} invalid={!!errors.value} error={(errors.value as any)?.message}>
                     <Controller
                         name="value"
                         control={control}
@@ -284,7 +285,7 @@ export function FilterContent({ onHide, dataFilterValue }: { onHide: () => void;
                                     label: item.value,
                                     value: item.value,
                                 }))}
-                                placeholder="Select value"
+                                placeholder={t('Select value')}
                                 onChange={selected => field.onChange(selected ? selected.map((s: any) => s.value) : [])}
                                 value={tableFieldValue
                                     .filter(item => Array.isArray(field.value) && field.value.includes(item.value))
@@ -305,14 +306,14 @@ export function FilterContent({ onHide, dataFilterValue }: { onHide: () => void;
         <form onSubmit={handleSubmit(onSubmit)} className={containerStyle}>
             <div className={rowStyle}>
                 <div className={colStyle}>
-                    <Field label="Columns" invalid={!!errors.field} error={(errors.field as any)?.message}>
+                    <Field label={t('Columns')} invalid={!!errors.field} error={(errors.field as any)?.message}>
                         <Controller
                             name="field"
                             control={control}
                             rules={{ required: 'Select Field' }}
 
                             render={({ field }) => (
-                                <Select
+                                <Select placeholder={t('Choose')}
                                     {...field}
                                     onChange={(selected) => {
                                         // Only update tableFieldValue when we actually have table data and a selected field
@@ -342,13 +343,13 @@ export function FilterContent({ onHide, dataFilterValue }: { onHide: () => void;
                     </Field>
                 </div>
                 <div className={colStyle}>
-                    <Field label="Operator" invalid={!!errors.operator} error={(errors.operator as any)?.message}>
+                    <Field label={t('Operator')} invalid={!!errors.operator} error={(errors.operator as any)?.message}>
                         <Controller
                             name="operator"
                             control={control}
                             rules={{ required: 'Select Operator' }}
                             render={({ field }) => (
-                                <Select
+                                <Select placeholder={t('Choose')}
                                     {...field}
                                     options={operatorOptions}
                                 />
@@ -361,7 +362,7 @@ export function FilterContent({ onHide, dataFilterValue }: { onHide: () => void;
             {renderFiledComponent()}
 
             <InlineFieldRow>
-                <InlineField label="Custom Label">
+                <InlineField label={t('Custom Label')}>
                     <Controller name="showLabel" control={control} render={({ field }) => <InlineSwitch {...field} />}></Controller>
                 </InlineField>
             </InlineFieldRow>
@@ -380,9 +381,9 @@ export function FilterContent({ onHide, dataFilterValue }: { onHide: () => void;
                         onHide();
                     }}
                 >
-                    Cancel
+                    {t('Cancel')}
                 </Button>
-                <Button type="submit">Confirm</Button>
+                <Button type="submit">{t('Confirm')}</Button>
             </div>
         </form>
     );

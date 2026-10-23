@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import React, { useEffect, useRef, useState } from 'react';
 import { getFieldIcon } from 'utils/icon';
 import { IconButton, Tooltip, useTheme2 } from '@grafana/ui';
@@ -88,7 +89,7 @@ export default function FieldItem({ depth = 0, searchActive = '', showChildren =
                 `}
             >
                 <div className="flex min-w-0 items-center">
-                    {hasChildren ? <IconButton name={isExpanded ? 'angle-down' : 'angle-right'} size="sm" tooltip={isExpanded ? 'Collapse' : 'Expand'} onClick={() => setExpanded(value => !value)} /> : depth > 0 ? <span className="w-6" /> : null}
+                    {hasChildren ? <IconButton name={isExpanded ? 'angle-down' : 'angle-right'} size="sm" tooltip={isExpanded ? t('Collapse') : t('Expand')} onClick={() => setExpanded(value => !value)} /> : depth > 0 ? <span className="w-6" /> : null}
                     <div>{getFieldIcon(field.Type)}</div>
                     <div className={css`display:flex; margin-left:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:${depth ? 170 : 150}px;`}>
                         {depth ? field.label || field.Field : field.Field}
@@ -97,8 +98,8 @@ export default function FieldItem({ depth = 0, searchActive = '', showChildren =
                 {hasChildren ? <span className={css`margin-left:8px; color:${theme.colors.text.secondary}; font-size:12px;`}>{field.leafCount || 0}</span> : null}
                 {!selected && <div className={cn('icon-wrapper', css`margin-left:auto; display:flex; align-items:center; color:${theme.colors.text.secondary}; &:hover { color:${theme.colors.text.primary}; }`)}>
                     {props.type === 'add' ? <>
-                        <IconButton name="plus" tooltip="Add to table" onClick={e => { props.onAdd?.(field); e.stopPropagation(); }} />
-                    </> : <IconButton name="minus" tooltip="Delete from table" onClick={e => { props.onRemove?.(field); e.stopPropagation(); }} />}
+                        <IconButton name="plus" tooltip={t('Add to table')} onClick={e => { props.onAdd?.(field); e.stopPropagation(); }} />
+                    </> : <IconButton name="minus" tooltip={t('Delete from table')} onClick={e => { props.onRemove?.(field); e.stopPropagation(); }} />}
                 </div>
                 }
             </div>
@@ -151,7 +152,7 @@ export default function FieldItem({ depth = 0, searchActive = '', showChildren =
                         font-size: 12px;
                     `}
                 >
-                    暂无可发现的内部字段
+                    {t('No discoverable nested fields')}
                 </div>
             ))}
         </div>

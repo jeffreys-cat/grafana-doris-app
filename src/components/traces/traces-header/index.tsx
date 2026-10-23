@@ -1,4 +1,5 @@
 'use client';
+import { t } from 'i18n';
 import React, { useEffect } from 'react';
 import dayjs from 'dayjs';
 import { DiscoverHeaderSearch } from './discover-header.style';
@@ -517,15 +518,15 @@ export default function TracesHeader() {
         >
             <DiscoverHeaderSearch>
                 <Field
-                    label="Datasource"
-                    description={datasourcePermissionsError ? 'Failed to load team datasource permissions' : undefined}
+                    label={t('Datasource')}
+                    description={datasourcePermissionsError ? t('Failed to load team datasource permissions') : undefined}
                 >
                     {/* filter 这个版本无效 */}
                     <DataSourcePicker
                         width={20}
                         type={SUPPORTED_DATASOURCE_TYPES}
                         current={selectedDatasource}
-                        placeholder="Choose"
+                        placeholder={t('Choose')}
                         noDefault
                         disabled={datasourcePermissionsLoading || allowedDatasources.length === 0}
                         isLoading={datasourcePermissionsLoading}
@@ -540,8 +541,8 @@ export default function TracesHeader() {
                     />
                 </Field>
                 {/* 需要从数据源中获取库表信息 */}
-                <Field label="Database" style={{ marginLeft: 8 }}>
-                    <Select
+                <Field label={t('Database')} style={{ marginLeft: 8 }}>
+                    <Select placeholder={t('Choose')}
                         width={15}
                         options={databases}
                         value={discoverCurrent.database}
@@ -553,8 +554,8 @@ export default function TracesHeader() {
                     ></Select>
                 </Field>
 
-                <Field label="Table" style={{ marginLeft: 8 }}>
-                    <Select
+                <Field label={t('Table')} style={{ marginLeft: 8 }}>
+                    <Select placeholder={t('Choose')}
                         options={tables}
                         width={15}
                         value={currentTable}
@@ -568,7 +569,7 @@ export default function TracesHeader() {
             </DiscoverHeaderSearch>
             {!searchFocus && (
                 <>
-                    <Field label="Time Field">
+                    <Field label={t('Time Field')}>
                         <Select
                             value={currentTimeField}
                             options={timeFields}
@@ -581,10 +582,10 @@ export default function TracesHeader() {
                                     timeField: selectdbTimeFiled.value,
                                 });
                             }}
-                            placeholder={'Time Field'}
+                            placeholder={t('Time Field')}
                         />
                     </Field>
-                    <Field label="Time Range" className={timeRangeFieldClass} style={{ marginLeft: 8, marginRight: 8 }}>
+                    <Field label={t('Time Range')} className={timeRangeFieldClass} style={{ marginLeft: 8, marginRight: 8 }}>
                         <TimeRangeInput
                             hideTimeZone={false}
                             timeZone={timeZone}

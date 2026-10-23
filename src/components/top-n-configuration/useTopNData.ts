@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { useEffect, useState } from 'react';
 import { useAtomValue, useSetAtom, useStore } from 'jotai';
 import { Subscription } from 'rxjs';
@@ -64,7 +65,7 @@ export function useTopNData(fieldName: string) {
         };
         const run = async () => {
             if (!datasource || !database || !table || !timeField || !dates[0] || !dates[1]) {
-                throw new Error('请先选择数据源、表、时间字段和时间范围');
+                throw new Error(t('Select a datasource, table, time field, and time range first'));
             }
             const luceneWhere = searchType === 'Lucene' ? await buildLuceneWhereClause() : undefined;
             if (!active) {

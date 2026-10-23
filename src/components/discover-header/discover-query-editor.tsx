@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import { css } from '@emotion/css';
@@ -135,7 +136,7 @@ export default function DiscoverQueryEditor({ mode, onQuerying }: Props) {
     return (
         <div
             style={{ minWidth: 0, width: '100%' }}
-            title={mode === 'lucene' ? 'VARIANT properties use exact value matching; searchable paths come from sampled data.' : undefined}
+            title={mode === 'lucene' ? t('VARIANT properties use exact value matching; searchable paths come from sampled data.') : undefined}
         >
             <CodeEditor
                 language={mode === 'sql' ? 'sql' : 'plaintext'}

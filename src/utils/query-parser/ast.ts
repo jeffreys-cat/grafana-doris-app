@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import * as lucene from '@hyperdx/lucene';
 import { logWarning } from '@grafana/runtime';
 import { decodeSpecialTokens, encodeSpecialTokens, encodeVariantLiteralFieldPaths, normalizeLuceneSingleQuotedValues } from './tokenUtils';
@@ -49,19 +50,19 @@ async function nodeTerm(node: lucene.Node, serializer: Serializer): Promise<stri
     if ((node as lucene.NodeTerm).term != null) {
         const nodeTermInstance = node as lucene.NodeTerm;
         if (nodeTermInstance.regex) {
-            throw new Error('Lucene regular-expression queries are not supported.');
+            throw new Error(t('Lucene regular-expression queries are not supported.'));
         }
         if (nodeTermInstance.similarity != null) {
-            throw new Error('Lucene fuzzy queries are not supported.');
+            throw new Error(t('Lucene fuzzy queries are not supported.'));
         }
         if (nodeTermInstance.proximity != null) {
-            throw new Error('Lucene proximity queries are not supported.');
+            throw new Error(t('Lucene proximity queries are not supported.'));
         }
         if (nodeTermInstance.boost != null) {
-            throw new Error('Lucene boost queries are not supported.');
+            throw new Error(t('Lucene boost queries are not supported.'));
         }
         if (nodeTermInstance.term.includes('?')) {
-            throw new Error('Lucene single-character wildcards (?) are not supported.');
+            throw new Error(t('Lucene single-character wildcards (?) are not supported.'));
         }
         let term = decodeSpecialTokens(nodeTermInstance.term);
         if (isImplicitField && nodeTermInstance.prefix === '-') {
@@ -126,7 +127,7 @@ async function nodeTerm(node: lucene.Node, serializer: Serializer): Promise<stri
         return serializer.range(field, rangedTerm.term_min, rangedTerm.term_max, isNegatedField);
     }
 
-    throw new Error(`Unexpected Node type. ${node}`);
+    throw new Error(t('Unexpected Node type. {{node}}', { node }));
 }
 
 async function serialize(ast: lucene.AST | lucene.Node, serializer: Serializer): Promise<string> {

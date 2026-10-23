@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Dayjs } from 'dayjs';
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
@@ -680,7 +681,7 @@ export function useDiscoverData() {
                 next: ({ data, ok }: any) => {
                     callback && callback(data.results.getTableDataTrace.status);
                     if (!ok) {
-                        message.error('Failed to request trace');
+                        message.error(t('Failed to request trace'));
                         return;
                     }
                     const formattedData = formatTracesResData(data.results.getTableDataTrace.frames[0]);
@@ -691,7 +692,7 @@ export function useDiscoverData() {
                     setTraceData([]);
                     logError(toError(err), { source: 'useDiscoverData', action: 'getTraceData' });
                     callback && callback(err.status);
-                    message.error('Failed to request trace');
+                    message.error(t('Failed to request trace'));
                     setTraceData(null);
                 },
             });

@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { defer, lastValueFrom } from 'rxjs';
 import { getBackendSrv } from '@grafana/runtime';
 import { getFieldStatisticsSummarySQL, getFieldStatisticsTopValuesSQL, getQueryTableChartsSQL, getQueryTableResultCountSQL, getQueryTableResultSQL, getSurroundingSQL, getTopNQuerySQL } from './sql';
@@ -161,7 +162,7 @@ export function getSurroundingDataWithWindow(payload: any) {
             response = await lastValueFrom(getSurroundingDataService({ ...payload, windowHours }));
             const result = response?.data?.results?.getSurroundingData;
             if (!response?.ok || result?.error || result?.status >= 400) {
-                throw new Error(result?.error || 'Surrounding logs query failed');
+                throw new Error(result?.error || t('Surrounding logs query failed'));
             }
             const count = result?.frames?.reduce((total: number, frame: any) => total + (frame.data?.values?.[0]?.length || 0), 0) || 0;
             if (count >= Number(payload.pageSize)) {

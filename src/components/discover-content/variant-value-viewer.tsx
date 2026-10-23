@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { css } from '@emotion/css';
 import { IconButton, useTheme2 } from '@grafana/ui';
 import React, { useMemo, useState } from 'react';
@@ -16,7 +17,7 @@ function isStructuredJsonValue(value: unknown): value is JsonValue[] | { [key: s
 }
 
 function getNodeSummary(value: JsonValue[] | { [key: string]: JsonValue }) {
-    return Array.isArray(value) ? `Array (${value.length})` : `Object (${Object.keys(value).length})`;
+    return Array.isArray(value) ? t('Array ({{count}})', { count: value.length }) : t('Object ({{count}})', { count: Object.keys(value).length });
 }
 
 function VariantTreeNode({
@@ -131,8 +132,8 @@ export function VariantValueViewer({ value, className, rootName = 'VARIANT' }: V
                 <IconButton
                     name={allExpanded ? 'angle-double-up' : 'angle-double-down'}
                     size="md"
-                    tooltip={allExpanded ? '收起全部' : '展开全部'}
-                    aria-label={allExpanded ? `收起全部 ${rootName} 字段` : `展开全部 ${rootName} 字段`}
+                    tooltip={allExpanded ? t('Collapse all') : t('Expand all')}
+                    aria-label={allExpanded ? t('Collapse all {{field}} fields', { field: rootName }) : t('Expand all {{field}} fields', { field: rootName })}
                     onClick={() => setAllExpanded(current => !current)}
                 />
             </div>

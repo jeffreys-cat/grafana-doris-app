@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import React, { useEffect, useRef } from 'react';
 import { css } from '@emotion/css';
 import { Drawer, IconButton, LoadingPlaceholder, useTheme2 } from '@grafana/ui';
@@ -115,7 +116,7 @@ export default function FieldStatistics() {
                             return;
                         }
                         setLoading(false);
-                        setError(requestError instanceof Error ? requestError : new Error(String(requestError?.message || 'Field statistics request failed')));
+                        setError(requestError instanceof Error ? requestError : new Error(String(requestError?.message || t('Field statistics request failed'))));
                         const queryError = createDiscoverQueryError(requestError, { source: 'fieldStatistics', searchType, searchValue });
                         setQueryState(current => ({ ...current, auxiliaryErrors: [...current.auxiliaryErrors.filter(item => item.source !== 'fieldStatistics'), queryError] }));
                     },
@@ -125,7 +126,7 @@ export default function FieldStatistics() {
                     return;
                 }
                 setLoading(false);
-                setError(requestError instanceof Error ? requestError : new Error(String(requestError?.message || 'Field statistics request failed')));
+                setError(requestError instanceof Error ? requestError : new Error(String(requestError?.message || t('Field statistics request failed'))));
             }
         };
         void run();
@@ -139,30 +140,30 @@ export default function FieldStatistics() {
     const percentage = result?.totalCount ? (result.nonNullCount * 100) / result.totalCount : 0;
     const maxTopCount = Math.max(...(result?.topValues.map(item => item.count) || []), 1);
 
-    return <Drawer title={`字段统计：${field.Field}`} size="md" onClose={close}>
+    return <Drawer title={t('Field statistics: {{field}}', { field: field.Field })} size="md" onClose={close}>
         <div className={css`display:grid; gap:16px; padding: 0 8px 16px;`}>
             <div className={css`color:${theme.colors.text.secondary}; font-size:12px;`}>
-                <div>{field.Type || 'Unknown type'} · 全部匹配数据</div>
-                <div>统计当前时间范围与查询条件下的全部匹配记录，不限于卡片预览的最多 500 条样本。</div>
+                <div>{field.Type || t('Unknown type')} {t('· All matching data')}</div>
+                <div>{t('Statistics cover all matching records in the current time range and query, beyond the card preview\'s 500-record sample.')}</div>
             </div>
-            {loading ? <LoadingPlaceholder text="Loading field statistics" /> : null}
+            {loading ? <LoadingPlaceholder text={t('Loading field statistics')} /> : null}
             {error ? <div role="alert" className={css`color:${theme.colors.error.text};`}>{error.message}</div> : null}
             {result ? <>
-                <section><h4>Non-null values</h4><strong>{result.nonNullCount.toLocaleString()} / {result.totalCount.toLocaleString()} ({percentage.toFixed(1)}%)</strong></section>
-                <section><h4>Approximate unique values</h4><strong>≈ {result.approximateDistinctCount.toLocaleString()}</strong></section>
-                <section><h4>Top values</h4>
+                <section><h4>{t('Non-null values')}</h4><strong>{result.nonNullCount.toLocaleString()} / {result.totalCount.toLocaleString()} ({percentage.toFixed(1)}%)</strong></section>
+                <section><h4>{t('Approximate unique values')}</h4><strong>≈ {result.approximateDistinctCount.toLocaleString()}</strong></section>
+                <section><h4>{t('Top values')}</h4>
                     <div className={css`display:grid; gap:10px;`}>
                         {result.topValues.length ? result.topValues.map((item, index) => {
                             const display = formatFieldDisplayValue(item.value, 'compact');
                             const filterValue = typeof item.value === 'string' || typeof item.value === 'number' || typeof item.value === 'boolean' ? item.value : undefined;
                             return <div key={`${display}-${index}`} className={css`display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:8px; align-items:center;`}>
                                 <div><div className={css`overflow:hidden; text-overflow:ellipsis; white-space:nowrap;`} title={display}>{display}</div><div className={css`height:5px; background:${theme.colors.background.secondary}; margin-top:4px;`}><div className={css`height:100%; background:${theme.colors.primary.main};`} style={{ width: `${(item.count * 100) / maxTopCount}%` }} /></div></div>
-                                <div className={css`display:flex; align-items:center; gap:4px;`}><span>{item.count.toLocaleString()}</span>{filterValue !== undefined ? <><IconButton name="plus-circle" tooltip="Include value" onClick={() => setFilters(current => [...current, { fieldName: field.Field, variantPath: field.variantPath, variantRootType: field.variantRootType, fieldType: field.Type, operator: '=', value: [filterValue], id: nanoid() }])} /><IconButton name="minus-circle" tooltip="Exclude value" onClick={() => setFilters(current => [...current, { fieldName: field.Field, variantPath: field.variantPath, variantRootType: field.variantRootType, fieldType: field.Type, operator: '!=', value: [filterValue], id: nanoid() }])} /></> : null}</div>
+                                <div className={css`display:flex; align-items:center; gap:4px;`}><span>{item.count.toLocaleString()}</span>{filterValue !== undefined ? <><IconButton name="plus-circle" tooltip={t('Include value')} onClick={() => setFilters(current => [...current, { fieldName: field.Field, variantPath: field.variantPath, variantRootType: field.variantRootType, fieldType: field.Type, operator: '=', value: [filterValue], id: nanoid() }])} /><IconButton name="minus-circle" tooltip={t('Exclude value')} onClick={() => setFilters(current => [...current, { fieldName: field.Field, variantPath: field.variantPath, variantRootType: field.variantRootType, fieldType: field.Type, operator: '!=', value: [filterValue], id: nanoid() }])} /></> : null}</div>
                             </div>;
-                        }) : <span>No non-null values</span>}
+                        }) : <span>{t('No non-null values')}</span>}
                     </div>
                 </section>
-                {isContinuousType(field.Type) ? <section><h4>Range and distribution</h4><div>Min: {formatFieldDisplayValue(result.min)} · Max: {formatFieldDisplayValue(result.max)}</div>
+                {isContinuousType(field.Type) ? <section><h4>{t('Range and distribution')}</h4><div>{t('Min:')}{formatFieldDisplayValue(result.min)} {t('· Max:')}{formatFieldDisplayValue(result.max)}</div>
                     <div className={css`display:flex; align-items:end; gap:2px; height:120px; margin-top:12px;`}>
                         {result.histogram.map((bucket, index) => <div key={`${bucket.lower}-${index}`} title={`${bucket.lower} – ${bucket.upper}: ${bucket.count}`} className={css`flex:1; min-width:4px; background:${theme.colors.primary.main};`} style={{ height: `${result.nonNullCount ? Math.max(2, (bucket.count * 100) / result.nonNullCount) : 0}%` }} />)}
                     </div>

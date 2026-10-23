@@ -50,3 +50,21 @@ describe('Doris password authentication', () => {
         expect(screen.getByPlaceholderText('Doris password')).toHaveValue('');
     });
 });
+
+it('translates standalone datasource configuration without changing saved values', async () => {
+    const { pluginI18n } = await import('i18n');
+    await pluginI18n.changeLanguage('zh-CN');
+    try {
+        const props = {
+            options: { jsonData: { enableSso: false, username: 'reader', host: 'doris.example' }, secureJsonFields: {}, secureJsonData: {} },
+            onOptionsChange: jest.fn(),
+        } as unknown as Props;
+        render(<ConfigEditor {...props} />);
+        expect(screen.getByText('Doris 用户名')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('Doris 密码')).toBeInTheDocument();
+        expect(screen.getByDisplayValue('reader')).toBeInTheDocument();
+        expect(screen.getByDisplayValue('doris.example')).toBeInTheDocument();
+    } finally {
+        await pluginI18n.changeLanguage('en-US');
+    }
+});

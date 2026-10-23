@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     Alert as GrafanaAlert,
@@ -239,7 +240,7 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
                 setBaseline(snapshotKey(store.get(discoverSnapshotAtom)));
                 setOpen(false);
             } else if (mounted.current) {
-                setError('The query could not be restored. See the details in Discover.');
+                setError(t('The query could not be restored. See the details in Discover.'));
             }
         } catch (error) {
             if (mounted.current) {
@@ -301,10 +302,10 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
     return (
         <>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                <Tooltip content={active ? `Save query: ${active.name}${dirty ? ' (Modified)' : ''}` : 'Save query'} show={isDialogOpen ? false : undefined}>
+                <Tooltip content={active ? t('Save query: {{name}}{{modified}}', { name: active.name, modified: dirty ? t(' (Modified)') : '' }) : t('Save query')} show={isDialogOpen ? false : undefined}>
                     <span style={{ display: 'inline-flex', position: 'relative' }}>
                         <GrafanaButton
-                            aria-label="Save query"
+                            aria-label={t('Save query')}
                             variant="secondary"
                             icon="save"
                             onClick={event => {
@@ -316,7 +317,7 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
                         {dirty && (
                             <span
                                 role="status"
-                                aria-label="Unsaved query changes"
+                                aria-label={t('Unsaved query changes')}
                                 style={{
                                     position: 'absolute',
                                     top: 3,
@@ -331,13 +332,13 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
                         )}
                     </span>
                 </Tooltip>
-                <Tooltip content="Saved queries" show={open ? false : undefined}>
-                    <GrafanaButton aria-label="Saved queries" variant="secondary" icon="folder-open" onClick={() => setOpen(true)} />
+                <Tooltip content={t('Saved queries')} show={open ? false : undefined}>
+                    <GrafanaButton aria-label={t('Saved queries')} variant="secondary" icon="folder-open" onClick={() => setOpen(true)} />
                 </Tooltip>
             </div>
             {open && (
                 <Drawer
-                    title="Saved queries"
+                    title={t('Saved queries')}
                     subtitle="Shared with members of this Grafana organization. Data access uses your own permissions."
                     size="md"
                     onClose={() => {
@@ -350,14 +351,14 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
                         <GrafanaInput
                             ref={searchInput}
                             type="search"
-                            aria-label="Search saved queries"
-                            placeholder="Search by name"
+                            aria-label={t('Search saved queries')}
+                            placeholder={t('Search by name')}
                             prefix={<Icon name="search" />}
                             suffix={
                                 search ? (
                                     <IconButton
                                         name="times"
-                                        aria-label="Clear search"
+                                        aria-label={t('Clear search')}
                                         onClick={() => {
                                             setSearch('');
                                             setPage(1);
@@ -375,20 +376,20 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
                         {error && (
                             <GrafanaAlert severity="error" title={error} bottomSpacing={0}>
                                 <GrafanaButton variant="secondary" size="sm" onClick={() => setReload(n => n + 1)}>
-                                    Retry
+                                    {t('Retry')}
                                 </GrafanaButton>
                             </GrafanaAlert>
                         )}
                         {loading ? (
                             <div role="status">
-                                <LoadingPlaceholder text="Loading saved queries…" />
+                                <LoadingPlaceholder text={t('Loading saved queries…')} />
                             </div>
                         ) : (
                             <>
                                 {!error && items.length === 0 && (
                                     <div className={styles.empty}>
                                         <EmptySearchResult>
-                                            {search ? 'No saved queries match your search.' : 'No saved queries yet. Use Save query to save your current query.'}
+                                            {search ? t('No saved queries match your search.') : t('No saved queries yet. Use Save query to save your current query.')}
                                         </EmptySearchResult>
                                     </div>
                                 )}
@@ -396,11 +397,11 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
                                     <>
                                         <div className={styles.listSummary}>
                                             <span>
-                                                {total} saved {total === 1 ? 'query' : 'queries'}
+                                                {t('{{count}} saved queries', { count: total })}
                                             </span>
-                                            <span>Updated most recently</span>
+                                            <span>{t('Updated most recently')}</span>
                                         </div>
-                                        <ul aria-label="Saved queries results" className={styles.list}>
+                                        <ul aria-label={t('Saved queries results')} className={styles.list}>
                                             {items.map(item => (
                                                 <li key={item.id}>
                                                     <Card
@@ -413,7 +414,7 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
                                                     >
                                                         <Card.Heading className={styles.heading}>{item.name}</Card.Heading>
                                                         <Card.Tags className={styles.tags}>
-                                                            <Tag name={item.state?.mode || 'Unknown mode'} />
+                                                            <Tag name={item.state?.mode || t('Unknown mode')} />
                                                         </Card.Tags>
                                                         {item.description && <Card.Description className={styles.description}>{item.description}</Card.Description>}
                                                         <Card.Meta className={styles.metadata}>
@@ -437,7 +438,7 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
                                                                             setEditor({ kind: 'rename', name: item.name, description: item.description, target: item });
                                                                         }}
                                                                     >
-                                                                        Rename
+                                                                        {t('Rename')}
                                                                     </GrafanaButton>
                                                                 )}
                                                                 {item.canDelete && (
@@ -452,7 +453,7 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
                                                                             setConfirmation({ kind: 'delete', target: item });
                                                                         }}
                                                                     >
-                                                                        Delete
+                                                                        {t('Delete')}
                                                                     </GrafanaButton>
                                                                 )}
                                                             </Card.Actions>
@@ -461,7 +462,7 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
                                                 </li>
                                             ))}
                                         </ul>
-                                        <nav aria-label="Saved queries pagination">
+                                        <nav aria-label={t('Saved queries pagination')}>
                                             <Pagination
                                                 currentPage={page}
                                                 numberOfPages={Math.max(1, Math.ceil(total / 20))}
@@ -479,7 +480,7 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
             )}
             {confirmation && (
                 <GrafanaModal
-                    title={confirmation.kind === 'delete' ? `Delete “${confirmation.target.name}”?` : 'Discard unsaved query changes?'}
+                    title={confirmation.kind === 'delete' ? t('Delete “{{name}}”?', { name: confirmation.target.name }) : t('Discard unsaved query changes?')}
                     isOpen
                     trapFocus
                     className={styles.modal}
@@ -493,12 +494,12 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
                 >
                     <p>
                         {confirmation.kind === 'delete'
-                            ? 'This removes the saved query for everyone in this organization.'
-                            : 'Loading this query replaces the current query and display settings.'}
+                            ? t('This removes the saved query for everyone in this organization.')
+                            : t('Loading this query replaces the current query and display settings.')}
                     </p>
                     <GrafanaModal.ButtonRow>
                         <GrafanaButton ref={confirmationCancel} variant="secondary" disabled={busy} onClick={() => setConfirmation(undefined)}>
-                            Cancel
+                            {t('Cancel')}
                         </GrafanaButton>
                         <GrafanaButton
                             variant={confirmation.kind === 'delete' ? 'destructive' : 'primary'}
@@ -506,14 +507,14 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
                             icon={busy ? 'spinner' : undefined}
                             onClick={() => void confirm()}
                         >
-                            {confirmation.kind === 'delete' ? (busy ? 'Deleting…' : 'Delete') : busy ? 'Loading…' : 'Discard and load'}
+                            {confirmation.kind === 'delete' ? (busy ? t('Deleting…') : t('Delete')) : busy ? t('Loading…') : t('Discard and load')}
                         </GrafanaButton>
                     </GrafanaModal.ButtonRow>
                 </GrafanaModal>
             )}
             {editor && (
                 <GrafanaModal
-                    title={editor.kind === 'rename' ? 'Rename saved query' : 'Save query'}
+                    title={editor.kind === 'rename' ? t('Rename saved query') : t('Save query')}
                     isOpen
                     trapFocus
                     className={styles.modal}
@@ -526,7 +527,7 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
                     }}
                 >
                     <form
-                        aria-label="Saved query details"
+                        aria-label={t('Saved query details')}
                         aria-busy={busy}
                         onSubmit={event => {
                             event.preventDefault();
@@ -534,40 +535,40 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
                         }}
                     >
                         <p className={css({ color: theme.colors.text.secondary, marginBottom: theme.spacing(3) })}>
-                            Shared with members of this Grafana organization. Data access uses your own permissions.
+                            {t('Shared with members of this Grafana organization. Data access uses your own permissions.')}
                         </p>
                         {editor.kind !== 'rename' && editor.source?.canEdit && canCreate && (
-                            <Field label="Save action" disabled={busy}>
+                            <Field label={t('Save action')} disabled={busy}>
                                 <RadioButtonGroup<'update' | 'create'>
-                                    aria-label="Save query action"
+                                    aria-label={t('Save query action')}
                                     value={editor.kind}
                                     options={[
-                                        { label: 'Update current query', value: 'update' },
-                                        { label: 'Save as new query', value: 'create' },
+                                        { label: t('Update current query'), value: 'update' },
+                                        { label: t('Save as new query'), value: 'create' },
                                     ]}
                                     className={css({ flexWrap: 'wrap' })}
                                     onChange={kind => setEditor(previous => previous && { ...previous, kind, target: kind === 'update' ? previous.source : undefined })}
                                 />
                             </Field>
                         )}
-                        <Field label="Name" required disabled={busy}>
+                        <Field label={t('Name')} required disabled={busy}>
                             <GrafanaInput
                                 ref={nameInput}
                                 id="saved-query-name"
-                                aria-label="Saved query name"
+                                aria-label={t('Saved query name')}
                                 required
                                 value={editor.name}
-                                placeholder="Name your query"
+                                placeholder={t('Name your query')}
                                 maxLength={120}
                                 onChange={({ currentTarget: { value } }) => setEditor(previous => previous && { ...previous, name: value })}
                             />
                         </Field>
-                        <Field label="Description (optional)" disabled={busy}>
+                        <Field label={t('Description (optional)')} disabled={busy}>
                             <TextArea
                                 id="saved-query-description"
-                                aria-label="Saved query description"
+                                aria-label={t('Saved query description')}
                                 value={editor.description}
-                                placeholder="Describe when to use this query"
+                                placeholder={t('Describe when to use this query')}
                                 rows={4}
                                 maxLength={2000}
                                 onChange={({ currentTarget: { value } }) => setEditor(previous => previous && { ...previous, description: value })}
@@ -576,10 +577,10 @@ export default function SavedQueries({ snapshot, ready, restore }: Props) {
                         {editorError && <GrafanaAlert severity="error" title={editorError} />}
                         <GrafanaModal.ButtonRow>
                             <GrafanaButton type="button" variant="secondary" disabled={busy} onClick={() => setEditor(undefined)}>
-                                Cancel
+                                {t('Cancel')}
                             </GrafanaButton>
                             <GrafanaButton type="submit" disabled={busy || !editor.name.trim() || unchanged} icon={busy ? 'spinner' : undefined}>
-                                {busy ? 'Saving…' : 'Save'}
+                                {busy ? t('Saving…') : t('Save')}
                             </GrafanaButton>
                         </GrafanaModal.ButtonRow>
                     </form>

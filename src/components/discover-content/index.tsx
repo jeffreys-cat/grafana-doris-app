@@ -1,4 +1,5 @@
 'use client';
+import { t } from 'i18n';
 import { ColumnDef, ColumnSizingState, OnChangeFn, Row, SortingState } from '@tanstack/react-table';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
@@ -139,7 +140,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
 
     const [state, updateState] = useState([
         {
-            label: 'Table',
+            label: t('Table'),
             value: 'Table',
             active: true,
         },
@@ -281,7 +282,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                     )}
                     {state[1].active && <VariantValueViewer value={processedData} rootName="JSON" />}
                 </TabContent>
-                <Tooltip title="Surrounding Items will ignore the existing interface's filter conditions and view the context through time.">
+                <Tooltip title={t('Surrounding logs ignore existing filters by default. Enable Filter to apply them.')}>
                     <a
                         onClick={() => {
                             setSurroundingLogsOpen(true);
@@ -298,7 +299,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                             }
                         `}
                     >
-                        Surrounding items
+                        {t('Surrounding items')}
                     </a>
                 </Tooltip>
             </div>
@@ -332,9 +333,9 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                         row.getCanExpand() && (
                             <div className="flex items-center">
                                 {row.getIsExpanded() ? (
-                                    <IconButton onClick={row.getToggleExpandedHandler()} name="arrow-down" tooltip="Collapse" />
+                                    <IconButton onClick={row.getToggleExpandedHandler()} name="arrow-down" tooltip={t('Collapse')} />
                                 ) : (
-                                    <IconButton onClick={row.getToggleExpandedHandler()} name="arrow-right" tooltip="Expand" />
+                                    <IconButton onClick={row.getToggleExpandedHandler()} name="arrow-right" tooltip={t('Expand')} />
                                 )}
                                 <div className="ml-1">{getValue<string>()}</div>
                             </div>
@@ -344,7 +345,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
             },
             {
                 id: TIME_COLUMN_ID,
-                header: () => currentTimeField || 'Time',
+                header: () => currentTimeField || t('Time'),
                 accessorKey: 'time',
                 size: 240,
                 minSize: 80,
@@ -480,7 +481,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                 <div>{field.Field}</div>
                                 <IconButton
                                     name="times"
-                                    tooltip="Remove"
+                                    tooltip={t('Remove')}
                                     style={{
                                         marginLeft: '8px',
                                         cursor: 'pointer',
@@ -596,14 +597,14 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                     text-align: center;
                 `}
             >
-                <strong>Query failed</strong>
+                <strong>{t('Query failed')}</strong>
                 <div
                     className={css`
                         margin-top: 4px;
                         color: ${theme.colors.text.secondary};
                     `}
                 >
-                    Review the query error above, then update the query and try again.
+                    {t('Review the query error above, then update the query and try again.')}
                 </div>
             </div>
         ) : queryState.status === 'success' && queryState.rowCount === 0 ? (
@@ -614,14 +615,14 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                     text-align: center;
                 `}
             >
-                <strong>Query succeeded — no results</strong>
+                <strong>{t('Query succeeded — no results')}</strong>
                 <div
                     className={css`
                         margin-top: 4px;
                         color: ${theme.colors.text.secondary};
                     `}
                 >
-                    Try expanding the time range or adjusting the filters.
+                    {t('Try expanding the time range or adjusting the filters.')}
                 </div>
             </div>
         ) : queryState.status === 'loading' ? (
@@ -632,7 +633,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                     text-align: center;
                 `}
             >
-                Querying…
+                {t('Querying…')}
             </div>
         ) : undefined;
 
@@ -669,16 +670,15 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                         color: ${theme.colors.text.secondary};
                     `}
                 >
-                    行高
-                    <Select
+                    {t('Row height')}<Select placeholder={t('Choose')}
                         inputId="discover-row-lines"
-                        aria-label="单元格显示行数"
+                        aria-label={t('Cell display lines')}
                         width={14}
                         options={[
-                            { label: '单行', value: 1 },
-                            { label: '3 行', value: 3 },
-                            { label: '5 行', value: 5 },
-                            { label: '自动', value: 0 },
+                            { label: t('Single line'), value: 1 },
+                            { label: t('3 lines'), value: 3 },
+                            { label: t('5 lines'), value: 5 },
+                            { label: t('Auto'), value: 0 },
                         ]}
                         value={cellLineCount}
                         onChange={option => {
@@ -690,7 +690,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                         }}
                     />
                 </label>
-                <IconButton name="history" tooltip="Reset column layout" aria-label="Reset column layout" disabled={!isLayoutModified} onClick={resetColumnLayout} />
+                <IconButton name="history" tooltip={t('Reset column layout')} aria-label={t('Reset column layout')} disabled={!isLayoutModified} onClick={resetColumnLayout} />
             </div>
             <div
                 data-testid="discover-table-scroll"
@@ -736,7 +736,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                         padding-bottom: 8px;
                     `}
                 >
-                    <div>Total {tableTotalCount} rows</div>
+                    <div>{t('Total {{count}} rows', { count: tableTotalCount })}</div>
                     <div
                         className={css`
                             display: flex;
@@ -753,9 +753,8 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                 gap: 8px;
                             `}
                         >
-                            Rows per page
-                            <Select
-                                aria-label="Rows per page"
+                            {t('Rows per page')}<Select placeholder={t('Choose')}
+                                aria-label={t('Rows per page')}
                                 options={[20, 50, 100, 200].map(size => ({ label: String(size), value: size }))}
                                 value={pageSize}
                                 onChange={option => {
@@ -841,7 +840,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                     cursor: pointer;
                                 `}
                             >
-                                Go
+                                {t('Go')}
                             </button>
                         </div>
                     </div>
@@ -852,7 +851,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
             {surroundingLogsOpen && (
                 <Drawer
                     size="lg"
-                    title="Surrounding items"
+                    title={t('Surrounding items')}
                     onClose={() => {
                         setSurroundingTableData([]);
                         setBeforeCount(0);

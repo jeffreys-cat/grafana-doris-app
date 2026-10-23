@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import React, { Fragment, useEffect, useMemo, useState } from 'react';
 import {
     ColumnDef,
@@ -118,15 +119,15 @@ function SortableHeader<TData>({
                 {renderExpandAllToggle ? (
                     <IconButton
                         name={isAllRowsExpanded ? 'arrow-down' : 'arrow-right'}
-                        tooltip={isAllRowsExpanded ? 'Collapse all' : 'Expand all'}
+                        tooltip={isAllRowsExpanded ? t('Collapse all') : t('Expand all')}
                         onClick={onToggleAll}
                     />
                 ) : null}
                 {canReorder ? (
                     <button
                         type="button"
-                        aria-label={`Move column ${header.column.id}`}
-                        title="Drag to reorder column"
+                        aria-label={t('Move column {{column}}', { column: header.column.id })}
+                        title={t('Drag to reorder column')}
                         {...attributes}
                         {...listeners}
                         className={css`
@@ -197,9 +198,9 @@ function SortableHeader<TData>({
                 {header.column.getCanResize() ? (
                     <div
                         role="separator"
-                        aria-label={`Resize column ${header.column.id}`}
+                        aria-label={t('Resize column {{column}}', { column: header.column.id })}
                         aria-orientation="vertical"
-                        title="Drag to resize column; double-click to reset"
+                        title={t('Drag to resize column; double-click to reset')}
                         onDoubleClick={() => header.column.resetSize()}
                         onMouseDown={header.getResizeHandler()}
                         onTouchStart={header.getResizeHandler()}
@@ -426,7 +427,7 @@ export default function SDCollapsibleTable<T>(props: SDCollapsibleTableProps<T>)
                     ) : (
                         <tr>
                             <td colSpan={Math.max(table.getVisibleLeafColumns().length, 1)}>
-                                {emptyContent || <EmptySearchResult>No Data</EmptySearchResult>}
+                                {emptyContent || <EmptySearchResult>{t('No Data')}</EmptySearchResult>}
                             </td>
                         </tr>
                     )}

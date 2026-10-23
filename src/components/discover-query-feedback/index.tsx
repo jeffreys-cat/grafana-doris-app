@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import React from 'react';
 import { Alert, useTheme2 } from '@grafana/ui';
 import { css } from '@emotion/css';
@@ -13,21 +14,21 @@ type DiscoverQueryFeedbackProps = {
 function getLocationText(error: DiscoverQueryError) {
     const location = error.location;
     if (!location) {
-        return 'Location: The backend did not report an error position.';
+        return t('Location: The backend did not report an error position.');
     }
     if (location.inputLine && location.inputColumn) {
-        return `Input location: line ${location.inputLine}, column ${location.inputColumn}${location.inputPosition ? ` (character ${location.inputPosition})` : ''}.`;
+        return location.inputPosition ? t('Input location: line {{line}}, column {{column}} (character {{position}}).', { line: location.inputLine, column: location.inputColumn, position: location.inputPosition }) : t('Input location: line {{line}}, column {{column}}.', { line: location.inputLine, column: location.inputColumn });
     }
     if (location.line && location.column) {
-        return `Generated SQL location: line ${location.line}, column ${location.column}.`;
+        return t('Generated SQL location: line {{line}}, column {{column}}.', { line: location.line, column: location.column });
     }
     if (location.position) {
-        return `Generated SQL position: character ${location.position}.`;
+        return t('Generated SQL position: character {{position}}.', { position: location.position });
     }
     if (location.near) {
-        return `Reported near: ${location.near}`;
+        return t('Reported near: {{near}}', { near: location.near });
     }
-    return 'Location: The backend did not report an error position.';
+    return t('Location: The backend did not report an error position.');
 }
 
 function QueryErrorDetails({ error }: { error: DiscoverQueryError }) {
@@ -42,7 +43,7 @@ function QueryErrorDetails({ error }: { error: DiscoverQueryError }) {
             `}
         >
             <div>
-                <strong>Backend message</strong>
+                <strong>{t('Backend message')}</strong>
                 <pre
                     className={css`
                         max-height: 180px;
@@ -59,8 +60,8 @@ function QueryErrorDetails({ error }: { error: DiscoverQueryError }) {
                 </pre>
             </div>
             <div>{getLocationText(error)}</div>
-            {error.location?.near ? <div>Near: <code>{error.location.near}</code></div> : null}
-            <div><strong>Possible cause:</strong> {error.likelyCause}</div>
+            {error.location?.near ? <div>{t('Near:')}<code>{error.location.near}</code></div> : null}
+            <div><strong>{t('Possible cause:')}</strong> {error.likelyCause}</div>
             {error.generatedSql ? (
                 <details>
                     <summary
@@ -70,7 +71,7 @@ function QueryErrorDetails({ error }: { error: DiscoverQueryError }) {
                             font-weight: 500;
                         `}
                     >
-                        Generated SQL
+                        {t('Generated SQL')}
                     </summary>
                     <div className={css`margin-top: 8px;`}>
                         <pre
@@ -95,7 +96,7 @@ function QueryErrorDetails({ error }: { error: DiscoverQueryError }) {
 }
 
 export default function DiscoverQueryFeedback({ queryState, searchType, database, table }: DiscoverQueryFeedbackProps) {
-    const tableContext = database && table ? `${database}.${table}` : 'No table selected';
+    const tableContext = database && table ? `${database}.${table}` : t('No table selected');
 
     return (
         <div
@@ -106,14 +107,14 @@ export default function DiscoverQueryFeedback({ queryState, searchType, database
             `}
         >
             {queryState.status === 'error' && queryState.error ? (
-                <Alert title="Query failed" severity="error">
-                    <div><strong>{searchType}</strong> query on <strong>{tableContext}</strong> did not complete.</div>
+                <Alert title={t('Query failed')} severity="error">
+                    <div>{t('{{mode}} query on {{table}} did not complete.', { mode: searchType === 'Search' ? t('Search') : searchType, table: tableContext })}</div>
                     <QueryErrorDetails error={queryState.error} />
                 </Alert>
             ) : null}
             {queryState.status !== 'error' && queryState.auxiliaryErrors.length > 0 ? (
-                <Alert title="Partial query failure" severity="warning">
-                    <div>The result query completed, but some supporting queries failed.</div>
+                <Alert title={t('Partial query failure')} severity="warning">
+                    <div>{t('The result query completed, but some supporting queries failed.')}</div>
                     {queryState.auxiliaryErrors.map(error => (
                         <div key={error.source} className={css`margin-top: 8px;`}>
                             <strong>{error.summary}</strong>

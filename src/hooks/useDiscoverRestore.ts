@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { useCallback, useEffect } from 'react';
 import { unstable_batchedUpdates } from 'react-dom';
 import { useStore } from 'jotai';
@@ -16,7 +17,7 @@ async function frameFor(request: Observable<any>, ref: string) {
     const response = await lastValueFrom(request.pipe(timeout(20000)));
     const result = response?.data?.results?.[ref];
     if (!response?.ok || result?.error || !result?.frames?.[0]) {
-        throw new Error(result?.error || `Failed to load ${ref}`);
+        throw new Error(result?.error || t('Failed to load {{resource}}', { resource: ref }));
     }
     return toDataFrame(result.frames[0]);
 }
@@ -53,7 +54,7 @@ export function useDiscoverRestore(allowedDatasources: DataSourceInstanceSetting
                 const state = strict ? validateSavedQueryState(input) : input;
                 const ds = allowedDatasources.find(ds => ds.uid === state.datasource || (!strict && ds.name === state.datasource));
                 if (!ds) {
-                    throw new Error('The saved datasource is unavailable or you do not have permission to use it');
+                    throw new Error(t('The saved datasource is unavailable or you do not have permission to use it'));
                 }
                 const databasesFrame = await frameFor(getDatabases(ds), 'getDatabases');
                 if (!current()) {
@@ -61,7 +62,7 @@ export function useDiscoverRestore(allowedDatasources: DataSourceInstanceSetting
                 }
                 const databases = Array.from(databasesFrame.fields[0]?.values || [], value => ({ label: String(value), value: String(value) }));
                 if (!databases.some(db => db.value === state.database)) {
-                    throw new Error(`Database is unavailable: ${state.database}`);
+                    throw new Error(t('Database is unavailable: {{database}}', { database: state.database }));
                 }
                 const tablesFrame = await frameFor(getTablesService({ selectdbDS: ds, database: state.database! }), 'getTables');
                 if (!current()) {
@@ -69,7 +70,7 @@ export function useDiscoverRestore(allowedDatasources: DataSourceInstanceSetting
                 }
                 const tables = Array.from(tablesFrame.fields[0]?.values || [], value => ({ label: String(value), value: String(value) }));
                 if (!tables.some(table => table.value === state.table)) {
-                    throw new Error(`Table is unavailable: ${state.table}`);
+                    throw new Error(t('Table is unavailable: {{table}}', { table: state.table }));
                 }
                 const params = { selectdbDS: ds, database: state.database!, table: state.table! };
                 // Start independent metadata requests together. Optional extended DESC
@@ -93,7 +94,7 @@ export function useDiscoverRestore(allowedDatasources: DataSourceInstanceSetting
                     state.timeField = timeFields[0]?.value;
                 }
                 if (!timeFields.some(field => field.value === state.timeField)) {
-                    throw new Error(`Time field is unavailable: ${state.timeField}`);
+                    throw new Error(t('Time field is unavailable: {{field}}', { field: state.timeField }));
                 }
                 const variants = variantsFrame
                     ? deriveVariantFieldsFromMetadata(
@@ -126,16 +127,16 @@ export function useDiscoverRestore(allowedDatasources: DataSourceInstanceSetting
                 };
                 const invalidFilters = state.filters.filter(filter => !resolve(filter.fieldName, filter.variantPath, filter.fieldType, filter.variantKey));
                 if (invalidFilters.length) {
-                    throw new Error(`Filter fields are unavailable: ${invalidFilters.map(f => f.fieldName).join(', ')}`);
+                    throw new Error(t('Filter fields are unavailable: {{fields}}', { fields: invalidFilters.map(f => f.fieldName).join(', ') }));
                 }
                 if (state.sort.field && !resolve(state.sort.field, state.sort.variantPath, state.sort.variantType)) {
-                    throw new Error(`Sort field is unavailable: ${state.sort.field}`);
+                    throw new Error(t('Sort field is unavailable: {{field}}', { field: state.sort.field }));
                 }
                 const selectedFields = state.selectedFields.map(field => resolve(field.Field, field.variantPath, field.Type, field.variantKey)).filter(Boolean);
                 const missing = state.selectedFields.filter(field => !resolve(field.Field, field.variantPath, field.Type, field.variantKey));
                 const zone = state.timeZone ? normalizeTimeZone(state.timeZone) : store.get(atoms.timeZoneAtom);
                 if (!zone) {
-                    throw new Error('Invalid saved time zone');
+                    throw new Error(t('Invalid saved time zone'));
                 }
                 let range = store.get(atoms.timeRangeAtom);
                 if (state.timeRawFrom && state.timeRawTo) {
@@ -144,12 +145,12 @@ export function useDiscoverRestore(allowedDatasources: DataSourceInstanceSetting
                     const start = parseTimeInZone(state.startTime, zone),
                         end = parseTimeInZone(state.endTime, zone);
                     if (!start?.isValid() || !end?.isValid() || start.isAfter(end)) {
-                        throw new Error('Invalid saved time range');
+                        throw new Error(t('Invalid saved time range'));
                     }
                     range = buildAbsoluteTimeRange(start, end);
                 }
                 if (!range?.from?.isValid() || !range?.to?.isValid() || range.from.valueOf() > range.to.valueOf()) {
-                    throw new Error('Invalid saved time range');
+                    throw new Error(t('Invalid saved time range'));
                 }
                 if (!current()) {
                     return false;

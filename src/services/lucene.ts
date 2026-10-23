@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { CustomSchemaSQLSerializerV2, genWhereSQL, parse } from 'utils/query-parser/query-parser';
 import { canUseDorisSearch } from 'utils/query-parser/ast';
 import { supportsJsonSearch, supportsSearch, supportsTryCast } from './metaservice';
@@ -22,7 +23,7 @@ function assertSupportedLuceneSyntax(query: string): void {
     // @hyperdx/lucene currently preserves slash-delimited regex as ordinary
     // text, so reject it before parsing instead of silently changing meaning.
     if (/(?:^|[\s(])[^\s:()]+:\/(?:\\.|[^/])+\/(?:$|[\s)])/u.test(query)) {
-        throw new Error('Lucene regular-expression queries are not supported.');
+        throw new Error(t('Lucene regular-expression queries are not supported.'));
     }
 }
 

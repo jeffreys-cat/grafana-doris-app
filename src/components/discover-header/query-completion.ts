@@ -1,3 +1,4 @@
+import { t } from 'i18n';
 import { getFilterFieldReference, quoteSqlLiteral, transformFieldPath } from 'utils/sql-filter';
 import { getVariantFieldValue } from 'utils/variant-fields';
 
@@ -18,14 +19,14 @@ export type QuerySuggestion = {
     kind?: 'field' | 'operator' | 'value' | 'keyword';
 };
 
-const SQL_OPERATORS = [
-    ['=', 'Equal'], ['!=', 'Not equal'], ['>', 'Greater than'], ['>=', 'Greater than or equal'],
-    ['<', 'Less than'], ['<=', 'Less than or equal'], ['LIKE', 'Pattern match'], ['IN', 'Match one of several values'],
-    ['BETWEEN', 'Inclusive range'], ['IS NULL', 'Missing value'], ['IS NOT NULL', 'Present value'],
+const getSqlOperators = () => [
+    ['=', t('Equal')], ['!=', t('Not equal')], ['>', t('Greater than')], ['>=', t('Greater than or equal')],
+    ['<', t('Less than')], ['<=', t('Less than or equal')], ['LIKE', t('Pattern match')], ['IN', t('Match one of several values')],
+    ['BETWEEN', t('Inclusive range')], ['IS NULL', t('Missing value')], ['IS NOT NULL', t('Present value')],
 ];
 const LOGICAL_OPERATORS = ['AND', 'OR'];
-const LUCENE_OPERATORS = [
-    ['AND', 'Both clauses must match'], ['OR', 'Either clause may match'], ['NOT', 'Exclude the following clause'],
+const getLuceneOperators = () => [
+    ['AND', t('Both clauses must match')], ['OR', t('Either clause may match')], ['NOT', t('Exclude the following clause')],
 ];
 
 function normalizedType(type?: string) {
@@ -102,7 +103,7 @@ function valuesForField(field: QueryField | undefined, rows: Array<Record<string
             continue;
         }
         seen.add(text);
-        result.push({ label: text, insertText: text, detail: 'Sample value', kind: 'value' });
+        result.push({ label: text, insertText: text, detail: t('Sample value'), kind: 'value' });
         if (result.length === 50) {
             break;
         }
@@ -114,8 +115,8 @@ function fieldSuggestions(fields: QueryField[], mode: DiscoverQueryMode): QueryS
     return fields.map(field => ({
         label: field.Field,
         insertText: mode === 'sql' ? getSqlFieldInsertText(field) : getLuceneFieldInsertText(field),
-        detail: field.Type || 'Field',
-        documentation: field.variantPath?.length ? `Structured path: ${field.variantPath.join('.')}` : undefined,
+        detail: field.Type || t('Field'),
+        documentation: field.variantPath?.length ? t('Structured path: {{path}}', { path: field.variantPath.join('.') }) : undefined,
         kind: 'field',
     }));
 }
@@ -149,27 +150,27 @@ export function getQuerySuggestions({ mode, query, fields, rows }: { mode: Disco
     const before = query.trimEnd();
     if (mode === 'lucene') {
         if (!before || /(?:^|\s|\()(?:(?:AND|OR|NOT)\s*)?$/i.test(before)) {
-            return [...fieldSuggestions(fields, mode), ...LUCENE_OPERATORS.map(([label, detail]) => ({ label, insertText: `${label} `, detail, kind: 'keyword' as const }))];
+            return [...fieldSuggestions(fields, mode), ...getLuceneOperators().map(([label, detail]) => ({ label, insertText: `${label} `, detail, kind: 'keyword' as const }))];
         }
         const luceneField = findLuceneField(before, fields);
         const completedLuceneValue = before.match(/[A-Za-z_][\w.\[\]"\\-]*\s*:\s*(.+)$/);
         if (luceneField && completedLuceneValue && /\s$/.test(query)) {
-            return LUCENE_OPERATORS.map(([label, detail]) => ({ label, insertText: `${label} `, detail, kind: 'keyword' as const }));
+            return getLuceneOperators().map(([label, detail]) => ({ label, insertText: `${label} `, detail, kind: 'keyword' as const }));
         }
         if (luceneField) {
             return [
                 ...valuesForField(luceneField, rows, mode),
-                { label: '>', insertText: '>', detail: 'Greater than', kind: 'operator' },
-                { label: '>=', insertText: '>=', detail: 'Greater than or equal', kind: 'operator' },
-                { label: '<', insertText: '<', detail: 'Less than', kind: 'operator' },
-                { label: '[min TO max]', insertText: '[ TO ]', detail: 'Inclusive range', kind: 'operator' },
-                { label: '*', insertText: '*', detail: 'Field exists', kind: 'operator' },
+                { label: '>', insertText: '>', detail: t('Greater than'), kind: 'operator' },
+                { label: '>=', insertText: '>=', detail: t('Greater than or equal'), kind: 'operator' },
+                { label: '<', insertText: '<', detail: t('Less than'), kind: 'operator' },
+                { label: '[min TO max]', insertText: '[ TO ]', detail: t('Inclusive range'), kind: 'operator' },
+                { label: '*', insertText: '*', detail: t('Field exists'), kind: 'operator' },
             ];
         }
         if (/^[\w.\[\]"\\-]+$/.test(before.split(/\s+/).pop() || '')) {
-            return [...fieldSuggestions(fields, mode), { label: ':', insertText: ':', detail: 'Field/value separator', kind: 'operator' }];
+            return [...fieldSuggestions(fields, mode), { label: ':', insertText: ':', detail: t('Field/value separator'), kind: 'operator' }];
         }
-        return LUCENE_OPERATORS.map(([label, detail]) => ({ label, insertText: ` ${label} `, detail, kind: 'keyword' }));
+        return getLuceneOperators().map(([label, detail]) => ({ label, insertText: ` ${label} `, detail, kind: 'keyword' }));
     }
 
     if (!before || /(?:^|\bAND\b|\bOR\b|\()\s*$/i.test(before)) {
@@ -179,13 +180,13 @@ export function getQuerySuggestions({ mode, query, fields, rows }: { mode: Disco
     const field = findSqlField(condition, fields);
     const hasOperator = /(?:=|!=|>=|<=|(?<![<>!])>|(?<![<>!])<|\bLIKE\b|\bIN\b|\bBETWEEN\b|\bIS\s+(?:NOT\s+)?NULL\b)\s*$/i.test(condition);
     if (field && !hasOperator && !/(?:=|!=|>=|<=|>|<|\bLIKE\b|\bIN\b|\bBETWEEN\b|\bIS\b)/i.test(condition)) {
-        return SQL_OPERATORS.map(([label, detail]) => ({ label, insertText: label.startsWith('IS ') ? ` ${label}` : ` ${label} `, detail, kind: 'operator' }));
+        return getSqlOperators().map(([label, detail]) => ({ label, insertText: label.startsWith('IS ') ? ` ${label}` : ` ${label} `, detail, kind: 'operator' }));
     }
     if (field && /(?:=|!=|>=|<=|(?<![<>!])>|(?<![<>!])<|\bLIKE\b|\bIN\b|\bBETWEEN\b)\s*[^)]*$/i.test(condition)) {
         return valuesForField(field, rows, mode);
     }
     if (/\b(?:IS\s+(?:NOT\s+)?NULL)\s*$/i.test(condition)) {
-        return LOGICAL_OPERATORS.map(label => ({ label, insertText: ` ${label} `, detail: 'Logical operator', kind: 'keyword' }));
+        return LOGICAL_OPERATORS.map(label => ({ label, insertText: ` ${label} `, detail: t('Logical operator'), kind: 'keyword' }));
     }
-    return [...fieldSuggestions(fields, mode), ...LOGICAL_OPERATORS.map(label => ({ label, insertText: ` ${label} `, detail: 'Logical operator', kind: 'keyword' as const }))];
+    return [...fieldSuggestions(fields, mode), ...LOGICAL_OPERATORS.map(label => ({ label, insertText: ` ${label} `, detail: t('Logical operator'), kind: 'keyword' as const }))];
 }
