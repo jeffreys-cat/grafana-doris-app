@@ -1,5 +1,5 @@
 'use client';
-import { ColumnDef, ColumnOrderState, ColumnSizingState, OnChangeFn, Row, SortingState } from '@tanstack/react-table';
+import { ColumnDef, ColumnSizingState, OnChangeFn, Row, SortingState } from '@tanstack/react-table';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Drawer, IconButton, Pagination, Select, Switch, Tab, TabContent, TabsBar, useTheme2 } from '@grafana/ui';
@@ -20,8 +20,6 @@ import {
     timeZoneAtom,
     discoverRowsExpandedAtom,
     discoverRowsWrappedAtom,
-    discoverColumnLayoutsAtom,
-    discoverSharedColumnOrderAtom,
 } from 'store/discover';
 import { Button as AntButton, Tooltip } from 'antd';
 import SDCollapsibleTable from 'components/selectdb-ui/sd-collapsible-table';
@@ -45,7 +43,7 @@ import {
     parseJsonLikeValue,
 } from 'utils/data';
 import { DiscoverQueryState, DiscoverSort } from 'types/discover';
-import { reconcileColumnOrder, reconcileColumnSizing } from 'utils/column-layout';
+import { useDiscoverColumnLayout } from 'hooks/useDiscoverColumnLayout';
 import { VariantValueViewer } from './variant-value-viewer';
 import { getVariantFieldValue } from 'utils/variant-fields';
 import { normalizeCount } from 'utils/count';
@@ -90,16 +88,9 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
     const tableFields = useAtomValue(tableFieldsAtom);
     const [discoverRowsExpanded, setDiscoverRowsExpanded] = useAtom(discoverRowsExpandedAtom);
     const [discoverRowsWrapped, setDiscoverRowsWrapped] = useAtom(discoverRowsWrappedAtom);
-    const [columnLayouts, setColumnLayouts] = useAtom(discoverColumnLayoutsAtom);
-    const [sharedColumnOrder, setSharedColumnOrder] = useAtom(discoverSharedColumnOrderAtom);
     const availableColumnIds = useMemo(
         () => [EXPAND_COLUMN_ID, TIME_COLUMN_ID, ...(hasSelectedFields ? selectedFields.map((field: any) => getFieldColumnId(field.Field)) : [SOURCE_COLUMN_ID])],
         [hasSelectedFields, selectedFields],
-    );
-    const availableColumnIdsKey = availableColumnIds.join('\u0000');
-    const validPersistentColumnIds = useMemo(
-        () => [EXPAND_COLUMN_ID, TIME_COLUMN_ID, SOURCE_COLUMN_ID, ...tableFields.map((field: any) => getFieldColumnId(String(field?.Field || field?.value || '')))],
-        [tableFields],
     );
     const defaultColumnSizing = useMemo<ColumnSizingState>(
         () => ({
@@ -116,8 +107,8 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
         }
         return JSON.stringify([datasourceId, discoverCurrent.catalog || 'internal', discoverCurrent.database, discoverCurrent.table]);
     }, [currentDatasource?.id, currentDatasource?.name, currentDatasource?.uid, discoverCurrent.catalog, discoverCurrent.database, discoverCurrent.table]);
-    const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(() => availableColumnIds);
-    const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => defaultColumnSizing);
+    const { columnOrder, columnSizing, onColumnOrderChange, onColumnSizingChange, resetColumnLayout } =
+        useDiscoverColumnLayout(layoutKey, availableColumnIds, defaultColumnSizing);
     const context = usePluginContext();
     // user settings
     const jsonData = context.meta.jsonData || {};
@@ -125,69 +116,6 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
     const { database = '', datasource, logsTable = '', targetTraceTable = '' } = logsConfig;
     // local input state for page-jump control
     const [jumpPage, setJumpPage] = useState<string>(String(page));
-
-    useEffect(() => {
-        const persistedLayout = layoutKey ? columnLayouts[layoutKey] : undefined;
-        setColumnOrder(reconcileColumnOrder(availableColumnIds, sharedColumnOrder.length ? sharedColumnOrder : persistedLayout?.columnOrder));
-        setColumnSizing({
-            ...defaultColumnSizing,
-            ...reconcileColumnSizing(availableColumnIds, persistedLayout?.columnSizing),
-        });
-        // availableColumnIdsKey intentionally represents the primitive column identity list.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [availableColumnIdsKey, columnLayouts, defaultColumnSizing, layoutKey, sharedColumnOrder]);
-
-    useEffect(() => {
-        if (!layoutKey || columnOrder.length === 0 || sharedColumnOrder.length) {
-            return;
-        }
-        const timeout = window.setTimeout(() => {
-            setColumnLayouts(previous => {
-                const currentLayout = previous[layoutKey];
-                const validIds = new Set(validPersistentColumnIds);
-                const inactiveColumnOrder = (currentLayout?.columnOrder || []).filter(id => validIds.has(id) && !columnOrder.includes(id));
-                const retainedSizing = Object.fromEntries(Object.entries(currentLayout?.columnSizing || {}).filter(([id]) => validIds.has(id)));
-                const nextLayout = {
-                    columnOrder: [...columnOrder, ...inactiveColumnOrder],
-                    columnSizing: { ...retainedSizing, ...columnSizing },
-                };
-                if (JSON.stringify(currentLayout) === JSON.stringify(nextLayout)) {
-                    return previous;
-                }
-                return { ...previous, [layoutKey]: nextLayout };
-            });
-        }, 250);
-        return () => window.clearTimeout(timeout);
-    }, [columnOrder, columnSizing, layoutKey, setColumnLayouts, sharedColumnOrder.length, validPersistentColumnIds]);
-
-    const handleColumnOrderChange = React.useCallback<OnChangeFn<ColumnOrderState>>(
-        updater => {
-            setColumnOrder(current => {
-                const next = typeof updater === 'function' ? updater(current) : updater;
-                setSharedColumnOrder(next);
-                return next;
-            });
-        },
-        [setSharedColumnOrder],
-    );
-
-    const resetColumnLayout = React.useCallback(() => {
-        setColumnOrder(availableColumnIds);
-        setColumnSizing(defaultColumnSizing);
-        // Shared state (restored from a Discover link) takes precedence over
-        // the persisted layout. Clear it as well so the reset is not
-        // immediately overwritten by the layout synchronization effect.
-        setSharedColumnOrder([]);
-        if (layoutKey) {
-            setColumnLayouts(previous => {
-                if (!previous[layoutKey]) {
-                    return previous;
-                }
-                const { [layoutKey]: _removed, ...remaining } = previous;
-                return remaining;
-            });
-        }
-    }, [availableColumnIds, defaultColumnSizing, layoutKey, setColumnLayouts, setSharedColumnOrder]);
 
     useEffect(() => {
         setJumpPage(String(page));
@@ -795,9 +723,9 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                     allRowsExpanded={discoverRowsExpanded}
                     onAllRowsExpandedChange={setDiscoverRowsExpanded}
                     columnOrder={columnOrder}
-                    onColumnOrderChange={handleColumnOrderChange}
+                    onColumnOrderChange={onColumnOrderChange}
                     columnSizing={columnSizing}
-                    onColumnSizingChange={setColumnSizing}
+                    onColumnSizingChange={onColumnSizingChange}
                     sorting={tableSorting}
                     onSortingChange={handleTableSortingChange}
                     enableColumnReordering

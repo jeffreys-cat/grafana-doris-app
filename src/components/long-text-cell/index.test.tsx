@@ -3,7 +3,12 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { LongTextCell } from './index';
 
 jest.mock('antd', () => ({
-    Tooltip: ({ children, title }: any) => <>{children}{title}</>,
+    Tooltip: ({ children, title }: any) => (
+        <>
+            {children}
+            {title}
+        </>
+    ),
 }));
 
 function setOverflow(element: HTMLElement, { width = false, height = false } = {}) {
@@ -58,5 +63,58 @@ describe('LongTextCell', () => {
         });
 
         expect(screen.getByRole('alert')).toHaveTextContent('Copy failed');
+    });
+
+    it('detects truncation in a nested field and removes the action when the value fits again', () => {
+        render(
+            <LongTextCell copyText="the complete value">
+                <span data-testid="field-text">truncated…</span>
+            </LongTextCell>,
+        );
+        const cell = screen.getByTestId('long-text-cell');
+        const field = screen.getByTestId('field-text');
+        setOverflow(cell);
+        setOverflow(field, { width: true });
+        fireEvent.mouseEnter(cell);
+        expect(screen.getByRole('button', { name: 'Copy full cell content' })).toBeInTheDocument();
+
+        setOverflow(field);
+        fireEvent.mouseEnter(cell);
+        expect(screen.queryByRole('button', { name: 'Copy full cell content' })).not.toBeInTheDocument();
+    });
+
+    it('offers copying for long wrapped text even when it fits without truncation', async () => {
+        const fullText = 'Long wrapped log message. '.repeat(20);
+        const writeText = jest.fn().mockResolvedValue(undefined);
+        Object.assign(navigator, { clipboard: { writeText } });
+        render(<LongTextCell copyText={fullText}>{fullText}</LongTextCell>);
+        const cell = screen.getByTestId('long-text-cell');
+        setOverflow(cell);
+        fireEvent.mouseEnter(cell);
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Copy full cell content' }));
+        });
+        expect(writeText).toHaveBeenCalledWith(fullText);
+    });
+
+    it('copies full multiline text without triggering the parent cell action', async () => {
+        const onCellClick = jest.fn();
+        const writeText = jest.fn().mockResolvedValue(undefined);
+        const fullText = 'First line\n第二行 with the complete value';
+        Object.assign(navigator, { clipboard: { writeText } });
+        render(
+            <div onClick={onCellClick}>
+                <LongTextCell copyText={fullText}>truncated…</LongTextCell>
+            </div>,
+        );
+        const cell = screen.getByTestId('long-text-cell');
+        setOverflow(cell, { width: true });
+        fireEvent.focus(cell);
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Copy full cell content' }));
+        });
+
+        expect(writeText).toHaveBeenCalledWith(fullText);
+        expect(onCellClick).not.toHaveBeenCalled();
     });
 });

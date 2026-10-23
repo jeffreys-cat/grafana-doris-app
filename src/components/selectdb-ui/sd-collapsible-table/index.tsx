@@ -88,7 +88,7 @@ function SortableHeader<TData>({
                 opacity: isDragging ? 0.7 : 1,
             }}
             className={css`
-                position: ${stickyHeader ? 'sticky' : 'static'};
+                position: ${stickyHeader ? 'sticky' : 'relative'};
                 ${stickyHeader ? 'top: 0;' : ''}
                 z-index: ${isDragging ? 4 : 2};
                 height: 48px;
@@ -199,6 +199,7 @@ function SortableHeader<TData>({
                         role="separator"
                         aria-label={`Resize column ${header.column.id}`}
                         aria-orientation="vertical"
+                        title="Drag to resize column; double-click to reset"
                         onDoubleClick={() => header.column.resetSize()}
                         onMouseDown={header.getResizeHandler()}
                         onTouchStart={header.getResizeHandler()}
@@ -206,22 +207,23 @@ function SortableHeader<TData>({
                             css`
                                 position: absolute;
                                 top: 0;
-                                right: -4px;
+                                right: 0;
                                 z-index: 5;
-                                width: 8px;
+                                width: 10px;
                                 height: 100%;
                                 cursor: col-resize;
                                 touch-action: none;
+                                user-select: none;
 
                                 &::after {
                                     content: '';
                                     position: absolute;
-                                    top: 25%;
-                                    left: 3px;
+                                    top: 15%;
+                                    right: 1px;
                                     width: 2px;
-                                    height: 50%;
+                                    height: 70%;
                                     border-radius: 1px;
-                                    background: ${theme.colors.border.medium};
+                                    background: ${theme.colors.text.secondary};
                                 }
 
                                 &:hover::after {
