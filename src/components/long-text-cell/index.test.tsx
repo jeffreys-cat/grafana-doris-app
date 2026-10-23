@@ -1,15 +1,6 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { LongTextCell } from './index';
-
-jest.mock('antd', () => ({
-    Tooltip: ({ children, title }: any) => (
-        <>
-            {children}
-            {title}
-        </>
-    ),
-}));
 
 function setOverflow(element: HTMLElement, { width = false, height = false } = {}) {
     Object.defineProperties(element, {
@@ -32,6 +23,7 @@ describe('LongTextCell', () => {
         fireEvent.mouseEnter(cell);
 
         expect(screen.queryByRole('button', { name: 'Copy full cell content' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'View full cell content' })).not.toBeInTheDocument();
     });
 
     it('shows the complete value and copies it when the cell is truncated', async () => {
@@ -42,9 +34,12 @@ describe('LongTextCell', () => {
         setOverflow(cell, { height: true });
         fireEvent.mouseEnter(cell);
 
-        expect(screen.getByText('the complete value')).toBeInTheDocument();
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'View full cell content' }));
+        const preview = await screen.findByRole('dialog', { name: 'Full cell content' });
+        expect(within(preview).getByText('the complete value')).toBeInTheDocument();
         await act(async () => {
-            fireEvent.click(screen.getByRole('button', { name: 'Copy full cell content' }));
+            fireEvent.click(within(preview).getByRole('button', { name: 'Copy full cell content' }));
         });
 
         expect(writeText).toHaveBeenCalledWith('the complete value');
@@ -116,5 +111,37 @@ describe('LongTextCell', () => {
 
         expect(writeText).toHaveBeenCalledWith(fullText);
         expect(onCellClick).not.toHaveBeenCalled();
+    });
+
+    it('opens details explicitly, closes with Escape, and returns focus without triggering a cell action', async () => {
+        const onCellClick = jest.fn();
+        render(
+            <div onClick={onCellClick}>
+                <LongTextCell copyText={'long message '.repeat(30)} maxLines={3}>
+                    preview…
+                </LongTextCell>
+            </div>,
+        );
+        const button = screen.getByRole('button', { name: 'View full cell content' });
+        fireEvent.mouseEnter(screen.getByTestId('long-text-cell'));
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        fireEvent.click(button);
+        const preview = await screen.findByRole('dialog', { name: 'Full cell content' });
+        expect(button).toHaveAttribute('aria-expanded', 'true');
+        fireEvent.keyDown(preview, { key: 'Escape' });
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+        expect(button).toHaveFocus();
+        expect(button).toHaveAttribute('aria-expanded', 'false');
+        expect(onCellClick).not.toHaveBeenCalled();
+    });
+
+    it('closes the old preview when a refreshed query supplies a different value', async () => {
+        const { rerender } = render(<LongTextCell copyText={'old message '.repeat(30)}>old preview…</LongTextCell>);
+        fireEvent.click(screen.getByRole('button', { name: 'View full cell content' }));
+        await screen.findByRole('dialog');
+
+        rerender(<LongTextCell copyText="new value">new value</LongTextCell>);
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+        expect(screen.queryByRole('button', { name: 'View full cell content' })).not.toBeInTheDocument();
     });
 });

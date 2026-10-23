@@ -2,7 +2,7 @@
 import { ColumnDef, ColumnSizingState, OnChangeFn, Row, SortingState } from '@tanstack/react-table';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { Drawer, IconButton, Pagination, Select, Switch, Tab, TabContent, TabsBar, useTheme2 } from '@grafana/ui';
+import { Drawer, IconButton, Pagination, Select, Tab, TabContent, TabsBar, useTheme2 } from '@grafana/ui';
 import {
     tableTotalCountAtom,
     tableDataAtom,
@@ -20,6 +20,7 @@ import {
     timeZoneAtom,
     discoverRowsExpandedAtom,
     discoverRowsWrappedAtom,
+    discoverRowLineCountAtom,
 } from 'store/discover';
 import { Button as AntButton, Tooltip } from 'antd';
 import SDCollapsibleTable from 'components/selectdb-ui/sd-collapsible-table';
@@ -88,6 +89,8 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
     const tableFields = useAtomValue(tableFieldsAtom);
     const [discoverRowsExpanded, setDiscoverRowsExpanded] = useAtom(discoverRowsExpandedAtom);
     const [discoverRowsWrapped, setDiscoverRowsWrapped] = useAtom(discoverRowsWrappedAtom);
+    const [rowLineCount, setRowLineCount] = useAtom(discoverRowLineCountAtom);
+    const cellLineCount = discoverRowsWrapped ? rowLineCount : 1;
     const availableColumnIds = useMemo(
         () => [EXPAND_COLUMN_ID, TIME_COLUMN_ID, ...(hasSelectedFields ? selectedFields.map((field: any) => getFieldColumnId(field.Field)) : [SOURCE_COLUMN_ID])],
         [hasSelectedFields, selectedFields],
@@ -418,24 +421,21 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
 
                     return (
                         <LongTextCell
+                            maxLines={cellLineCount}
                             copyText={formatRecordDisplayValue(row.original._original)}
                             className={css`
-                                display: flex;
-                                align-items: center;
                                 width: 100%;
                                 box-sizing: border-box;
-                                min-height: 48px;
-                                max-height: ${discoverRowsWrapped ? '12rem' : '48px'};
-                                overflow: ${discoverRowsWrapped ? 'auto' : 'hidden'};
-                                word-break: ${discoverRowsWrapped ? 'break-all' : 'normal'};
-                                white-space: ${discoverRowsWrapped ? 'pre-wrap' : 'nowrap'};
-                                text-overflow: ${discoverRowsWrapped ? 'clip' : 'ellipsis'};
                                 font-size: 0.875rem;
                                 line-height: 1.25rem;
                             `}
                         >
                             <ColumnStyleWrapper
+                                as="span"
                                 className={css`
+                                    && .field-pair {
+                                        display: inline;
+                                    }
                                     & .field-key {
                                         background-color: ${theme.isDark ? '#3f3f4f' : 'rgb(191, 217, 253)'};
                                     }
@@ -446,12 +446,11 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                     }
                                 `}
                             >
-                                <div
+                                <span
                                     onClick={handleClick}
                                     dangerouslySetInnerHTML={{ __html: html }}
                                     className={css`
-                                        display: block;
-                                        width: 100%;
+                                        display: inline;
                                     `}
                                 />
                             </ColumnStyleWrapper>
@@ -508,56 +507,27 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                                         min-height: 48px;
                                     `}`}
                                 >
-                                    {isStructuredJsonType(fieldType) ? (
-                                        <VariantValueViewer value={rawFieldValue} />
-                                    ) : field.value === 'trace_id' ? (
-                                        <AntButton
-                                            className={css`
-                                                padding-left: 0px;
-                                            `}
-                                            onClick={() => {
-                                                if (isTargetLogTable && targetTraceTable) {
-                                                    openTraceDrawer(fieldValue, targetTraceTable);
-                                                } else {
-                                                    openTraceDrawer(fieldValue);
-                                                }
-                                            }}
-                                            type="link"
-                                        >
-                                            {fieldValue}
-                                        </AntButton>
-                                    ) : (
-                                        <LongTextCell
-                                            copyText={fieldValue}
-                                            className={css`
-                                                max-height: 192px;
-                                                overflow: auto;
-                                            `}
-                                        >
-                                            <div
-                                                className={css`
-                                                    display: flex;
-                                                    align-items: center;
-                                                    padding: 16px 16px 16px 0;
-                                                    word-break: break-all;
-                                                `}
+                                    <LongTextCell
+                                        maxLines={cellLineCount}
+                                        copyText={isStructuredJsonType(fieldType) ? formatFieldDisplayValue(rawFieldValue, 'pretty') : fieldValue}
+                                        className={css`font-size: 12px;`}
+                                    >
+                                        {field.value === 'trace_id' ? (
+                                            <AntButton
+                                                className={css`padding: 0; height: auto; font: inherit;`}
+                                                onClick={() => {
+                                                    if (isTargetLogTable && targetTraceTable) {
+                                                        openTraceDrawer(fieldValue, targetTraceTable);
+                                                    } else {
+                                                        openTraceDrawer(fieldValue);
+                                                    }
+                                                }}
+                                                type="link"
                                             >
-                                                <span
-                                                    className={css`
-                                                        display: block;
-                                                        width: 100%;
-                                                        font-size: 12px;
-                                                        white-space: ${discoverRowsWrapped ? 'pre-wrap' : 'nowrap'};
-                                                        text-overflow: ${discoverRowsWrapped ? 'clip' : 'ellipsis'};
-                                                        overflow: ${discoverRowsWrapped ? 'visible' : 'hidden'};
-                                                        overflow-wrap: anywhere;
-                                                    `}
-                                                >
-                                                    {fieldValue}
-                                                </span>
-                                            </div>
-                                        </LongTextCell>
-                                    )}
+                                                {fieldValue}
+                                            </AntButton>
+                                        ) : fieldValue}
+                                    </LongTextCell>
                                     <div
                                         className={`filter-content ${css`
                                             visibility: hidden;
@@ -574,7 +544,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
         }
         return dynamicColumns;
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [timeZone, currentTimeField, discoverRowsWrapped, handleRemove, hasSelectedFields, selectedFields, theme.isDark]);
+    }, [timeZone, currentTimeField, cellLineCount, handleRemove, hasSelectedFields, selectedFields, theme.isDark]);
 
     const tableSorting = useMemo<SortingState>(() => {
         const selectedColumnId =
@@ -689,7 +659,7 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                 `}
             >
                 <label
-                    htmlFor="discover-wrap-rows"
+                    htmlFor="discover-row-lines"
                     className={css`
                         display: inline-flex;
                         align-items: center;
@@ -699,8 +669,26 @@ export default function DiscoverContent({ fetchNextPage, getTraceData, queryStat
                         color: ${theme.colors.text.secondary};
                     `}
                 >
-                    换行
-                    <Switch id="discover-wrap-rows" aria-label="长文本换行" value={discoverRowsWrapped} onChange={event => setDiscoverRowsWrapped(event.currentTarget.checked)} />
+                    行高
+                    <Select
+                        inputId="discover-row-lines"
+                        aria-label="单元格显示行数"
+                        width={14}
+                        options={[
+                            { label: '单行', value: 1 },
+                            { label: '3 行', value: 3 },
+                            { label: '5 行', value: 5 },
+                            { label: '自动', value: 0 },
+                        ]}
+                        value={cellLineCount}
+                        onChange={option => {
+                            const lines = option.value;
+                            if (lines === 0 || lines === 1 || lines === 3 || lines === 5) {
+                                setRowLineCount(lines);
+                                setDiscoverRowsWrapped(lines !== 1);
+                            }
+                        }}
+                    />
                 </label>
                 <IconButton name="history" tooltip="Reset column layout" aria-label="Reset column layout" disabled={!isLayoutModified} onClick={resetColumnLayout} />
             </div>

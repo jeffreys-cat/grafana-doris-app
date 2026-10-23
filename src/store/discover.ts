@@ -44,6 +44,7 @@ export const variantFieldsAtom = atom<any[]>([]);
 export const variantImplicitPathsAtom = atomWithStorage<Record<string, Record<string, string[][]>>>('discover-variant-implicit-paths', {});
 export const discoverRowsExpandedAtom = atomWithStorage<boolean>('discover-rows-expanded', false);
 export const discoverRowsWrappedAtom = atomWithStorage<boolean>('discover-rows-wrapped', true);
+export const discoverRowLineCountAtom = atomWithStorage<0 | 1 | 3 | 5>('discover-row-line-count', 3);
 export const discoverColumnLayoutsAtom = atomWithStorage<DiscoverColumnLayouts>('discover-column-layouts', {});
 export const discoverSortAtom = atom<DiscoverSort>({ field: '', direction: 'DESC' });
 export const topNEnabledAtom = atom(false);

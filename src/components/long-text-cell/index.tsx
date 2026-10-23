@@ -1,19 +1,21 @@
 import React, { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { Tooltip } from 'antd';
-import { css } from '@emotion/css';
-import { ClipboardButton, useTheme2 } from '@grafana/ui';
+import { css, cx } from '@emotion/css';
+import { Button, ClipboardButton, Toggletip, useTheme2 } from '@grafana/ui';
 
 interface LongTextCellProps {
     children: ReactNode;
     copyText: string;
     className?: string;
+    /** Zero fits all content; undefined leaves sizing to the caller. */
+    maxLines?: number;
 }
 
-export function LongTextCell({ children, copyText, className }: LongTextCellProps) {
+export function LongTextCell({ children, copyText, className, maxLines }: LongTextCellProps) {
     const theme = useTheme2();
     const contentRef = useRef<HTMLDivElement>(null);
     const [isOverflowing, setIsOverflowing] = useState(false);
     const [copyFailed, setCopyFailed] = useState(false);
+    const [previewOpen, setPreviewOpen] = useState(false);
     // Wrapping can make a lengthy value fit without making it easy to copy.
     const canCopy = isOverflowing || copyText.length > 120;
 
@@ -33,6 +35,16 @@ export function LongTextCell({ children, copyText, className }: LongTextCellProp
 
     useEffect(() => {
         setCopyFailed(false);
+        setPreviewOpen(false);
+    }, [copyText]);
+
+    useEffect(() => {
+        if (!canCopy) {
+            setPreviewOpen(false);
+        }
+    }, [canCopy]);
+
+    useEffect(() => {
         updateOverflow();
         const element = contentRef.current;
         if (!element || typeof ResizeObserver === 'undefined') {
@@ -41,19 +53,22 @@ export function LongTextCell({ children, copyText, className }: LongTextCellProp
         const observer = new ResizeObserver(updateOverflow);
         observer.observe(element);
         return () => observer.disconnect();
-    }, [updateOverflow, copyText]);
+    }, [updateOverflow, copyText, maxLines]);
 
-    const preview = isOverflowing ? (
+    const preview = (
         <div
+            role="dialog"
+            aria-label="Full cell content"
             className={css`
-                max-width: min(560px, calc(100vw - 32px));
+                width: min(560px, calc(100vw - 64px));
                 box-sizing: border-box;
-                padding: 12px;
             `}
         >
             <div
+                tabIndex={0}
+                aria-label="Cell value"
                 className={css`
-                    max-height: 320px;
+                    max-height: min(400px, 60vh);
                     overflow: auto;
                     white-space: pre-wrap;
                     overflow-wrap: anywhere;
@@ -62,8 +77,28 @@ export function LongTextCell({ children, copyText, className }: LongTextCellProp
             >
                 {copyText}
             </div>
+            <ClipboardButton
+                type="button"
+                aria-label="Copy full cell content"
+                variant="secondary"
+                size="sm"
+                icon="copy"
+                getText={() => copyText}
+                onClipboardCopy={() => setCopyFailed(false)}
+                onClipboardError={() => setCopyFailed(true)}
+                className={css`
+                    margin-top: 12px;
+                `}
+            >
+                复制完整内容
+            </ClipboardButton>
+            {copyFailed && (
+                <span role="alert" style={{ color: theme.colors.error.text }}>
+                    Copy failed
+                </span>
+            )}
         </div>
-    ) : null;
+    );
 
     return (
         <div
@@ -84,11 +119,28 @@ export function LongTextCell({ children, copyText, className }: LongTextCellProp
                 }
             `}
         >
-            <Tooltip title={preview} mouseEnterDelay={0.15}>
-                <div ref={contentRef} className={className} data-testid="long-text-cell" onMouseEnter={updateOverflow}>
-                    {children}
-                </div>
-            </Tooltip>
+            <div
+                ref={contentRef}
+                className={cx(
+                    className,
+                    maxLines !== undefined &&
+                        css`
+                            display: ${maxLines > 0 ? '-webkit-box' : 'block'};
+                            -webkit-box-orient: vertical;
+                            ${maxLines > 0 ? `-webkit-line-clamp: ${maxLines};` : ''}
+                            max-height: none;
+                            overflow: ${maxLines > 0 ? 'hidden' : 'visible'};
+                            white-space: pre-wrap;
+                            overflow-wrap: anywhere;
+                            word-break: break-word;
+                            line-height: 20px;
+                        `,
+                )}
+                data-testid="long-text-cell"
+                onMouseEnter={updateOverflow}
+            >
+                {children}
+            </div>
             {canCopy && (
                 <div
                     className={`cell-copy-action ${css`
@@ -113,11 +165,31 @@ export function LongTextCell({ children, copyText, className }: LongTextCellProp
                     onClick={event => event.stopPropagation()}
                     onDoubleClick={event => event.stopPropagation()}
                 >
-                    {copyFailed && (
+                    {copyFailed && !previewOpen && (
                         <span role="alert" style={{ color: theme.colors.error.text, padding: '0 4px', fontSize: theme.typography.bodySmall.fontSize }}>
                             Copy failed
                         </span>
                     )}
+                    <Toggletip
+                        title="完整内容"
+                        content={preview}
+                        placement="bottom-start"
+                        show={previewOpen}
+                        onOpen={() => setPreviewOpen(true)}
+                        onClose={() => setPreviewOpen(false)}
+                        fitContent
+                    >
+                        <Button
+                            type="button"
+                            aria-label="View full cell content"
+                            aria-expanded={previewOpen}
+                            aria-haspopup="dialog"
+                            title="查看完整内容"
+                            variant="secondary"
+                            size="sm"
+                            icon="eye"
+                        />
+                    </Toggletip>
                     <ClipboardButton
                         type="button"
                         aria-label="Copy full cell content"
