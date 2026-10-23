@@ -2,7 +2,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import React, { useMemo, useState } from 'react';
 import FieldItem from './field-item/field-item';
 import { FilterContent } from './filter-content/filter-content';
-import { selectedFieldsAtom, tableFieldsAtom, variantFieldsAtom, searchableAtom, aggregatableAtom, fieldTypeAtom, indexesAtom, fieldStatisticsFieldAtom, topNConfigAtom, topNEnabledAtom, topNRunRequestAtom } from 'store/discover';
+import { selectedFieldsAtom, tableFieldsAtom, variantFieldsAtom, searchableAtom, aggregatableAtom, fieldTypeAtom, indexesAtom, fieldStatisticsFieldAtom, topNConfigurationFieldAtom } from 'store/discover';
 import { AggregatableEnum, getFieldType, SearchableEnum, FieldTypeEnum, isStructuredJsonType } from 'utils/data';
 import { Button, CollapsableSection, Icon, Input, useTheme2, Toggletip } from '@grafana/ui';
 import { css } from '@emotion/css';
@@ -18,9 +18,7 @@ export default function DiscoverSidebar() {
     const indexes = useAtomValue(indexesAtom);
     const theme = useTheme2();
     const [, setFieldStatisticsField] = useAtom(fieldStatisticsFieldAtom);
-    const [, setTopNConfig] = useAtom(topNConfigAtom);
-    const [, setTopNEnabled] = useAtom(topNEnabledAtom);
-    const [, requestTopNRun] = useAtom(topNRunRequestAtom);
+    const [, setTopNConfigurationField] = useAtom(topNConfigurationFieldAtom);
     const filteredFields = tableFields
         .filter(field => {
             if (aggregatable === AggregatableEnum.ANY) {
@@ -80,9 +78,7 @@ export default function DiscoverSidebar() {
     }
 
     function handleTopN(field: any) {
-        setTopNConfig(current => ({ ...current, groupField: field.Field, metric: 'COUNT', metricField: '', direction: 'DESC', limit: 5 }));
-        setTopNEnabled(true);
-        requestTopNRun(current => current + 1);
+        setTopNConfigurationField({ Field: field.Field, Type: field.Type });
     }
 
     return (

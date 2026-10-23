@@ -1,13 +1,13 @@
 import { css } from '@emotion/css';
-import { Button, IconButton } from '@grafana/ui';
-import { Progress } from 'antd';
+import { Button, IconButton, useTheme2 } from '@grafana/ui';
 import { useAtom, useAtomValue } from 'jotai';
 import { get } from 'lodash-es';
 import { nanoid } from 'nanoid';
 import React from 'react';
-import { topDataAtom, tableTotalCountAtom, dataFilterAtom, topNConfigAtom, topNEnabledAtom, topNResultFieldsAtom, topNRowsAtom } from 'store/discover';
+import { topDataAtom, tableTotalCountAtom, dataFilterAtom } from 'store/discover';
 import { formatFieldDisplayValue, isComplexType } from 'utils/data';
 import { getVariantFieldValue } from 'utils/variant-fields';
+import { normalizeCount } from 'utils/count';
 interface JsonObject {
     [key: string]: any;
 }
@@ -38,169 +38,236 @@ function countValueDistribution(jsonArray: JsonObject[], field: any): Array<[any
     return Array.from(valueCountMap.values()).map(({ value, count }) => [value, count]);
 }
 
-export function TopData({ field, onTopN, canRunTopN = true, onPointerEnter, onPointerLeave }: any) {
-    const topData = useAtomValue(topDataAtom);
-    const tableTotalCount = useAtomValue(tableTotalCountAtom);
-    const topNEnabled = useAtomValue(topNEnabledAtom);
-    const topNConfig = useAtomValue(topNConfigAtom);
-    const topNFields = useAtomValue(topNResultFieldsAtom);
-    const topNRows = useAtomValue(topNRowsAtom);
-    const [dataFilter, setDataFilter] = useAtom(dataFilterAtom);
-    const topNValueField = topNFields.find(item => item.Field === '__top_n_value')?.Field;
-    const hasTopNResult = topNEnabled && topNConfig.groupField === field.Field && Boolean(topNValueField);
-    const res: Array<[any, number]> = hasTopNResult
-        ? topNRows.map(row => [field.variantPath?.length ? getVariantFieldValue(row, field) : row[field.Field], Number(row[topNValueField!] || 0)])
-        : countValueDistribution(topData, field).sort((a, b) => b[1] - a[1]);
-    // COUNT results are percentages of every matching record, rather than only
-    // the returned Top N groups. Other aggregation metrics display their value.
-    const showRecordPercentage = !hasTopNResult || topNConfig.metric === 'COUNT';
-    const resultTotal = showRecordPercentage ? tableTotalCount : topData.length;
-    const itemCount = hasTopNResult ? `${topNRows.length} groups from all matches` : `${Math.min(500, tableTotalCount)} Items`;
+type TopDataProps = {
+    field: any;
+    onTopN?: (field: any) => void;
+    canRunTopN?: boolean;
+    canShowStatistics?: boolean;
+    onFieldStatistics?: (field: any) => void;
+    onPointerEnter?: React.PointerEventHandler<HTMLDivElement>;
+    onPointerLeave?: React.PointerEventHandler<HTMLDivElement>;
+};
 
+function DistributionRows({ field, rows, total, onFilter }: { field: any; rows: Array<[any, number]>; total?: number; onFilter: (value: any, operator: '=' | '!=') => void }) {
+    const theme = useTheme2();
     return (
         <div
-            onPointerEnter={onPointerEnter}
-            onPointerLeave={onPointerLeave}
+            role="list"
             className={css`
-                width: 300px;
-                max-width: min(300px, calc(100vw - 24px));
-                box-sizing: border-box;
-                max-height: 400px;
-                overflow-y: auto;
-                padding: 8px;
+                display: grid;
+                gap: 12px;
+                margin-top: 12px;
             `}
         >
-            <div className="mb-2 mt-2 break-words text-xs text-n5">
-                <span className="mr-2">{field.Field}</span>
-                <span>({field.Type})</span>
-            </div>
-            <div
-                className={css`
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                `}
-            >
-                {canRunTopN && (
-                    <Button size="sm" variant="secondary" onClick={() => onTopN?.(field)}>
-                        Top {hasTopNResult ? topNConfig.limit : 5}
-                    </Button>
-                )}
-                <small className="text-n2">{itemCount}</small>
-            </div>
-            <div className="mt-3 space-y-3 text-n5">
-                {res.map(
-                    ([rawValue, count], index) => {
-                        const value = normalizeTopDataValue(rawValue);
-                        const canFilterValue = rawValue !== undefined && rawValue !== null && value !== '-';
-                        return (
-                            index < (hasTopNResult ? topNConfig.limit : 5) && (
-                                <div key={index} className="flex items-center justify-between">
+            {rows.length ? (
+                rows.map(([rawValue, count], index) => {
+                    const value = normalizeTopDataValue(rawValue);
+                    const percent = total ? Math.min(100, (count * 100) / total) : 0;
+                    const canFilter = !isComplexType(field.Type) && rawValue !== undefined && rawValue !== null && value !== '-';
+                    return (
+                        <div
+                            key={index}
+                            role="listitem"
+                            className={css`
+                                display: flex;
+                                align-items: center;
+                                gap: 12px;
+                            `}
+                        >
+                            <div
+                                className={css`
+                                    flex: 1;
+                                    min-width: 0;
+                                `}
+                            >
                                 <div
                                     className={css`
-                                        overflow: hidden;
-                                        text-overflow: ellipsis;
-                                        white-space: nowrap;
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 12px;
                                     `}
                                 >
-                                    <div
+                                    <span
+                                        title={value}
                                         className={css`
-                                            display: flex;
-                                            align-items: center;
-                                            width: 180px;
-                                            justify-content: space-between;
+                                            flex: 1;
+                                            overflow: hidden;
+                                            text-overflow: ellipsis;
+                                            white-space: nowrap;
                                         `}
                                     >
-                                        <div
-                                            className={css`
-                                                flex: 1 1 0%;
-                                                overflow: hidden;
-                                                text-overflow: ellipsis;
-                                                white-space: nowrap;
-                                            `}
-                                        >
-                                            {value}
-                                        </div>
-                                        <div
-                                            className={css`
-                                                margin-left: 20px;
-                                                flex-shrink: 0;
-                                            `}
-                                        >
-                                            {showRecordPercentage
-                                                ? `${resultTotal ? +((count * 100) / resultTotal).toFixed(1) : 0}%`
-                                                : count}
-                                        </div>
-                                    </div>
-                                    <Progress
-                                        size={4}
-                                        className={css`
-                                            .ant-progress-outer {
-                                                .ant-progress-inner {
-                                                    position: absolute;
-                                                    top: 0px;
-                                                }
-                                            }
-                                        `}
-                                        style={{ width: '100%', height: '0px' }}
-                                        percent={showRecordPercentage && resultTotal ? +((count * 100) / resultTotal).toFixed(1) : 0}
-                                        status="normal"
-                                        showInfo={false}
-                                    />
+                                        {value}
+                                    </span>
+                                    <span title={total !== undefined ? `${count.toLocaleString()} / ${total.toLocaleString()} 条记录` : String(count)}>
+                                        {total !== undefined ? `${+percent.toFixed(1)}%` : count.toLocaleString()}
+                                    </span>
                                 </div>
-                                {!isComplexType(field.Type) && canFilterValue && (
+                                {total !== undefined && (
                                     <div
+                                        aria-hidden="true"
                                         className={css`
-                                            margin-left: 30px;
+                                            height: 4px;
+                                            margin-top: 5px;
+                                            background: ${theme.colors.background.secondary};
+                                            border-radius: 2px;
                                         `}
                                     >
-                                        <IconButton
-                                            name="plus-circle"
-                                            onClick={e => {
-                                                setDataFilter([
-                                                    ...dataFilter,
-                                                    {
-                                                        fieldName: field.Field,
-                                                        variantPath: field.variantPath,
-                                                        variantRootType: field.variantRootType,
-                                                        fieldType: field.Type,
-                                                        operator: '=',
-                                                        value: [rawValue],
-                                                        id: nanoid(),
-                                                    },
-                                                ]);
-                                                e.stopPropagation();
-                                            }}
-                                            tooltip="Equivalent filtration"
-                                        />
-                                        <IconButton
-                                            name="minus-circle"
-                                            style={{ marginLeft: '4px' }}
-                                            tooltip="Nonequivalent filtration"
-                                            onClick={e => {
-                                                setDataFilter([
-                                                    ...dataFilter,
-                                                    {
-                                                        fieldName: field.Field,
-                                                        variantPath: field.variantPath,
-                                                        variantRootType: field.variantRootType,
-                                                        fieldType: field.Type,
-                                                        operator: '!=',
-                                                        value: [rawValue],
-                                                        id: nanoid(),
-                                                    },
-                                                ]);
-                                                e.stopPropagation();
-                                            }}
+                                        <div
+                                            style={{ width: `${percent}%` }}
+                                            className={css`
+                                                height: 100%;
+                                                background: ${theme.colors.primary.main};
+                                                border-radius: 2px;
+                                            `}
                                         />
                                     </div>
                                 )}
+                            </div>
+                            {canFilter && (
+                                <div
+                                    className={css`
+                                        display: flex;
+                                        flex: none;
+                                        gap: 4px;
+                                    `}
+                                >
+                                    <IconButton
+                                        name="plus-circle"
+                                        tooltip="Include value"
+                                        onClick={event => {
+                                            event.stopPropagation();
+                                            onFilter(rawValue, '=');
+                                        }}
+                                    />
+                                    <IconButton
+                                        name="minus-circle"
+                                        tooltip="Exclude value"
+                                        onClick={event => {
+                                            event.stopPropagation();
+                                            onFilter(rawValue, '!=');
+                                        }}
+                                    />
                                 </div>
-                            )
-                        );
-                    },
-                )}
+                            )}
+                        </div>
+                    );
+                })
+            ) : (
+                <div
+                    className={css`
+                        color: ${theme.colors.text.secondary};
+                    `}
+                >
+                    暂无非空字段值
+                </div>
+            )}
+        </div>
+    );
+}
+
+export function TopData({ field, onTopN, canRunTopN = true, canShowStatistics = false, onFieldStatistics, onPointerEnter, onPointerLeave }: TopDataProps) {
+    const theme = useTheme2();
+    const topData = useAtomValue(topDataAtom);
+    const tableTotalCount = normalizeCount(useAtomValue(tableTotalCountAtom));
+    const [, setDataFilter] = useAtom(dataFilterAtom);
+    const sampleRows = countValueDistribution(topData, field)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+    const addFilter = (value: any, operator: '=' | '!=') => {
+        setDataFilter(current => [
+            ...current,
+            {
+                fieldName: field.Field,
+                variantPath: field.variantPath,
+                variantRootType: field.variantRootType,
+                fieldType: field.Type,
+                operator,
+                value: [value],
+                id: nanoid(),
+            },
+        ]);
+    };
+    const sectionHeader = css`
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+    `;
+    const description = css`
+        color: ${theme.colors.text.secondary};
+        font-size: 12px;
+        line-height: 1.5;
+        margin-top: 6px;
+    `;
+
+    return (
+        <div
+            role="region"
+            aria-label={`${field.Field} 字段卡片`}
+            onPointerEnter={onPointerEnter}
+            onPointerLeave={onPointerLeave}
+            className={css`
+                width: 340px;
+                max-width: min(340px, calc(100vw - 24px));
+                max-height: min(560px, calc(100vh - 32px));
+                box-sizing: border-box;
+                overflow-y: auto;
+                padding: 8px;
+                color: ${theme.colors.text.primary};
+            `}
+        >
+            <div
+                className={css`
+                    overflow-wrap: anywhere;
+                    margin-bottom: 16px;
+                `}
+            >
+                <strong>{field.Field}</strong> <span className={description}>({field.Type})</span>
             </div>
+            <section aria-label="当前查询结果">
+                <div className={sectionHeader}>
+                    <strong>当前查询结果</strong>
+                    <small>{topData.length.toLocaleString()} 条样本</small>
+                </div>
+                <div className={description}>基于当前查询返回的最多 500 条记录，展示前 5 个常见值；比例以样本记录数为基准。</div>
+                <DistributionRows field={field} rows={sampleRows} total={topData.length} onFilter={addFilter} />
+            </section>
+            {(canRunTopN || canShowStatistics) && (
+                <section
+                    aria-label="全部匹配数据"
+                    className={css`
+                        margin-top: 16px;
+                        padding-top: 16px;
+                        border-top: 1px solid ${theme.colors.border.weak};
+                    `}
+                >
+                    <div className={sectionHeader}>
+                        <strong>全部匹配数据</strong>
+                        <small>{tableTotalCount.toLocaleString()} 条匹配记录</small>
+                    </div>
+                    <div className={description}>统计当前时间范围与查询条件下的全部匹配记录，不受 500 条样本限制。</div>
+                    <div
+                        className={css`
+                            display: flex;
+                            flex-wrap: wrap;
+                            gap: 8px;
+                            margin-top: 12px;
+                        `}
+                    >
+                        {canShowStatistics && (
+                            <Button size="sm" variant="secondary" icon="info-circle" onClick={() => onFieldStatistics?.(field)}>
+                                字段统计
+                            </Button>
+                        )}
+                        {canRunTopN && (
+                            <Button size="sm" variant="secondary" onClick={() => onTopN?.(field)} title="配置数量、聚合方式和排序，对全部匹配记录执行统计">
+                                Top N 配置
+                            </Button>
+                        )}
+                    </div>
+                    {canShowStatistics && <div className={description}>点击“字段统计”打开侧边栏，查看非空值、去重数及分布。</div>}
+                </section>
+            )}
         </div>
     );
 }

@@ -26,6 +26,13 @@ export interface QueryTableDataParams {
 }
 
 export type TopNAggregation = 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX';
+export type TopNConfig = {
+    groupField: string;
+    metric: TopNAggregation;
+    metricField: string;
+    direction: 'DESC' | 'ASC';
+    limit: number;
+};
 export type FieldStatisticsField = {
     Field: string;
     Type?: string;

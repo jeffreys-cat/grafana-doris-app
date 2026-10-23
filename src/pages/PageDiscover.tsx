@@ -12,6 +12,7 @@ import { testIds } from '../components/testIds';
 import { useDiscoverData } from './PageDiscover/useDiscoverData';
 import DiscoverQueryFeedback from 'components/discover-query-feedback';
 import FieldStatistics from 'components/field-statistics';
+import TopNConfiguration from 'components/top-n-configuration';
 import { useAtom, useAtomValue } from 'jotai';
 import { currentDatabaseAtom, currentTableAtom, discoverShareReadyAtom, locationAtom, searchTypeAtom, selectedDatasourceAtom, variantSamplingWarningAtom } from 'store/discover';
 import { DISCOVER_SHARE_STATE_PARAM, encodeDiscoverShareState } from 'utils/discover-share-state';
@@ -376,6 +377,7 @@ export default function PageDiscover() {
                             >
                                 <DiscoverContent getTraceData={getTraceData} fetchNextPage={() => {}} queryState={queryState} sort={sort} onSortChange={onSortChange} />
                                 <FieldStatistics />
+                                <TopNConfiguration />
                             </div>
                         </div>
                     </section>

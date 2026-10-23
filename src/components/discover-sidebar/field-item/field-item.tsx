@@ -97,7 +97,6 @@ export default function FieldItem({ depth = 0, searchActive = '', showChildren =
                 {hasChildren ? <span className={css`margin-left:8px; color:${theme.colors.text.secondary}; font-size:12px;`}>{field.leafCount || 0}</span> : null}
                 {!selected && <div className={cn('icon-wrapper', css`margin-left:auto; display:flex; align-items:center; color:${theme.colors.text.secondary}; &:hover { color:${theme.colors.text.primary}; }`)}>
                     {props.type === 'add' ? <>
-                        {canShowStatistics ? <IconButton name="info-circle" tooltip="Field statistics" onClick={e => { props.onFieldStatistics?.(field); e.stopPropagation(); }} /> : null}
                         <IconButton name="plus" tooltip="Add to table" onClick={e => { props.onAdd?.(field); e.stopPropagation(); }} />
                     </> : <IconButton name="minus" tooltip="Delete from table" onClick={e => { props.onRemove?.(field); e.stopPropagation(); }} />}
                 </div>
@@ -113,7 +112,25 @@ export default function FieldItem({ depth = 0, searchActive = '', showChildren =
                     show={topDataVisible}
                     placement="right"
                     interactive
-                    content={<TopData field={field} onTopN={props.onTopN} canRunTopN={canRunTopN} onPointerEnter={enterTopDataRegion} onPointerLeave={scheduleHide} />}
+                    content={<TopData
+                        field={field}
+                        onTopN={(selectedField: any) => {
+                            clearTimer(showTimer);
+                            clearTimer(hideTimer);
+                            setTopDataVisible(false);
+                            props.onTopN?.(selectedField);
+                        }}
+                        canRunTopN={canRunTopN}
+                        canShowStatistics={canShowStatistics}
+                        onFieldStatistics={(selectedField: any) => {
+                            clearTimer(showTimer);
+                            clearTimer(hideTimer);
+                            setTopDataVisible(false);
+                            props.onFieldStatistics?.(selectedField);
+                        }}
+                        onPointerEnter={enterTopDataRegion}
+                        onPointerLeave={scheduleHide}
+                    />}
                 >
                     {item}
                 </Tooltip>

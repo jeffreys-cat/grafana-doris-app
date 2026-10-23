@@ -9,7 +9,10 @@ jest.mock('@grafana/ui', () => ({
 }));
 
 jest.mock('./top-data/top-data', () => ({
-    TopData: ({ field }: any) => <div data-testid="field-top-data">{field.Field}</div>,
+    TopData: ({ field, onFieldStatistics, canShowStatistics }: any) => <div data-testid="field-top-data">
+        {field.Field}
+        {canShowStatistics && <button onClick={() => onFieldStatistics(field)}>字段统计</button>}
+    </div>,
 }));
 
 jest.mock('utils/icon', () => ({
@@ -61,11 +64,20 @@ describe('VARIANT sidebar field item', () => {
 describe('Discover field statistics entry point', () => {
     const leafField = { Field: 'service_name', Type: 'VARCHAR' };
 
-    it('opens field statistics from a leaf without adding it to the table', () => {
+    it('opens field statistics from the hover card, closes the card, and does not add the field', () => {
+        jest.useFakeTimers();
         const onFieldStatistics = jest.fn();
-        render(<FieldItem type="add" field={leafField} onFieldStatistics={onFieldStatistics} />);
-        fireEvent.click(screen.getByRole('button', { name: 'Field statistics' }));
+        const onAdd = jest.fn();
+        render(<FieldItem type="add" field={leafField} onFieldStatistics={onFieldStatistics} onAdd={onAdd} />);
+        expect(screen.queryByRole('button', { name: 'Field statistics' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: '字段统计' })).not.toBeInTheDocument();
+        fireEvent.pointerEnter(screen.getByTestId('field-item-row'));
+        act(() => { jest.advanceTimersByTime(200); });
+        fireEvent.click(screen.getByRole('button', { name: '字段统计' }));
         expect(onFieldStatistics).toHaveBeenCalledWith(leafField);
+        expect(onAdd).not.toHaveBeenCalled();
+        expect(screen.queryByTestId('field-top-data')).not.toBeInTheDocument();
+        jest.useRealTimers();
     });
 
     it('shows the field distribution popover after a short hover', () => {

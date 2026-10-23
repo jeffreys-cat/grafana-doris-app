@@ -139,9 +139,12 @@ export default function FieldStatistics() {
     const percentage = result?.totalCount ? (result.nonNullCount * 100) / result.totalCount : 0;
     const maxTopCount = Math.max(...(result?.topValues.map(item => item.count) || []), 1);
 
-    return <Drawer title={`Field statistics: ${field.Field}`} size="md" onClose={close}>
+    return <Drawer title={`字段统计：${field.Field}`} size="md" onClose={close}>
         <div className={css`display:grid; gap:16px; padding: 0 8px 16px;`}>
-            <div className={css`color:${theme.colors.text.secondary}; font-size:12px;`}>{field.Type || 'Unknown type'} · current Discover filters and time range</div>
+            <div className={css`color:${theme.colors.text.secondary}; font-size:12px;`}>
+                <div>{field.Type || 'Unknown type'} · 全部匹配数据</div>
+                <div>统计当前时间范围与查询条件下的全部匹配记录，不限于卡片预览的最多 500 条样本。</div>
+            </div>
             {loading ? <LoadingPlaceholder text="Loading field statistics" /> : null}
             {error ? <div role="alert" className={css`color:${theme.colors.error.text};`}>{error.message}</div> : null}
             {result ? <>

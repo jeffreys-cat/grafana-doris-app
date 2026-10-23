@@ -5,7 +5,7 @@ import { atomWithStorage, selectAtom } from 'jotai/utils';
 import { atomWithLocation } from 'jotai-location';
 import { DataSourceInstanceSettings, DataSourceJsonData, dateTime, TimeZone } from '@grafana/data';
 import { Dayjs } from 'dayjs';
-import { DataFilterType, DiscoverCurrent, FieldStatisticsField, IntervalEnum, ShortcutItem, TopNAggregation } from 'types/type';
+import { DataFilterType, DiscoverCurrent, FieldStatisticsField, IntervalEnum, ShortcutItem, TopNConfig } from 'types/type';
 import { AggregatableEnum, DISCOVER_DEFAULT_STATUS, DISCOVER_SHORTCUTS, FieldTypeEnum, SearchableEnum } from 'utils/data';
 import { getGrafanaUserTimeZone } from 'utils/time';
 import { DiscoverColumnLayouts, DiscoverQueryState, DiscoverSort, FieldStatisticsResult } from 'types/discover';
@@ -48,13 +48,15 @@ export const discoverRowLineCountAtom = atomWithStorage<0 | 1 | 3 | 5>('discover
 export const discoverColumnLayoutsAtom = atomWithStorage<DiscoverColumnLayouts>('discover-column-layouts', {});
 export const discoverSortAtom = atom<DiscoverSort>({ field: '', direction: 'DESC' });
 export const topNEnabledAtom = atom(false);
-export const topNConfigAtom = atom<{ groupField: string; metric: TopNAggregation; metricField: string; direction: 'DESC' | 'ASC'; limit: number }>({
+export const topNConfigAtom = atom<TopNConfig>({
     groupField: '', metric: 'COUNT', metricField: '', direction: 'DESC', limit: 5,
 });
+export const topNPreferencesAtom = atomWithStorage<Record<string, TopNConfig>>('discover-top-n-preferences-v1', {}, undefined, { getOnInit: true });
 export const topNResultFieldsAtom = atom<Array<{ Field: string; Type: string }>>([]);
 export const topNRowsAtom = atom<Array<Record<string, any>>>([]);
 /** Increments when a field-side Top N action should execute immediately. */
 export const topNRunRequestAtom = atom(0);
+export const topNConfigurationFieldAtom = atom<FieldStatisticsField | undefined>(undefined);
 export const fieldStatisticsFieldAtom = atom<FieldStatisticsField | undefined>(undefined);
 export const fieldStatisticsResultAtom = atom<FieldStatisticsResult | undefined>(undefined);
 export const fieldStatisticsLoadingAtom = atom(false);
